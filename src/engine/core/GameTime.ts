@@ -1,0 +1,36 @@
+export type TimeScale = 1 | 2 | 4;
+
+export class GameTime {
+  /** Elapsed simulation time in seconds */
+  elapsed = 0;
+  /** Whether simulation is paused */
+  paused = true;
+  /** Time scale multiplier */
+  timeScale: TimeScale = 1;
+
+  /** Fixed timestep for simulation (seconds per tick) */
+  readonly fixedDt = 0.1; // 10 ticks per second
+
+  tick(realDeltaSeconds: number): number {
+    if (this.paused) return 0;
+    const simDelta = realDeltaSeconds * this.timeScale;
+    this.elapsed += simDelta;
+    return simDelta;
+  }
+
+  togglePause(): void {
+    this.paused = !this.paused;
+  }
+
+  setTimeScale(scale: TimeScale): void {
+    this.timeScale = scale;
+  }
+
+  /** Format elapsed time as T+MM:SS */
+  formatElapsed(): string {
+    const totalSeconds = Math.floor(this.elapsed);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `T+${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+}
