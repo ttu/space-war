@@ -94,6 +94,36 @@ export interface Order {
   orbitRadius?: number;
 }
 
+// --- Navigation ---
+
+export type NavPhase = 'rotating' | 'accelerating' | 'flipping' | 'decelerating' | 'arrived';
+
+export interface BurnPlan {
+  accelTime: number;    // seconds of acceleration burn
+  coastTime: number;    // seconds of coasting (zero for brachistochrone)
+  decelTime: number;    // seconds of deceleration burn
+  totalTime: number;    // total transit time
+  flipAngle: number;    // angle to rotate to for decel (usually accelAngle + PI)
+  burnDirection: number; // angle in radians for acceleration thrust
+}
+
+export interface NavigationOrder extends Component {
+  type: 'NavigationOrder';
+  targetX: number;
+  targetY: number;
+  phase: NavPhase;
+  burnPlan: BurnPlan;
+  phaseStartTime: number; // game time when current phase started
+  arrivalThreshold: number; // km — close enough to consider arrived
+}
+
+export interface RotationState extends Component {
+  type: 'RotationState';
+  currentAngle: number;  // current facing in radians
+  targetAngle: number;   // desired facing in radians
+  rotating: boolean;
+}
+
 // --- Component type constants for queries ---
 
 export const COMPONENT = {
@@ -107,4 +137,6 @@ export const COMPONENT = {
   Selectable: 'Selectable',
   ThermalSignature: 'ThermalSignature',
   Orders: 'Orders',
+  NavigationOrder: 'NavigationOrder',
+  RotationState: 'RotationState',
 } as const;

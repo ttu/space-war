@@ -6,9 +6,12 @@ import { GameLoop } from '../core/GameLoop';
 import { CameraController } from '../core/Camera';
 import { InputManager } from '../core/InputManager';
 import { PhysicsSystem } from '../engine/systems/PhysicsSystem';
+import { NavigationSystem } from '../engine/systems/NavigationSystem';
 import { RadarRenderer } from '../rendering/RadarRenderer';
 import { ShipRenderer } from '../rendering/ShipRenderer';
 import { CelestialRenderer } from '../rendering/CelestialRenderer';
+import { TrailRenderer } from '../rendering/TrailRenderer';
+import { CommandHandler } from './CommandHandler';
 import {
   Position,
   Velocity,
@@ -16,6 +19,7 @@ import {
   Thruster,
   CelestialBody,
   Selectable,
+  RotationState,
   COMPONENT,
 } from '../engine/components';
 
@@ -31,9 +35,12 @@ export class SpaceWarGame {
   private gameLoop!: GameLoop;
 
   private physicsSystem = new PhysicsSystem();
+  private navigationSystem = new NavigationSystem();
+  private commandHandler!: CommandHandler;
   private radarRenderer!: RadarRenderer;
   private shipRenderer!: ShipRenderer;
   private celestialRenderer!: CelestialRenderer;
+  private trailRenderer!: TrailRenderer;
 
   // UI elements
   private pausedLabel!: HTMLElement;
@@ -45,6 +52,7 @@ export class SpaceWarGame {
     this.setupUI();
     this.setupInput();
     this.loadDemoScenario();
+    this.commandHandler = new CommandHandler(this.world);
 
     this.gameLoop = new GameLoop(
       this.gameTime,
@@ -74,6 +82,7 @@ export class SpaceWarGame {
     this.radarRenderer = new RadarRenderer(this.scene);
     this.shipRenderer = new ShipRenderer(this.scene);
     this.celestialRenderer = new CelestialRenderer(this.scene);
+    this.trailRenderer = new TrailRenderer(this.scene);
 
     window.addEventListener('resize', () => {
       const w = window.innerWidth;
@@ -199,49 +208,15 @@ export class SpaceWarGame {
 
   private handleRightClick(screenX: number, screenY: number): void {
     const worldPos = this.camera.screenToWorld(screenX, screenY, this.canvas);
-
-    // Issue move order to selected ships
-    const ships = this.world.query(COMPONENT.Position, COMPONENT.Ship, COMPONENT.Selectable, COMPONENT.Thruster);
-    for (const id of ships) {
-      const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
-      if (!sel.selected) continue;
-
-      const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
-      if (ship.faction !== 'player') continue;
-
-      const pos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
-      const vel = this.world.getComponent<Velocity>(id, COMPONENT.Velocity)!;
-      const thruster = this.world.getComponent<Thruster>(id, COMPONENT.Thruster)!;
-
-      // Simple move-to: point thrust toward target
-      const dx = worldPos.x - pos.x;
-      const dy = worldPos.y - pos.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < 1) continue;
-
-      // Calculate if we should thrust toward target or brake
-      // Simple approach: check if velocity is roughly pointing away from target
-      const dotProduct = vel.vx * dx + vel.vy * dy;
-      const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
-      const stoppingDistance = (speed * speed) / (2 * thruster.maxThrust);
-
-      if (stoppingDistance >= dist * 0.8 && dotProduct > 0) {
-        // We're getting close and moving toward target - flip and brake
-        thruster.thrustAngle = Math.atan2(-vel.vy, -vel.vx);
-        thruster.throttle = 1;
-      } else {
-        // Thrust toward target
-        thruster.thrustAngle = Math.atan2(dy, dx);
-        thruster.throttle = 1;
-      }
-    }
+    this.commandHandler.issueMoveTo(worldPos.x, worldPos.y);
   }
 
   // --- Simulation ---
 
   private fixedUpdate(dt: number): void {
+    this.navigationSystem.update(this.world, dt, this.gameTime.elapsed);
     this.physicsSystem.update(this.world, dt);
+    this.trailRenderer.recordPositions(this.world);
   }
 
   // --- Rendering ---
@@ -260,6 +235,7 @@ export class SpaceWarGame {
     this.radarRenderer.updateScaleLabel(zoom, this.container);
     this.celestialRenderer.update(this.world, zoom);
     this.shipRenderer.update(this.world, alpha, zoom);
+    this.trailRenderer.update(this.world, zoom);
 
     // Update time display
     this.gameTimeLabel.textContent = this.gameTime.formatElapsed();
@@ -323,6 +299,12 @@ export class SpaceWarGame {
       type: 'Selectable',
       selected: false,
     });
+    this.world.addComponent<RotationState>(flagship, {
+      type: 'RotationState',
+      currentAngle: 0,
+      targetAngle: 0,
+      rotating: false,
+    });
 
     // Player escort destroyer
     const escort = this.world.createEntity();
@@ -355,6 +337,12 @@ export class SpaceWarGame {
     this.world.addComponent<Selectable>(escort, {
       type: 'Selectable',
       selected: false,
+    });
+    this.world.addComponent<RotationState>(escort, {
+      type: 'RotationState',
+      currentAngle: 0,
+      targetAngle: 0,
+      rotating: false,
     });
 
     // Enemy ships approaching from far away
@@ -389,6 +377,12 @@ export class SpaceWarGame {
       type: 'Selectable',
       selected: false,
     });
+    this.world.addComponent<RotationState>(enemy1, {
+      type: 'RotationState',
+      currentAngle: 0,
+      targetAngle: 0,
+      rotating: false,
+    });
 
     const enemy2 = this.world.createEntity();
     this.world.addComponent<Position>(enemy2, {
@@ -420,6 +414,12 @@ export class SpaceWarGame {
     this.world.addComponent<Selectable>(enemy2, {
       type: 'Selectable',
       selected: false,
+    });
+    this.world.addComponent<RotationState>(enemy2, {
+      type: 'RotationState',
+      currentAngle: 0,
+      targetAngle: 0,
+      rotating: false,
     });
 
     // Moon
