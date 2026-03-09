@@ -1,6 +1,6 @@
 import { World, EntityId } from '../types';
 import {
-  Position, Velocity, Thruster, NavigationOrder, RotationState,
+  Position, Velocity, Thruster, Facing, NavigationOrder, RotationState,
   COMPONENT,
 } from '../components';
 import { shortestAngleDelta, normalizeAngle } from '../../game/TrajectoryCalculator';
@@ -56,6 +56,12 @@ export class NavigationSystem {
       case 'arrived':
         thruster.throttle = 0;
         break;
+    }
+
+    // Sync Facing component if present
+    const facing = world.getComponent<Facing>(entityId, COMPONENT.Facing);
+    if (facing) {
+      facing.angle = rot.currentAngle;
     }
   }
 

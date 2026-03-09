@@ -107,7 +107,11 @@ export class TrailRenderer {
 
     let line = this.trailLines.get(entityId);
     if (!line) {
+      // Pre-allocate buffer for max trail length
+      const positions = new Float32Array(MAX_TRAIL_POINTS * 3);
       const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setDrawRange(0, 0);
       const mat = new THREE.LineBasicMaterial({
         color,
         transparent: true,
@@ -118,15 +122,12 @@ export class TrailRenderer {
       this.group.add(line);
     }
 
-    const positions = new Float32Array(trail.length * 3);
+    const posAttr = line.geometry.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < trail.length; i++) {
-      positions[i * 3] = trail[i].x;
-      positions[i * 3 + 1] = trail[i].y;
-      positions[i * 3 + 2] = 0.5;
+      posAttr.setXYZ(i, trail[i].x, trail[i].y, 0.5);
     }
-    line.geometry.dispose();
-    line.geometry = new THREE.BufferGeometry();
-    line.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    posAttr.needsUpdate = true;
+    line.geometry.setDrawRange(0, trail.length);
   }
 
   private updateProjectionLine(world: World, entityId: EntityId, _zoom: number): void {
@@ -149,7 +150,11 @@ export class TrailRenderer {
 
     let line = this.projectionLines.get(entityId);
     if (!line) {
+      // Pre-allocate buffer for max projection steps + 1 (start point)
+      const positions = new Float32Array((PROJECTION_STEPS + 1) * 3);
       const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setDrawRange(0, 0);
       const mat = new THREE.LineDashedMaterial({
         color: PROJECTION_COLOR,
         transparent: true,
@@ -164,17 +169,13 @@ export class TrailRenderer {
 
     line.visible = true;
 
-    // Simple projection: extrapolate current velocity (and thrust if navigating)
     const points = this.projectPath(pos, vel, thruster, nav);
-    const positions = new Float32Array(points.length * 3);
+    const posAttr = line.geometry.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < points.length; i++) {
-      positions[i * 3] = points[i].x;
-      positions[i * 3 + 1] = points[i].y;
-      positions[i * 3 + 2] = 0.3;
+      posAttr.setXYZ(i, points[i].x, points[i].y, 0.3);
     }
-    line.geometry.dispose();
-    line.geometry = new THREE.BufferGeometry();
-    line.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    posAttr.needsUpdate = true;
+    line.geometry.setDrawRange(0, points.length);
     line.computeLineDistances();
   }
 
@@ -187,27 +188,71 @@ export class TrailRenderer {
     let px = pos.x, py = pos.y;
     let vx = vel.vx, vy = vel.vy;
 
-    for (let i = 0; i < PROJECTION_STEPS; i++) {
-      // Apply current thrust if active
-      if (thruster && thruster.throttle > 0) {
-        const accel = thruster.maxThrust * thruster.throttle;
-        vx += Math.cos(thruster.thrustAngle) * accel * PROJECTION_DT;
-        vy += Math.sin(thruster.thrustAngle) * accel * PROJECTION_DT;
-      }
+    // If navigating with a burn plan, simulate the full trajectory
+    if (nav && thruster && nav.phase !== 'arrived') {
+      const a = thruster.maxThrust;
+      const plan = nav.burnPlan;
+      // Remaining time in current phase (approximate)
+      let phase: string = nav.phase;
+      let remaining = this.estimatePhaseRemaining(nav, thruster);
 
-      px += vx * PROJECTION_DT;
-      py += vy * PROJECTION_DT;
-      points.push({ x: px, y: py });
+      for (let i = 0; i < PROJECTION_STEPS; i++) {
+        // Apply thrust based on current phase
+        if (phase === 'accelerating') {
+          vx += Math.cos(plan.burnDirection) * a * PROJECTION_DT;
+          vy += Math.sin(plan.burnDirection) * a * PROJECTION_DT;
+          remaining -= PROJECTION_DT;
+          if (remaining <= 0) { phase = 'flipping'; remaining = 0; }
+        } else if (phase === 'flipping') {
+          // No thrust during flip — skip to decel
+          phase = 'decelerating';
+          remaining = plan.decelTime;
+        } else if (phase === 'decelerating') {
+          vx += Math.cos(plan.flipAngle) * a * PROJECTION_DT;
+          vy += Math.sin(plan.flipAngle) * a * PROJECTION_DT;
+          remaining -= PROJECTION_DT;
+          if (remaining <= 0) { phase = 'arrived'; }
+        } else if (phase === 'rotating') {
+          // No thrust during rotation — skip to accel
+          phase = 'accelerating';
+          remaining = plan.accelTime;
+        }
+        // 'arrived' — no thrust, just drift
 
-      // Stop projection if we've reached nav target
-      if (nav) {
+        px += vx * PROJECTION_DT;
+        py += vy * PROJECTION_DT;
+        points.push({ x: px, y: py });
+
         const dx = nav.targetX - px;
         const dy = nav.targetY - py;
         if (Math.sqrt(dx * dx + dy * dy) < nav.arrivalThreshold) break;
       }
+    } else {
+      // No navigation — simple velocity extrapolation
+      for (let i = 0; i < PROJECTION_STEPS; i++) {
+        if (thruster && thruster.throttle > 0) {
+          const accel = thruster.maxThrust * thruster.throttle;
+          vx += Math.cos(thruster.thrustAngle) * accel * PROJECTION_DT;
+          vy += Math.sin(thruster.thrustAngle) * accel * PROJECTION_DT;
+        }
+        px += vx * PROJECTION_DT;
+        py += vy * PROJECTION_DT;
+        points.push({ x: px, y: py });
+      }
     }
 
     return points;
+  }
+
+  /** Estimate remaining time in current nav phase (approximate — no gameTime access). */
+  private estimatePhaseRemaining(nav: NavigationOrder, _thruster: Thruster): number {
+    switch (nav.phase) {
+      case 'rotating': return 0;
+      case 'accelerating': return nav.burnPlan.accelTime;
+      case 'flipping': return 0;
+      case 'decelerating': return nav.burnPlan.decelTime;
+      default: return 0;
+    }
   }
 
   dispose(): void {
