@@ -1,5 +1,5 @@
 import { World, EntityId } from '../types';
-import { Position, Velocity, Thruster, CelestialBody, COMPONENT } from '../components';
+import { Position, Velocity, Thruster, CelestialBody, ShipSystems, COMPONENT } from '../components';
 import { gravitationalAcceleration } from '../../utils/OrbitalMechanics';
 
 export class PhysicsSystem {
@@ -35,9 +35,14 @@ export class PhysicsSystem {
     pos.prevX = pos.x;
     pos.prevY = pos.y;
 
-    // Apply thrust acceleration
+    // Apply thrust acceleration (scaled by engines health if ShipSystems present)
     if (thruster && thruster.throttle > 0) {
-      const accel = thruster.maxThrust * thruster.throttle;
+      let thrustMultiplier = 1;
+      const systems = world.getComponent<ShipSystems>(entityId, COMPONENT.ShipSystems);
+      if (systems && systems.engines.max > 0) {
+        thrustMultiplier = systems.engines.current / systems.engines.max;
+      }
+      const accel = thruster.maxThrust * thruster.throttle * thrustMultiplier;
       vel.vx += Math.cos(thruster.thrustAngle) * accel * dt;
       vel.vy += Math.sin(thruster.thrustAngle) * accel * dt;
     }

@@ -11,6 +11,8 @@ export interface MissileLauncher extends Component {
   ammo: number;           // total missiles remaining
   seekerRange: number;    // km — onboard seeker detection range
   seekerSensitivity: number; // onboard seeker threshold
+  /** 0 = destroyed (weapon cannot fire). Omit or 100 = full. */
+  integrity?: number;
 }
 
 export type GuidanceMode = 'sensor' | 'seeker' | 'ballistic';
@@ -35,6 +37,8 @@ export interface PDC extends Component {
   fireRate: number;            // rounds per second (e.g. 100)
   lastFiredTime: number;       // game time of last burst
   damagePerHit: number;       // damage to ship hull per hit (close-range)
+  /** 0 = destroyed (weapon cannot fire). Omit or 100 = full. */
+  integrity?: number;
 }
 
 export interface Railgun extends Component {
@@ -44,6 +48,8 @@ export interface Railgun extends Component {
   reloadTime: number;         // seconds between shots
   lastFiredTime: number;      // game time of last shot
   damage: number;             // hull damage on hit
+  /** 0 = destroyed (weapon cannot fire). Omit or 100 = full. */
+  integrity?: number;
 }
 
 export interface Projectile extends Component {

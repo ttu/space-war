@@ -100,6 +100,8 @@ export class CommandHandler {
 
       const launcher = this.world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher)!;
 
+      if ((launcher.integrity ?? 100) <= 0) continue;
+
       // Check reload cooldown
       if (launcher.lastFiredTime > 0 && gameTime - launcher.lastFiredTime < launcher.reloadTime) continue;
 
@@ -183,6 +185,7 @@ export class CommandHandler {
       if (ship.faction !== 'player') continue;
 
       const railgun = this.world.getComponent<Railgun>(shipId, COMPONENT.Railgun)!;
+      if ((railgun.integrity ?? 100) <= 0) continue;
       if (gameTime - railgun.lastFiredTime < railgun.reloadTime) continue;
 
       const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position)!;

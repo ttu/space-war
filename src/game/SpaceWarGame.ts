@@ -11,6 +11,7 @@ import { SensorSystem } from '../engine/systems/SensorSystem';
 import { MissileSystem } from '../engine/systems/MissileSystem';
 import { PDCSystem } from '../engine/systems/PDCSystem';
 import { RailgunSystem } from '../engine/systems/RailgunSystem';
+import { DamageSystem } from '../engine/systems/DamageSystem';
 import { RadarRenderer } from '../rendering/RadarRenderer';
 import { ShipRenderer } from '../rendering/ShipRenderer';
 import { CelestialRenderer } from '../rendering/CelestialRenderer';
@@ -24,6 +25,8 @@ import {
   Velocity,
   Ship,
   Thruster,
+  Hull,
+  createShipSystems,
   CelestialBody,
   Selectable,
   RotationState,
@@ -54,6 +57,7 @@ export class SpaceWarGame {
   private missileSystem = new MissileSystem(this.eventBus);
   private pdcSystem = new PDCSystem(this.eventBus);
   private railgunSystem = new RailgunSystem(this.eventBus);
+  private damageSystem = new DamageSystem(this.eventBus);
   private commandHandler!: CommandHandler;
   private radarRenderer!: RadarRenderer;
   private shipRenderer!: ShipRenderer;
@@ -415,6 +419,7 @@ export class SpaceWarGame {
     this.missileSystem.update(this.world, dt, this.gameTime.elapsed);
     this.pdcSystem.update(this.world, dt, this.gameTime.elapsed);
     this.railgunSystem.update(this.world, dt, this.gameTime.elapsed);
+    this.damageSystem.processHitEvents(this.world);
     this.navigationSystem.update(this.world, dt, this.gameTime.elapsed);
     this.physicsSystem.update(this.world, dt);
     this.trailRenderer.recordPositions(this.world);
@@ -504,6 +509,10 @@ export class SpaceWarGame {
       faction: 'player',
       flagship: true,
     });
+    this.world.addComponent<Hull>(flagship, {
+      type: 'Hull', current: 100, max: 100, armor: 5,
+    });
+    this.world.addComponent(flagship, createShipSystems(100, 100, 100));
     this.world.addComponent<Thruster>(flagship, {
       type: 'Thruster',
       maxThrust: 0.1,
@@ -561,6 +570,10 @@ export class SpaceWarGame {
       faction: 'player',
       flagship: false,
     });
+    this.world.addComponent<Hull>(escort, {
+      type: 'Hull', current: 80, max: 80, armor: 4,
+    });
+    this.world.addComponent(escort, createShipSystems(80, 80, 80));
     this.world.addComponent<Thruster>(escort, {
       type: 'Thruster',
       maxThrust: 0.15,
@@ -618,6 +631,10 @@ export class SpaceWarGame {
       faction: 'enemy',
       flagship: true,
     });
+    this.world.addComponent<Hull>(enemy1, {
+      type: 'Hull', current: 100, max: 100, armor: 5,
+    });
+    this.world.addComponent(enemy1, createShipSystems(100, 100, 100));
     this.world.addComponent<Thruster>(enemy1, {
       type: 'Thruster',
       maxThrust: 0.1,
@@ -674,6 +691,10 @@ export class SpaceWarGame {
       faction: 'enemy',
       flagship: false,
     });
+    this.world.addComponent<Hull>(enemy2, {
+      type: 'Hull', current: 60, max: 60, armor: 3,
+    });
+    this.world.addComponent(enemy2, createShipSystems(60, 60, 60));
     this.world.addComponent<Thruster>(enemy2, {
       type: 'Thruster',
       maxThrust: 0.18,

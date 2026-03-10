@@ -22,6 +22,8 @@ export class PDCSystem {
       const pos = world.getComponent<Position>(shipId, COMPONENT.Position)!;
       const pdc = world.getComponent<PDC>(shipId, COMPONENT.PDC)!;
 
+      if ((pdc.integrity ?? 100) <= 0) continue;
+
       const sx = pos.x;
       const sy = pos.y;
       const faction = ship.faction;

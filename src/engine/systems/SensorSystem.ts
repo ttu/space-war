@@ -2,7 +2,7 @@ import { World, EntityId } from '../types';
 import { EventBus } from '../core/EventBus';
 import {
   Position, Velocity, Ship, Thruster, ThermalSignature,
-  SensorArray, ContactTracker, DetectedContact,
+  SensorArray, ContactTracker, DetectedContact, ShipSystems,
   COMPONENT, Faction,
 } from '../components';
 
@@ -97,8 +97,17 @@ export class SensorSystem {
 
       const pos = world.getComponent<Position>(entityId, COMPONENT.Position)!;
       const sensor = world.getComponent<SensorArray>(entityId, COMPONENT.SensorArray)!;
+      const systems = world.getComponent<ShipSystems>(entityId, COMPONENT.ShipSystems);
 
-      result.push({ entityId, pos, sensor });
+      let effectiveMaxRange = sensor.maxRange;
+      let effectiveSensitivity = sensor.sensitivity;
+      if (systems && systems.sensors.max > 0) {
+        const factor = systems.sensors.current / systems.sensors.max;
+        effectiveMaxRange = sensor.maxRange * factor;
+        effectiveSensitivity = sensor.sensitivity / factor; // damaged = less sensitive (higher threshold)
+      }
+
+      result.push({ entityId, pos, sensor, effectiveMaxRange, effectiveSensitivity });
     }
     return result;
   }
@@ -136,12 +145,12 @@ export class SensorSystem {
       const dy = target.pos.y - sensor.pos.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      if (distance > sensor.sensor.maxRange) continue;
+      if (distance > sensor.effectiveMaxRange) continue;
       if (distance < 1) continue; // avoid division by zero
 
       const signalStrength = effectiveSignature / (distance * distance);
 
-      if (signalStrength > sensor.sensor.sensitivity) {
+      if (signalStrength > sensor.effectiveSensitivity) {
         if (!bestSignal || signalStrength > bestSignal.signalStrength) {
           bestSignal = { signalStrength, distance };
         }
@@ -156,6 +165,8 @@ interface SensorShipData {
   entityId: EntityId;
   pos: Position;
   sensor: SensorArray;
+  effectiveMaxRange: number;
+  effectiveSensitivity: number;
 }
 
 interface TargetShipData {
