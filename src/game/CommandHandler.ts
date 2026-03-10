@@ -1,12 +1,14 @@
-import { World } from '../engine/types';
+import { World, EntityId } from '../engine/types';
+import { EventBus } from '../engine/core/EventBus';
 import {
-  Position, Velocity, Ship, Thruster, Selectable,
-  NavigationOrder, RotationState, COMPONENT,
+  Position, Velocity, Ship, Thruster, Selectable, Facing, ThermalSignature,
+  NavigationOrder, RotationState, MissileLauncher, Missile,
+  COMPONENT,
 } from '../engine/components';
 import { computeBurnPlan, angleBetweenPoints } from './TrajectoryCalculator';
 
 export class CommandHandler {
-  constructor(private world: World) {}
+  constructor(private world: World, private eventBus?: EventBus) {}
 
   /** Issue a move-to order to all selected player ships. */
   issueMoveTo(targetX: number, targetY: number): void {
@@ -64,6 +66,86 @@ export class CommandHandler {
 
       // Cancel current thrust
       thruster.throttle = 0;
+    }
+  }
+
+  /** Launch missile salvos from selected player ships at the target entity. */
+  launchMissile(targetId: EntityId, gameTime: number): void {
+    const selected = this.world.query(
+      COMPONENT.Position, COMPONENT.Velocity, COMPONENT.Ship,
+      COMPONENT.Selectable, COMPONENT.MissileLauncher,
+    );
+
+    const targetPos = this.world.getComponent<Position>(targetId, COMPONENT.Position);
+    if (!targetPos) return;
+
+    for (const shipId of selected) {
+      const sel = this.world.getComponent<Selectable>(shipId, COMPONENT.Selectable)!;
+      if (!sel.selected) continue;
+
+      const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship)!;
+      if (ship.faction !== 'player') continue;
+
+      const launcher = this.world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher)!;
+
+      // Check reload cooldown
+      if (launcher.lastFiredTime > 0 && gameTime - launcher.lastFiredTime < launcher.reloadTime) continue;
+
+      const salvoSize = Math.min(launcher.salvoSize, launcher.ammo);
+      if (salvoSize <= 0) continue;
+
+      const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position)!;
+      const vel = this.world.getComponent<Velocity>(shipId, COMPONENT.Velocity)!;
+
+      // Direction to target
+      const dx = targetPos.x - pos.x;
+      const dy = targetPos.y - pos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dirX = dist > 0 ? dx / dist : 1;
+      const dirY = dist > 0 ? dy / dist : 0;
+
+      // Create missile entity — inherits ship velocity + small initial boost
+      const missileId = this.world.createEntity();
+      const launchBoost = 0.5; // km/s initial kick
+      this.world.addComponent<Position>(missileId, {
+        type: 'Position', x: pos.x, y: pos.y, prevX: pos.x, prevY: pos.y,
+      });
+      this.world.addComponent<Velocity>(missileId, {
+        type: 'Velocity',
+        vx: vel.vx + dirX * launchBoost,
+        vy: vel.vy + dirY * launchBoost,
+      });
+      this.world.addComponent<Facing>(missileId, {
+        type: 'Facing', angle: Math.atan2(dirY, dirX),
+      });
+      this.world.addComponent<ThermalSignature>(missileId, {
+        type: 'ThermalSignature', baseSignature: 100, thrustMultiplier: 500,
+      });
+      this.world.addComponent<Missile>(missileId, {
+        type: 'Missile',
+        targetId,
+        launcherFaction: ship.faction,
+        count: salvoSize,
+        fuel: launcher.maxRange / (launcher.missileAccel * 100),
+        accel: launcher.missileAccel,
+        seekerRange: launcher.seekerRange,
+        seekerSensitivity: launcher.seekerSensitivity,
+        guidanceMode: 'sensor',
+        armed: false,
+        armingDistance: 5,
+      });
+
+      // Decrement ammo, update fire time
+      launcher.ammo -= salvoSize;
+      launcher.lastFiredTime = gameTime;
+
+      this.eventBus?.emit({
+        type: 'MissileLaunched',
+        time: gameTime,
+        entityId: shipId,
+        targetId,
+        data: { salvoSize, faction: ship.faction },
+      });
     }
   }
 }

@@ -8,10 +8,12 @@ import { InputManager } from '../core/InputManager';
 import { PhysicsSystem } from '../engine/systems/PhysicsSystem';
 import { NavigationSystem } from '../engine/systems/NavigationSystem';
 import { SensorSystem } from '../engine/systems/SensorSystem';
+import { MissileSystem } from '../engine/systems/MissileSystem';
 import { RadarRenderer } from '../rendering/RadarRenderer';
 import { ShipRenderer } from '../rendering/ShipRenderer';
 import { CelestialRenderer } from '../rendering/CelestialRenderer';
 import { TrailRenderer } from '../rendering/TrailRenderer';
+import { MissileRenderer } from '../rendering/MissileRenderer';
 import { CommandHandler } from './CommandHandler';
 import {
   Position,
@@ -24,6 +26,7 @@ import {
   ThermalSignature,
   SensorArray,
   ContactTracker,
+  MissileLauncher,
   COMPONENT,
 } from '../engine/components';
 
@@ -41,11 +44,13 @@ export class SpaceWarGame {
   private physicsSystem = new PhysicsSystem();
   private navigationSystem = new NavigationSystem();
   private sensorSystem = new SensorSystem(30, this.eventBus);
+  private missileSystem = new MissileSystem(this.eventBus);
   private commandHandler!: CommandHandler;
   private radarRenderer!: RadarRenderer;
   private shipRenderer!: ShipRenderer;
   private celestialRenderer!: CelestialRenderer;
   private trailRenderer!: TrailRenderer;
+  private missileRenderer!: MissileRenderer;
 
   // UI elements
   private pausedLabel!: HTMLElement;
@@ -57,7 +62,7 @@ export class SpaceWarGame {
     this.setupUI();
     this.setupInput();
     this.loadDemoScenario();
-    this.commandHandler = new CommandHandler(this.world);
+    this.commandHandler = new CommandHandler(this.world, this.eventBus);
 
     this.gameLoop = new GameLoop(
       this.gameTime,
@@ -88,6 +93,7 @@ export class SpaceWarGame {
     this.shipRenderer = new ShipRenderer(this.scene);
     this.celestialRenderer = new CelestialRenderer(this.scene);
     this.trailRenderer = new TrailRenderer(this.scene);
+    this.missileRenderer = new MissileRenderer(this.scene);
 
     window.addEventListener('resize', () => {
       const w = window.innerWidth;
@@ -179,7 +185,7 @@ export class SpaceWarGame {
   private handleClick(screenX: number, screenY: number, shiftKey: boolean): void {
     const worldPos = this.camera.screenToWorld(screenX, screenY, this.canvas);
     const zoom = this.camera.getZoom();
-    const pickRadius = zoom * 0.02;
+    const pickRadius = zoom * 0.04;
 
     const ships = this.world.query(COMPONENT.Position, COMPONENT.Ship, COMPONENT.Selectable);
 
@@ -213,16 +219,57 @@ export class SpaceWarGame {
 
   private handleRightClick(screenX: number, screenY: number): void {
     const worldPos = this.camera.screenToWorld(screenX, screenY, this.canvas);
-    this.commandHandler.issueMoveTo(worldPos.x, worldPos.y);
+    const zoom = this.camera.getZoom();
+    const pickRadius = zoom * 0.04;
+
+    // Check if we right-clicked on a detected enemy ship
+    const ships = this.world.query(COMPONENT.Position, COMPONENT.Ship);
+    const playerContacts = this.getPlayerContacts();
+    let clickedEnemy: string | null = null;
+    let closestDist = pickRadius;
+
+    for (const id of ships) {
+      const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
+      if (ship.faction === 'player') continue;
+
+      // Use detected position for enemy ships
+      let checkX: number, checkY: number;
+      if (playerContacts) {
+        const contact = playerContacts.contacts.get(id);
+        if (!contact) continue; // can't target undetected ships
+        checkX = contact.lastKnownX;
+        checkY = contact.lastKnownY;
+      } else {
+        const pos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
+        checkX = pos.x;
+        checkY = pos.y;
+      }
+
+      const dx = checkX - worldPos.x;
+      const dy = checkY - worldPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < closestDist) {
+        closestDist = dist;
+        clickedEnemy = id;
+      }
+    }
+
+    if (clickedEnemy) {
+      this.commandHandler.launchMissile(clickedEnemy, this.gameTime.elapsed);
+    } else {
+      this.commandHandler.issueMoveTo(worldPos.x, worldPos.y);
+    }
   }
 
   // --- Simulation ---
 
   private fixedUpdate(dt: number): void {
     this.sensorSystem.update(this.world, dt, this.gameTime.elapsed);
+    this.missileSystem.update(this.world, dt, this.gameTime.elapsed);
     this.navigationSystem.update(this.world, dt, this.gameTime.elapsed);
     this.physicsSystem.update(this.world, dt);
     this.trailRenderer.recordPositions(this.world);
+    this.missileRenderer.recordPositions(this.world);
   }
 
   // --- Rendering ---
@@ -243,6 +290,7 @@ export class SpaceWarGame {
     const playerContacts = this.getPlayerContacts();
     this.shipRenderer.update(this.world, alpha, zoom, playerContacts, this.gameTime.elapsed);
     this.trailRenderer.update(this.world, zoom);
+    this.missileRenderer.update(this.world, zoom);
 
     // Update time display
     this.gameTimeLabel.textContent = this.gameTime.formatElapsed();
@@ -327,6 +375,12 @@ export class SpaceWarGame {
     this.world.addComponent<SensorArray>(flagship, {
       type: 'SensorArray', maxRange: 500_000, sensitivity: 1e-12,
     });
+    this.world.addComponent<MissileLauncher>(flagship, {
+      type: 'MissileLauncher',
+      salvoSize: 6, reloadTime: 30, lastFiredTime: 0,
+      maxRange: 50_000, missileAccel: 0.5, ammo: 24,
+      seekerRange: 5_000, seekerSensitivity: 1e-8,
+    });
 
     // Player escort destroyer
     const escort = this.world.createEntity();
@@ -371,6 +425,12 @@ export class SpaceWarGame {
     });
     this.world.addComponent<SensorArray>(escort, {
       type: 'SensorArray', maxRange: 400_000, sensitivity: 2e-12,
+    });
+    this.world.addComponent<MissileLauncher>(escort, {
+      type: 'MissileLauncher',
+      salvoSize: 4, reloadTime: 25, lastFiredTime: 0,
+      maxRange: 40_000, missileAccel: 0.6, ammo: 16,
+      seekerRange: 4_000, seekerSensitivity: 2e-8,
     });
 
     // Enemy ships approaching from far away
@@ -417,6 +477,12 @@ export class SpaceWarGame {
     this.world.addComponent<SensorArray>(enemy1, {
       type: 'SensorArray', maxRange: 500_000, sensitivity: 1e-12,
     });
+    this.world.addComponent<MissileLauncher>(enemy1, {
+      type: 'MissileLauncher',
+      salvoSize: 6, reloadTime: 30, lastFiredTime: 0,
+      maxRange: 50_000, missileAccel: 0.5, ammo: 24,
+      seekerRange: 5_000, seekerSensitivity: 1e-8,
+    });
 
     const enemy2 = this.world.createEntity();
     this.world.addComponent<Position>(enemy2, {
@@ -460,6 +526,12 @@ export class SpaceWarGame {
     });
     this.world.addComponent<SensorArray>(enemy2, {
       type: 'SensorArray', maxRange: 300_000, sensitivity: 3e-12,
+    });
+    this.world.addComponent<MissileLauncher>(enemy2, {
+      type: 'MissileLauncher',
+      salvoSize: 3, reloadTime: 20, lastFiredTime: 0,
+      maxRange: 35_000, missileAccel: 0.6, ammo: 12,
+      seekerRange: 3_000, seekerSensitivity: 3e-8,
     });
 
     // Moon

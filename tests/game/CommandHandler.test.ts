@@ -3,6 +3,7 @@ import { WorldImpl } from '../../src/engine/ecs/World';
 import { CommandHandler } from '../../src/game/CommandHandler';
 import {
   Position, Velocity, Ship, Thruster, Selectable, NavigationOrder, RotationState,
+  MissileLauncher, Missile,
   COMPONENT,
 } from '../../src/engine/components';
 
@@ -84,5 +85,73 @@ describe('CommandHandler', () => {
     const nav = world.getComponent<NavigationOrder>(entities[0], COMPONENT.NavigationOrder)!;
     expect(nav.targetX).toBe(5000);
     expect(nav.targetY).toBe(5000);
+  });
+});
+
+describe('CommandHandler - Missile Launch', () => {
+  function createLauncherShip(world: WorldImpl) {
+    const id = createPlayerShip(world);
+    world.addComponent<MissileLauncher>(id, {
+      type: 'MissileLauncher',
+      salvoSize: 6, reloadTime: 30, lastFiredTime: 0,
+      maxRange: 50_000, missileAccel: 0.5, ammo: 24,
+      seekerRange: 5_000, seekerSensitivity: 1e-8,
+    });
+    return id;
+  }
+
+  function createTarget(world: WorldImpl, x: number) {
+    const id = world.createEntity();
+    world.addComponent<Position>(id, { type: 'Position', x, y: 0, prevX: x, prevY: 0 });
+    return id;
+  }
+
+  it('should launch missile salvo from selected ship with launcher', () => {
+    const world = new WorldImpl();
+    const handler = new CommandHandler(world);
+    const shipId = createLauncherShip(world);
+    const targetId = createTarget(world, 10_000);
+
+    handler.launchMissile(targetId, 10.0);
+
+    const missiles = world.query(COMPONENT.Missile);
+    expect(missiles.length).toBe(1);
+
+    const missile = world.getComponent<Missile>(missiles[0], COMPONENT.Missile)!;
+    expect(missile.targetId).toBe(targetId);
+    expect(missile.count).toBe(6);
+    expect(missile.launcherFaction).toBe('player');
+
+    const launcher = world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher)!;
+    expect(launcher.ammo).toBe(18);
+    expect(launcher.lastFiredTime).toBe(10.0);
+  });
+
+  it('should not launch if reload not complete', () => {
+    const world = new WorldImpl();
+    const handler = new CommandHandler(world);
+    const shipId = createLauncherShip(world);
+    const launcher = world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher)!;
+    launcher.lastFiredTime = 5.0;
+    const targetId = createTarget(world, 10_000);
+
+    handler.launchMissile(targetId, 20.0); // 20 - 5 = 15 < 30 reload time
+
+    const missiles = world.query(COMPONENT.Missile);
+    expect(missiles.length).toBe(0);
+  });
+
+  it('should not launch if no ammo', () => {
+    const world = new WorldImpl();
+    const handler = new CommandHandler(world);
+    const shipId = createLauncherShip(world);
+    const launcher = world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher)!;
+    launcher.ammo = 0;
+    const targetId = createTarget(world, 10_000);
+
+    handler.launchMissile(targetId, 50.0);
+
+    const missiles = world.query(COMPONENT.Missile);
+    expect(missiles.length).toBe(0);
   });
 });
