@@ -9,11 +9,14 @@ import { PhysicsSystem } from '../engine/systems/PhysicsSystem';
 import { NavigationSystem } from '../engine/systems/NavigationSystem';
 import { SensorSystem } from '../engine/systems/SensorSystem';
 import { MissileSystem } from '../engine/systems/MissileSystem';
+import { PDCSystem } from '../engine/systems/PDCSystem';
+import { RailgunSystem } from '../engine/systems/RailgunSystem';
 import { RadarRenderer } from '../rendering/RadarRenderer';
 import { ShipRenderer } from '../rendering/ShipRenderer';
 import { CelestialRenderer } from '../rendering/CelestialRenderer';
 import { TrailRenderer } from '../rendering/TrailRenderer';
 import { MissileRenderer } from '../rendering/MissileRenderer';
+import { ProjectileRenderer } from '../rendering/ProjectileRenderer';
 import { CommandHandler } from './CommandHandler';
 import { applyBoxSelection } from './Selection';
 import {
@@ -28,6 +31,8 @@ import {
   SensorArray,
   ContactTracker,
   MissileLauncher,
+  PDC,
+  Railgun,
   NavigationOrder,
   COMPONENT,
 } from '../engine/components';
@@ -47,17 +52,22 @@ export class SpaceWarGame {
   private navigationSystem = new NavigationSystem();
   private sensorSystem = new SensorSystem(30, this.eventBus);
   private missileSystem = new MissileSystem(this.eventBus);
+  private pdcSystem = new PDCSystem(this.eventBus);
+  private railgunSystem = new RailgunSystem(this.eventBus);
   private commandHandler!: CommandHandler;
   private radarRenderer!: RadarRenderer;
   private shipRenderer!: ShipRenderer;
   private celestialRenderer!: CelestialRenderer;
   private trailRenderer!: TrailRenderer;
   private missileRenderer!: MissileRenderer;
+  private projectileRenderer!: ProjectileRenderer;
 
   // UI elements
   private pausedLabel!: HTMLElement;
   private gameTimeLabel!: HTMLElement;
   private speedButtons!: HTMLButtonElement[];
+  private targetingReadout!: HTMLElement;
+  private targetingReadoutTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // Box-drag selection state (screen coords while dragging)
   private selectionBoxState: { startScreenX: number; startScreenY: number; endScreenX: number; endScreenY: number } | null = null;
@@ -69,6 +79,20 @@ export class SpaceWarGame {
     this.setupInput();
     this.loadDemoScenario();
     this.commandHandler = new CommandHandler(this.world, this.eventBus);
+
+    this.eventBus.subscribe('RailgunFired', (e) => {
+      const p = e.data?.hitProbability as number | undefined;
+      if (p != null && this.targetingReadout) {
+        this.targetingReadout.textContent = `Hit: ${Math.round(p * 100)}%`;
+        this.targetingReadout.classList.add('visible');
+        if (this.targetingReadoutTimeout) clearTimeout(this.targetingReadoutTimeout);
+        this.targetingReadoutTimeout = setTimeout(() => {
+          this.targetingReadout.classList.remove('visible');
+          this.targetingReadout.textContent = '';
+          this.targetingReadoutTimeout = null;
+        }, 2000);
+      }
+    });
 
     this.gameLoop = new GameLoop(
       this.gameTime,
@@ -127,6 +151,7 @@ export class SpaceWarGame {
     this.celestialRenderer = new CelestialRenderer(this.scene);
     this.trailRenderer = new TrailRenderer(this.scene);
     this.missileRenderer = new MissileRenderer(this.scene);
+    this.projectileRenderer = new ProjectileRenderer(this.scene);
 
     this.selectionBoxLine = this.createSelectionBoxLine();
     this.scene.add(this.selectionBoxLine);
@@ -142,6 +167,7 @@ export class SpaceWarGame {
   private setupUI(): void {
     this.pausedLabel = document.getElementById('paused-label')!;
     this.gameTimeLabel = document.getElementById('game-time')!;
+    this.targetingReadout = document.getElementById('targeting-readout')!;
 
     const btnPause = document.getElementById('btn-pause')!;
     const btn1x = document.getElementById('btn-1x')! as HTMLButtonElement;
@@ -376,6 +402,7 @@ export class SpaceWarGame {
 
     if (clickedEnemy) {
       this.commandHandler.launchMissile(clickedEnemy, this.gameTime.elapsed);
+      this.commandHandler.fireRailgun(clickedEnemy, this.gameTime.elapsed);
     } else {
       this.commandHandler.issueMoveTo(worldPos.x, worldPos.y);
     }
@@ -386,6 +413,8 @@ export class SpaceWarGame {
   private fixedUpdate(dt: number): void {
     this.sensorSystem.update(this.world, dt, this.gameTime.elapsed);
     this.missileSystem.update(this.world, dt, this.gameTime.elapsed);
+    this.pdcSystem.update(this.world, dt, this.gameTime.elapsed);
+    this.railgunSystem.update(this.world, dt, this.gameTime.elapsed);
     this.navigationSystem.update(this.world, dt, this.gameTime.elapsed);
     this.physicsSystem.update(this.world, dt);
     this.trailRenderer.recordPositions(this.world);
@@ -411,6 +440,7 @@ export class SpaceWarGame {
     this.shipRenderer.update(this.world, alpha, zoom, playerContacts, this.gameTime.elapsed);
     this.trailRenderer.update(this.world, zoom);
     this.missileRenderer.update(this.world, zoom);
+    this.projectileRenderer.update(this.world, zoom);
 
     this.updateSelectionBoxVisual();
 
@@ -503,6 +533,12 @@ export class SpaceWarGame {
       maxRange: 50_000, missileAccel: 0.5, ammo: 24,
       seekerRange: 5_000, seekerSensitivity: 1e-8,
     });
+    this.world.addComponent<PDC>(flagship, {
+      type: 'PDC', range: 5, fireRate: 100, lastFiredTime: 0, damagePerHit: 1,
+    });
+    this.world.addComponent<Railgun>(flagship, {
+      type: 'Railgun', projectileSpeed: 100, maxRange: 10_000, reloadTime: 2, lastFiredTime: 0, damage: 50,
+    });
 
     // Player escort destroyer
     const escort = this.world.createEntity();
@@ -553,6 +589,12 @@ export class SpaceWarGame {
       salvoSize: 4, reloadTime: 25, lastFiredTime: 0,
       maxRange: 40_000, missileAccel: 0.6, ammo: 16,
       seekerRange: 4_000, seekerSensitivity: 2e-8,
+    });
+    this.world.addComponent<PDC>(escort, {
+      type: 'PDC', range: 5, fireRate: 80, lastFiredTime: 0, damagePerHit: 1,
+    });
+    this.world.addComponent<Railgun>(escort, {
+      type: 'Railgun', projectileSpeed: 120, maxRange: 8_000, reloadTime: 1.5, lastFiredTime: 0, damage: 40,
     });
 
     // Enemy ships approaching from far away
@@ -605,6 +647,12 @@ export class SpaceWarGame {
       maxRange: 50_000, missileAccel: 0.5, ammo: 24,
       seekerRange: 5_000, seekerSensitivity: 1e-8,
     });
+    this.world.addComponent<PDC>(enemy1, {
+      type: 'PDC', range: 5, fireRate: 100, lastFiredTime: 0, damagePerHit: 1,
+    });
+    this.world.addComponent<Railgun>(enemy1, {
+      type: 'Railgun', projectileSpeed: 100, maxRange: 10_000, reloadTime: 2, lastFiredTime: 0, damage: 50,
+    });
 
     const enemy2 = this.world.createEntity();
     this.world.addComponent<Position>(enemy2, {
@@ -654,6 +702,12 @@ export class SpaceWarGame {
       salvoSize: 3, reloadTime: 20, lastFiredTime: 0,
       maxRange: 35_000, missileAccel: 0.6, ammo: 12,
       seekerRange: 3_000, seekerSensitivity: 3e-8,
+    });
+    this.world.addComponent<PDC>(enemy2, {
+      type: 'PDC', range: 4, fireRate: 60, lastFiredTime: 0, damagePerHit: 1,
+    });
+    this.world.addComponent<Railgun>(enemy2, {
+      type: 'Railgun', projectileSpeed: 90, maxRange: 6_000, reloadTime: 1.8, lastFiredTime: 0, damage: 35,
     });
 
     // Moon

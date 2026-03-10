@@ -109,6 +109,17 @@
         display: inline;
       }
 
+      #time-controls .targeting-readout {
+        color: var(--status-green);
+        margin-left: 8px;
+        font-size: 11px;
+        display: none;
+      }
+
+      #time-controls .targeting-readout.visible {
+        display: inline;
+      }
+
       /* Info overlay */
       #info-overlay {
         position: absolute;
@@ -137,6 +148,7 @@
         <button id="btn-50x">50x</button>
         <button id="btn-100x">100x</button>
         <span class="game-time" id="game-time">T+00:00</span>
+        <span class="targeting-readout" id="targeting-readout"></span>
       </div>
 
       <div id="info-overlay">

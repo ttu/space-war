@@ -28,3 +28,29 @@ export interface Missile extends Component {
   armed: boolean;               // safe until min distance from launcher
   armingDistance: number;        // km — distance from launch point before arming
 }
+
+export interface PDC extends Component {
+  type: 'PDC';
+  range: number;              // km — engagement range (anti-missile and close ship)
+  fireRate: number;            // rounds per second (e.g. 100)
+  lastFiredTime: number;       // game time of last burst
+  damagePerHit: number;       // damage to ship hull per hit (close-range)
+}
+
+export interface Railgun extends Component {
+  type: 'Railgun';
+  projectileSpeed: number;    // km/s
+  maxRange: number;           // km
+  reloadTime: number;         // seconds between shots
+  lastFiredTime: number;      // game time of last shot
+  damage: number;             // hull damage on hit
+}
+
+export interface Projectile extends Component {
+  type: 'Projectile';
+  shooterId: EntityId;
+  targetId: EntityId;
+  faction: Faction;
+  damage: number;
+  hitRadius: number;           // km — proximity for hit
+}

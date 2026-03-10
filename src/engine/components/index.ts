@@ -1,7 +1,7 @@
 import { Component, EntityId } from '../types';
 
 export type { SensorArray, DetectedContact, ContactTracker } from './sensor-components';
-export type { MissileLauncher, Missile, GuidanceMode } from './weapon-components';
+export type { MissileLauncher, Missile, GuidanceMode, PDC, Railgun, Projectile } from './weapon-components';
 
 // --- Core spatial components ---
 
@@ -146,4 +146,7 @@ export const COMPONENT = {
   ContactTracker: 'ContactTracker',
   MissileLauncher: 'MissileLauncher',
   Missile: 'Missile',
+  PDC: 'PDC',
+  Railgun: 'Railgun',
+  Projectile: 'Projectile',
 } as const;

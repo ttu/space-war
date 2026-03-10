@@ -2,10 +2,11 @@ import { World, EntityId } from '../engine/types';
 import { EventBus } from '../engine/core/EventBus';
 import {
   Position, Velocity, Ship, Thruster, Selectable, Facing, ThermalSignature,
-  NavigationOrder, RotationState, MissileLauncher, Missile,
+  NavigationOrder, RotationState, MissileLauncher, Missile, Railgun, Projectile,
   COMPONENT,
 } from '../engine/components';
 import { computeBurnPlan, angleBetweenPoints } from './TrajectoryCalculator';
+import { computeLeadSolution, hitProbability } from './FiringComputer';
 
 export class CommandHandler {
   constructor(private world: World, private eventBus?: EventBus) {}
@@ -156,6 +157,85 @@ export class CommandHandler {
         entityId: shipId,
         targetId,
         data: { salvoSize, faction: ship.faction },
+      });
+    }
+  }
+
+  /** Fire railguns from selected player ships at the target entity (lead targeting). */
+  fireRailgun(targetId: EntityId, gameTime: number): void {
+    const selected = this.world.query(
+      COMPONENT.Position, COMPONENT.Velocity, COMPONENT.Ship,
+      COMPONENT.Selectable, COMPONENT.Railgun,
+    );
+
+    const targetPos = this.world.getComponent<Position>(targetId, COMPONENT.Position);
+    const targetVel = this.world.getComponent<Velocity>(targetId, COMPONENT.Velocity);
+    if (!targetPos) return;
+
+    const targetVx = targetVel?.vx ?? 0;
+    const targetVy = targetVel?.vy ?? 0;
+
+    for (const shipId of selected) {
+      const sel = this.world.getComponent<Selectable>(shipId, COMPONENT.Selectable)!;
+      if (!sel.selected) continue;
+
+      const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship)!;
+      if (ship.faction !== 'player') continue;
+
+      const railgun = this.world.getComponent<Railgun>(shipId, COMPONENT.Railgun)!;
+      if (gameTime - railgun.lastFiredTime < railgun.reloadTime) continue;
+
+      const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position)!;
+      const vel = this.world.getComponent<Velocity>(shipId, COMPONENT.Velocity)!;
+
+      const solution = computeLeadSolution(
+        pos.x, pos.y, vel.vx, vel.vy,
+        targetPos.x, targetPos.y, targetVx, targetVy,
+        railgun.projectileSpeed,
+        railgun.maxRange,
+      );
+      if (!solution) continue;
+
+      const range = Math.sqrt(
+        (targetPos.x - pos.x) ** 2 + (targetPos.y - pos.y) ** 2,
+      );
+      const targetSpeed = Math.sqrt(targetVx * targetVx + targetVy * targetVy);
+      const prob = hitProbability(
+        range,
+        targetSpeed,
+        railgun.projectileSpeed,
+        railgun.maxRange,
+      );
+
+      const dirX = Math.cos(solution.fireAngle);
+      const dirY = Math.sin(solution.fireAngle);
+      const projId = this.world.createEntity();
+      this.world.addComponent<Position>(projId, {
+        type: 'Position',
+        x: pos.x, y: pos.y, prevX: pos.x, prevY: pos.y,
+      });
+      this.world.addComponent<Velocity>(projId, {
+        type: 'Velocity',
+        vx: dirX * railgun.projectileSpeed,
+        vy: dirY * railgun.projectileSpeed,
+      });
+      this.world.addComponent<Projectile>(projId, {
+        type: 'Projectile',
+        shooterId: shipId,
+        targetId,
+        faction: ship.faction,
+        damage: railgun.damage,
+        hitRadius: 0.5,
+      });
+
+      railgun.lastFiredTime = gameTime;
+
+      this.eventBus?.emit({
+        type: 'RailgunFired',
+        time: gameTime,
+        entityId: shipId,
+        targetId,
+        data: { timeToImpact: solution.timeToImpact, hitProbability: prob },
       });
     }
   }
