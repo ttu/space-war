@@ -15,6 +15,7 @@ import { CelestialRenderer } from '../rendering/CelestialRenderer';
 import { TrailRenderer } from '../rendering/TrailRenderer';
 import { MissileRenderer } from '../rendering/MissileRenderer';
 import { CommandHandler } from './CommandHandler';
+import { applyBoxSelection } from './Selection';
 import {
   Position,
   Velocity,
@@ -57,6 +58,10 @@ export class SpaceWarGame {
   private gameTimeLabel!: HTMLElement;
   private speedButtons!: HTMLButtonElement[];
 
+  // Box-drag selection state (screen coords while dragging)
+  private selectionBoxState: { startScreenX: number; startScreenY: number; endScreenX: number; endScreenY: number } | null = null;
+  private selectionBoxLine!: THREE.LineSegments;
+
   constructor(private canvas: HTMLCanvasElement, private container: HTMLElement) {
     this.setupRenderer();
     this.setupUI();
@@ -94,6 +99,9 @@ export class SpaceWarGame {
     this.celestialRenderer = new CelestialRenderer(this.scene);
     this.trailRenderer = new TrailRenderer(this.scene);
     this.missileRenderer = new MissileRenderer(this.scene);
+
+    this.selectionBoxLine = this.createSelectionBoxLine();
+    this.scene.add(this.selectionBoxLine);
 
     window.addEventListener('resize', () => {
       const w = window.innerWidth;
@@ -154,6 +162,17 @@ export class SpaceWarGame {
           break;
         case 'click':
           this.handleClick(event.screenX, event.screenY, event.shiftKey);
+          break;
+        case 'boxSelect':
+          this.handleBoxSelect(event.startScreenX, event.startScreenY, event.endScreenX, event.endScreenY, event.shiftKey);
+          break;
+        case 'boxSelectUpdate':
+          this.selectionBoxState = {
+            startScreenX: event.startScreenX,
+            startScreenY: event.startScreenY,
+            endScreenX: event.endScreenX,
+            endScreenY: event.endScreenY,
+          };
           break;
         case 'rightClick':
           this.handleRightClick(event.screenX, event.screenY);
@@ -223,6 +242,71 @@ export class SpaceWarGame {
       const sel = this.world.getComponent<Selectable>(closestId, COMPONENT.Selectable)!;
       sel.selected = !sel.selected || !shiftKey;
     }
+  }
+
+  private handleBoxSelect(
+    startScreenX: number,
+    startScreenY: number,
+    endScreenX: number,
+    endScreenY: number,
+    shiftKey: boolean,
+  ): void {
+    this.selectionBoxState = null;
+
+    const p1 = this.camera.screenToWorld(startScreenX, startScreenY, this.canvas);
+    const p2 = this.camera.screenToWorld(endScreenX, endScreenY, this.canvas);
+    const worldMinX = Math.min(p1.x, p2.x);
+    const worldMaxX = Math.max(p1.x, p2.x);
+    const worldMinY = Math.min(p1.y, p2.y);
+    const worldMaxY = Math.max(p1.y, p2.y);
+
+    applyBoxSelection(this.world, worldMinX, worldMinY, worldMaxX, worldMaxY, shiftKey);
+  }
+
+  private createSelectionBoxLine(): THREE.LineSegments {
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(8 * 3);
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.LineBasicMaterial({
+      color: 0x44cccc,
+      linewidth: 1,
+      transparent: true,
+      opacity: 0.8,
+    });
+    return new THREE.LineSegments(geometry, material);
+  }
+
+  private updateSelectionBoxVisual(): void {
+    if (!this.selectionBoxState) {
+      this.selectionBoxLine.visible = false;
+      return;
+    }
+    const p1 = this.camera.screenToWorld(
+      this.selectionBoxState.startScreenX,
+      this.selectionBoxState.startScreenY,
+      this.canvas,
+    );
+    const p2 = this.camera.screenToWorld(
+      this.selectionBoxState.endScreenX,
+      this.selectionBoxState.endScreenY,
+      this.canvas,
+    );
+    const minX = Math.min(p1.x, p2.x);
+    const maxX = Math.max(p1.x, p2.x);
+    const minY = Math.min(p1.y, p2.y);
+    const maxY = Math.max(p1.y, p2.y);
+
+    const pos = this.selectionBoxLine.geometry.getAttribute('position') as THREE.BufferAttribute;
+    pos.setXYZ(0, minX, minY, 2);
+    pos.setXYZ(1, maxX, minY, 2);
+    pos.setXYZ(2, maxX, minY, 2);
+    pos.setXYZ(3, maxX, maxY, 2);
+    pos.setXYZ(4, maxX, maxY, 2);
+    pos.setXYZ(5, minX, maxY, 2);
+    pos.setXYZ(6, minX, maxY, 2);
+    pos.setXYZ(7, minX, minY, 2);
+    pos.needsUpdate = true;
+    this.selectionBoxLine.visible = true;
   }
 
   private handleRightClick(screenX: number, screenY: number): void {
@@ -299,6 +383,8 @@ export class SpaceWarGame {
     this.shipRenderer.update(this.world, alpha, zoom, playerContacts, this.gameTime.elapsed);
     this.trailRenderer.update(this.world, zoom);
     this.missileRenderer.update(this.world, zoom);
+
+    this.updateSelectionBoxVisual();
 
     // Update time display
     this.gameTimeLabel.textContent = this.gameTime.formatElapsed();

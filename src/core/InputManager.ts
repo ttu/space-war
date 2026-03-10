@@ -1,6 +1,8 @@
 export type InputEvent =
   | { type: 'click'; screenX: number; screenY: number; shiftKey: boolean }
   | { type: 'rightClick'; screenX: number; screenY: number }
+  | { type: 'boxSelect'; startScreenX: number; startScreenY: number; endScreenX: number; endScreenY: number; shiftKey: boolean }
+  | { type: 'boxSelectUpdate'; startScreenX: number; startScreenY: number; endScreenX: number; endScreenY: number }
   | { type: 'zoom'; delta: number }
   | { type: 'cameraPanDrag'; deltaX: number; deltaY: number; canvasWidth: number; canvasHeight: number }
   | { type: 'togglePause' }
@@ -15,6 +17,9 @@ export class InputManager {
   private isRightMouseDown = false;
   private lastMouseScreen = { x: 0, y: 0 };
   private hasRightDragged = false;
+  private isLeftMouseDown = false;
+  private leftDragStart = { x: 0, y: 0 };
+  private hasLeftDragged = false;
   private readonly dragThreshold = 5;
   private boundHandlers: { type: string; handler: EventListener; target: EventTarget }[] = [];
 
@@ -58,7 +63,11 @@ export class InputManager {
 
     this.addListener(this.canvas, 'mousedown', ((e: MouseEvent) => {
       this.lastMouseScreen = { x: e.clientX, y: e.clientY };
-      if (e.button === 2) {
+      if (e.button === 0) {
+        this.isLeftMouseDown = true;
+        this.leftDragStart = { x: e.clientX, y: e.clientY };
+        this.hasLeftDragged = false;
+      } else if (e.button === 2) {
         this.isRightMouseDown = true;
         this.hasRightDragged = false;
       }
@@ -66,7 +75,19 @@ export class InputManager {
 
     this.addListener(this.canvas, 'mouseup', ((e: MouseEvent) => {
       if (e.button === 0) {
-        this.emit({ type: 'click', screenX: e.clientX, screenY: e.clientY, shiftKey: e.shiftKey });
+        if (this.hasLeftDragged) {
+          this.emit({
+            type: 'boxSelect',
+            startScreenX: this.leftDragStart.x,
+            startScreenY: this.leftDragStart.y,
+            endScreenX: e.clientX,
+            endScreenY: e.clientY,
+            shiftKey: e.shiftKey,
+          });
+        } else {
+          this.emit({ type: 'click', screenX: e.clientX, screenY: e.clientY, shiftKey: e.shiftKey });
+        }
+        this.isLeftMouseDown = false;
       } else if (e.button === 2) {
         this.isRightMouseDown = false;
         if (!this.hasRightDragged) {
@@ -92,6 +113,20 @@ export class InputManager {
           });
         }
         this.lastMouseScreen = { x: e.clientX, y: e.clientY };
+      } else if (this.isLeftMouseDown) {
+        const deltaX = e.clientX - this.leftDragStart.x;
+        const deltaY = e.clientY - this.leftDragStart.y;
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        if (distance > this.dragThreshold) {
+          if (!this.hasLeftDragged) this.hasLeftDragged = true;
+          this.emit({
+            type: 'boxSelectUpdate',
+            startScreenX: this.leftDragStart.x,
+            startScreenY: this.leftDragStart.y,
+            endScreenX: e.clientX,
+            endScreenY: e.clientY,
+          });
+        }
       }
     }) as EventListener);
 
