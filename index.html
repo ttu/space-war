@@ -63,6 +63,13 @@
         font-size: 13px;
         z-index: 10;
         user-select: none;
+        pointer-events: none;
+      }
+
+      #time-controls button,
+      #time-controls .game-time,
+      #time-controls .paused-label {
+        pointer-events: auto;
       }
 
       #time-controls button {
@@ -111,6 +118,7 @@
         color: var(--text-muted);
         z-index: 10;
         line-height: 1.6;
+        pointer-events: none;
       }
     </style>
   </head>

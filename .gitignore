@@ -3,3 +3,9 @@ dist/
 .DS_Store
 *.png
 .playwright-mcp/
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+.blob/

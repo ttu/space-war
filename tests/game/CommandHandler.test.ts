@@ -46,17 +46,45 @@ describe('CommandHandler', () => {
     expect(nav!.burnPlan.accelTime).toBeGreaterThan(0);
   });
 
-  it('does not issue orders to unselected ships', () => {
+  it('does not issue orders when multiple player ships exist, none selected, and no flagship', () => {
     const world = new WorldImpl();
     const handler = new CommandHandler(world);
-    const id = createPlayerShip(world);
-    const sel = world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
-    sel.selected = false;
+    const id1 = createPlayerShip(world, {});
+    const id2 = createPlayerShip(world, {});
+    world.getComponent<Selectable>(id1, COMPONENT.Selectable)!.selected = false;
+    world.getComponent<Selectable>(id2, COMPONENT.Selectable)!.selected = false;
+    world.getComponent<Ship>(id1, COMPONENT.Ship)!.flagship = false;
+    world.getComponent<Ship>(id2, COMPONENT.Ship)!.flagship = false;
+
+    handler.issueMoveTo(10000, 0);
+
+    expect(world.getComponent<NavigationOrder>(id1, COMPONENT.NavigationOrder)).toBeUndefined();
+    expect(world.getComponent<NavigationOrder>(id2, COMPONENT.NavigationOrder)).toBeUndefined();
+  });
+
+  it('issues to flagship when no player ship is selected', () => {
+    const world = new WorldImpl();
+    const handler = new CommandHandler(world);
+    const id = world.createEntity();
+    world.addComponent<Position>(id, { type: 'Position', x: 0, y: 0, prevX: 0, prevY: 0 });
+    world.addComponent<Velocity>(id, { type: 'Velocity', vx: 0, vy: 0 });
+    world.addComponent<Ship>(id, {
+      type: 'Ship', name: 'Flagship', hullClass: 'cruiser', faction: 'player', flagship: true,
+    });
+    world.addComponent<Thruster>(id, {
+      type: 'Thruster', maxThrust: 0.1, thrustAngle: 0, throttle: 0, rotationSpeed: 0.5,
+    });
+    world.addComponent<Selectable>(id, { type: 'Selectable', selected: false });
+    world.addComponent<RotationState>(id, {
+      type: 'RotationState', currentAngle: 0, targetAngle: 0, rotating: false,
+    });
 
     handler.issueMoveTo(10000, 0);
 
     const nav = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder);
-    expect(nav).toBeUndefined();
+    expect(nav).toBeDefined();
+    expect(nav!.targetX).toBe(10000);
+    expect(nav!.targetY).toBe(0);
   });
 
   it('does not issue orders to enemy ships', () => {

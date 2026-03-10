@@ -8,7 +8,7 @@ A browser-based real-time tactical space combat game. Fleet commander perspectiv
 
 Inspired by: The Expanse, Lost Fleet, Project Rho.
 
-**Tech Stack**: Three.js, TypeScript, Vite, Vitest
+**Tech Stack**: Three.js, TypeScript, Vite, Vitest, Playwright (e2e)
 
 ## Setup & Build
 
@@ -16,8 +16,9 @@ Inspired by: The Expanse, Lost Fleet, Project Rho.
 npm install
 npm run dev      # Development server
 npm run build    # Production build (tsc && vite build)
-npm test         # Run tests once
-npm run test:watch # Run tests (watch mode)
+npm test         # Run unit tests once
+npm run test:watch # Run unit tests (watch mode)
+npm run test:e2e # Run Playwright e2e tests (requires: npx playwright install)
 ```
 
 ## Project Structure
@@ -58,7 +59,7 @@ src/
 - **Three.js**: Orthographic camera; top-down 2D view; ship icons are geometric shapes
 - **Units**: km for distance, km/s for velocity, km/s² for acceleration
 - **Naming**: PascalCase for classes, camelCase for functions/variables
-- **Testing**: Vitest; tests mirror `src/` structure under `tests/`
+- **Testing**: Vitest for unit tests (mirror `src/` under `tests/`); Playwright for e2e (see `e2e/`)
 
 ## Commit Conventions
 

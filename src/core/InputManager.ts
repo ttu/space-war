@@ -17,11 +17,14 @@ export class InputManager {
   private isRightMouseDown = false;
   private lastMouseScreen = { x: 0, y: 0 };
   private hasRightDragged = false;
+  private rightClickEmitted = false;
   private isLeftMouseDown = false;
   private leftDragStart = { x: 0, y: 0 };
   private hasLeftDragged = false;
   private readonly dragThreshold = 5;
-  private boundHandlers: { type: string; handler: EventListener; target: EventTarget }[] = [];
+  /** Require more movement for right-drag so right-click isn't lost to accidental pan */
+  private readonly rightDragThreshold = 20;
+  private boundHandlers: { type: string; handler: EventListener; target: EventTarget; capture?: boolean }[] = [];
 
   constructor(private canvas: HTMLCanvasElement) {
     this.setupEventListeners();
@@ -43,6 +46,11 @@ export class InputManager {
   private addListener(target: EventTarget, type: string, handler: EventListener): void {
     target.addEventListener(type, handler);
     this.boundHandlers.push({ type, handler, target });
+  }
+
+  private addListenerCapture(target: EventTarget, type: string, handler: EventListener): void {
+    target.addEventListener(type, handler, { capture: true });
+    this.boundHandlers.push({ type, handler, target, capture: true });
   }
 
   private setupEventListeners(): void {
@@ -70,6 +78,7 @@ export class InputManager {
       } else if (e.button === 2) {
         this.isRightMouseDown = true;
         this.hasRightDragged = false;
+        this.rightClickEmitted = false;
       }
     }) as EventListener);
 
@@ -90,7 +99,8 @@ export class InputManager {
         this.isLeftMouseDown = false;
       } else if (e.button === 2) {
         this.isRightMouseDown = false;
-        if (!this.hasRightDragged) {
+        if (!this.hasRightDragged && !this.rightClickEmitted) {
+          this.rightClickEmitted = true;
           this.emit({ type: 'rightClick', screenX: e.clientX, screenY: e.clientY });
         }
       }
@@ -101,7 +111,7 @@ export class InputManager {
         const deltaX = e.clientX - this.lastMouseScreen.x;
         const deltaY = e.clientY - this.lastMouseScreen.y;
         const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-        if (distance > this.dragThreshold) this.hasRightDragged = true;
+        if (distance > this.rightDragThreshold) this.hasRightDragged = true;
         if (this.hasRightDragged) {
           const rect = this.canvas.getBoundingClientRect();
           this.emit({
@@ -136,6 +146,16 @@ export class InputManager {
     }) as EventListener);
 
     this.addListener(this.canvas, 'contextmenu', ((e: Event) => e.preventDefault()) as EventListener);
+
+    // When right-click lands on an overlay, canvas doesn't get mousedown/mouseup; emit rightClick from contextmenu
+    this.addListenerCapture(document, 'contextmenu', ((e: Event) => {
+      e.preventDefault();
+      const me = e as MouseEvent;
+      const el = me.target as Element;
+      if (el !== this.canvas && !el.closest?.('button')) {
+        this.emit({ type: 'rightClick', screenX: me.clientX, screenY: me.clientY });
+      }
+    }) as EventListener);
   }
 
   getCameraMovement(): { x: number; y: number } {
@@ -154,8 +174,8 @@ export class InputManager {
   }
 
   destroy(): void {
-    for (const { target, type, handler } of this.boundHandlers) {
-      target.removeEventListener(type, handler);
+    for (const { target, type, handler, capture } of this.boundHandlers) {
+      target.removeEventListener(type, handler, { capture: !!capture });
     }
     this.boundHandlers = [];
   }

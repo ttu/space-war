@@ -10,20 +10,32 @@ import { computeBurnPlan, angleBetweenPoints } from './TrajectoryCalculator';
 export class CommandHandler {
   constructor(private world: World, private eventBus?: EventBus) {}
 
-  /** Issue a move-to order to all selected player ships. */
+  /** Issue a move-to order to all selected player ships. If none selected, issues to flagship or sole player ship. */
   issueMoveTo(targetX: number, targetY: number): void {
     const ships = this.world.query(
       COMPONENT.Position, COMPONENT.Velocity, COMPONENT.Ship,
       COMPONENT.Thruster, COMPONENT.Selectable,
     );
 
-    for (const id of ships) {
-      const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
-      if (!sel.selected) continue;
+    const toCommand: EntityId[] = [];
+    let flagshipId: EntityId | null = null;
+    const playerShips: EntityId[] = [];
 
+    for (const id of ships) {
       const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
       if (ship.faction !== 'player') continue;
+      playerShips.push(id);
+      if (ship.flagship) flagshipId = id;
+      const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
+      if (sel.selected) toCommand.push(id);
+    }
 
+    if (toCommand.length === 0) {
+      if (flagshipId !== null) toCommand.push(flagshipId);
+      else if (playerShips.length === 1) toCommand.push(playerShips[0]);
+    }
+
+    for (const id of toCommand) {
       const pos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
       const vel = this.world.getComponent<Velocity>(id, COMPONENT.Velocity)!;
       const thruster = this.world.getComponent<Thruster>(id, COMPONENT.Thruster)!;
@@ -64,7 +76,6 @@ export class CommandHandler {
         rot.targetAngle = burnPlan.burnDirection;
       }
 
-      // Cancel current thrust
       thruster.throttle = 0;
     }
   }

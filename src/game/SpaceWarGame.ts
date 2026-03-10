@@ -28,6 +28,7 @@ import {
   SensorArray,
   ContactTracker,
   MissileLauncher,
+  NavigationOrder,
   COMPONENT,
 } from '../engine/components';
 
@@ -78,6 +79,33 @@ export class SpaceWarGame {
 
   start(): void {
     this.gameLoop.start();
+  }
+
+  /**
+   * State for e2e tests. Returns counts so tests can assert selection and move orders.
+   * Only populated when app is loaded with ?e2e=1 (see main.ts).
+   */
+  getTestState(): {
+    selectedCount: number;
+    playerShipsWithMoveOrder: number;
+    visibleDestinationMarkerCount: number;
+  } {
+    const ships = this.world.query(COMPONENT.Ship, COMPONENT.Selectable);
+    let selectedCount = 0;
+    let playerShipsWithMoveOrder = 0;
+    let visibleDestinationMarkerCount = 0;
+    for (const id of ships) {
+      const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
+      if (ship.faction !== 'player') continue;
+      const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
+      if (sel.selected) selectedCount++;
+      const nav = this.world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder);
+      if (nav) {
+        playerShipsWithMoveOrder++;
+        if (nav.phase !== 'arrived') visibleDestinationMarkerCount++;
+      }
+    }
+    return { selectedCount, playerShipsWithMoveOrder, visibleDestinationMarkerCount };
   }
 
   private setupRenderer(): void {
