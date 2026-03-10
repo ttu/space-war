@@ -27,6 +27,7 @@ import {
   MissileLauncher,
   PDC,
   Railgun,
+  AIStrategicIntent,
   type Faction,
 } from '../components';
 
@@ -185,6 +186,14 @@ export function loadScenario(world: World, scenario: Scenario): void {
         lastFiredTime: 0,
         damage: mod.damage,
       } as Railgun);
+    }
+
+    if (s.faction === 'enemy') {
+      world.addComponent(id, {
+        type: 'AIStrategicIntent',
+        objective: 'hold',
+        nextStrategicUpdate: 0,
+      } as AIStrategicIntent);
     }
   }
 

@@ -12,6 +12,8 @@ import { MissileSystem } from '../engine/systems/MissileSystem';
 import { PDCSystem } from '../engine/systems/PDCSystem';
 import { RailgunSystem } from '../engine/systems/RailgunSystem';
 import { DamageSystem } from '../engine/systems/DamageSystem';
+import { AIStrategicSystem } from '../engine/systems/AIStrategicSystem';
+import { AITacticalSystem } from '../engine/systems/AITacticalSystem';
 import { RadarRenderer } from '../rendering/RadarRenderer';
 import { ShipRenderer } from '../rendering/ShipRenderer';
 import { CelestialRenderer } from '../rendering/CelestialRenderer';
@@ -50,6 +52,8 @@ export class SpaceWarGame {
   private pdcSystem = new PDCSystem(this.eventBus);
   private railgunSystem = new RailgunSystem(this.eventBus);
   private damageSystem = new DamageSystem(this.eventBus);
+  private aiStrategicSystem = new AIStrategicSystem();
+  private aiTacticalSystem!: AITacticalSystem;
   private commandHandler!: CommandHandler;
   private radarRenderer!: RadarRenderer;
   private shipRenderer!: ShipRenderer;
@@ -75,6 +79,7 @@ export class SpaceWarGame {
     this.setupInput();
     this.loadDemoScenario();
     this.commandHandler = new CommandHandler(this.world, this.eventBus);
+    this.aiTacticalSystem = new AITacticalSystem(this.commandHandler);
 
     this.eventBus.subscribe('RailgunFired', (e) => {
       const p = e.data?.hitProbability as number | undefined;
@@ -415,6 +420,8 @@ export class SpaceWarGame {
     this.pdcSystem.update(this.world, dt, this.gameTime.elapsed);
     this.railgunSystem.update(this.world, dt, this.gameTime.elapsed);
     this.damageSystem.processHitEvents(this.world);
+    this.aiStrategicSystem.update(this.world, dt, this.gameTime.elapsed);
+    this.aiTacticalSystem.update(this.world, dt, this.gameTime.elapsed);
     this.navigationSystem.update(this.world, dt, this.gameTime.elapsed);
     this.physicsSystem.update(this.world, dt);
     this.trailRenderer.recordPositions(this.world);

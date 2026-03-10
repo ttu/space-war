@@ -129,6 +129,22 @@ export interface RotationState extends Component {
   rotating: boolean;
 }
 
+// --- AI (enemy fleet) ---
+
+export type AIObjective = 'engage' | 'disengage' | 'hold';
+
+export interface AIStrategicIntent extends Component {
+  type: 'AIStrategicIntent';
+  objective: AIObjective;
+  /** Primary target for weapons (detected enemy). */
+  targetId?: EntityId;
+  /** Where to maneuver (e.g. toward target or retreat vector). */
+  moveToX?: number;
+  moveToY?: number;
+  /** Game time when strategic layer should re-evaluate. */
+  nextStrategicUpdate: number;
+}
+
 // --- Component type constants for queries ---
 
 export const COMPONENT = {
@@ -152,4 +168,5 @@ export const COMPONENT = {
   Railgun: 'Railgun',
   Projectile: 'Projectile',
   ShipSystems: 'ShipSystems',
+  AIStrategicIntent: 'AIStrategicIntent',
 } as const;
