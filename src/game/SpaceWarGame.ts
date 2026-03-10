@@ -111,12 +111,20 @@ export class SpaceWarGame {
     const btn1x = document.getElementById('btn-1x')! as HTMLButtonElement;
     const btn2x = document.getElementById('btn-2x')! as HTMLButtonElement;
     const btn4x = document.getElementById('btn-4x')! as HTMLButtonElement;
-    this.speedButtons = [btn1x, btn2x, btn4x];
+    const btn10x = document.getElementById('btn-10x')! as HTMLButtonElement;
+    const btn20x = document.getElementById('btn-20x')! as HTMLButtonElement;
+    const btn50x = document.getElementById('btn-50x')! as HTMLButtonElement;
+    const btn100x = document.getElementById('btn-100x')! as HTMLButtonElement;
+    this.speedButtons = [btn1x, btn2x, btn4x, btn10x, btn20x, btn50x, btn100x];
 
     btnPause.addEventListener('click', () => this.togglePause());
     btn1x.addEventListener('click', () => this.setSpeed(1));
     btn2x.addEventListener('click', () => this.setSpeed(2));
     btn4x.addEventListener('click', () => this.setSpeed(4));
+    btn10x.addEventListener('click', () => this.setSpeed(10));
+    btn20x.addEventListener('click', () => this.setSpeed(20));
+    btn50x.addEventListener('click', () => this.setSpeed(50));
+    btn100x.addEventListener('click', () => this.setSpeed(100));
 
     this.updatePauseUI();
     this.updateSpeedUI();
@@ -165,7 +173,7 @@ export class SpaceWarGame {
   }
 
   private cycleSpeed(delta: number): void {
-    const scales: TimeScale[] = [1, 2, 4];
+    const scales: TimeScale[] = [1, 2, 4, 10, 20, 50, 100];
     const idx = scales.indexOf(this.gameTime.timeScale);
     const newIdx = Math.max(0, Math.min(scales.length - 1, idx + delta));
     this.setSpeed(scales[newIdx]);
@@ -176,7 +184,7 @@ export class SpaceWarGame {
   }
 
   private updateSpeedUI(): void {
-    const scales: TimeScale[] = [1, 2, 4];
+    const scales: TimeScale[] = [1, 2, 4, 10, 20, 50, 100];
     for (let i = 0; i < this.speedButtons.length; i++) {
       this.speedButtons[i].classList.toggle('active', scales[i] === this.gameTime.timeScale);
     }
