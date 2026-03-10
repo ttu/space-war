@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { World, EntityId } from '../engine/types';
-import { Position, Velocity, Ship, Selectable, Thruster, COMPONENT, Faction } from '../engine/components';
+import {
+  Position, Velocity, Ship, Selectable, Thruster, COMPONENT, Faction,
+  ContactTracker, DetectedContact,
+} from '../engine/components';
 
 interface ShipVisual {
   group: THREE.Group;
@@ -27,7 +30,7 @@ export class ShipRenderer {
     this.scene.add(this.group);
   }
 
-  update(world: World, _alpha: number, zoom: number): void {
+  update(world: World, _alpha: number, zoom: number, playerContacts?: ContactTracker, gameTime?: number): void {
     const shipEntities = world.query(COMPONENT.Position, COMPONENT.Ship);
     const activeIds = new Set(shipEntities);
 
@@ -49,15 +52,48 @@ export class ShipRenderer {
       const selectable = world.getComponent<Selectable>(entityId, COMPONENT.Selectable);
       const thruster = world.getComponent<Thruster>(entityId, COMPONENT.Thruster);
 
+      // Fog of war: skip undetected enemy ships
+      let contact: DetectedContact | undefined;
+      if (playerContacts && ship.faction !== 'player') {
+        contact = playerContacts.contacts.get(entityId);
+        if (!contact) {
+          // Not detected — hide if visual exists
+          const existing = this.visuals.get(entityId);
+          if (existing) {
+            existing.group.visible = false;
+          }
+          continue;
+        }
+      }
+
       let visual = this.visuals.get(entityId);
       if (!visual) {
         visual = this.createShipVisual(ship.faction);
         this.visuals.set(entityId, visual);
         this.group.add(visual.group);
       }
+      visual.group.visible = true;
 
-      // Position (use current pos - interpolation can be added later)
-      visual.group.position.set(pos.x, pos.y, 1);
+      // Position: use detected (light-delayed) position for enemy contacts
+      if (contact) {
+        visual.group.position.set(contact.lastKnownX, contact.lastKnownY, 1);
+      } else {
+        visual.group.position.set(pos.x, pos.y, 1);
+      }
+
+      // Confidence-based opacity for detected enemies
+      const iconMat = visual.icon.material as THREE.MeshBasicMaterial;
+      if (contact && gameTime !== undefined) {
+        const age = gameTime - contact.receivedTime;
+        const ageFactor = Math.max(0.3, 1.0 - age * 0.02);
+        const signalFactor = Math.min(1.0, contact.signalStrength * 1e9);
+        const opacity = contact.lost
+          ? Math.max(0.1, 0.4 * ageFactor)
+          : ageFactor * signalFactor;
+        iconMat.opacity = Math.max(0.15, Math.min(0.9, opacity));
+      } else {
+        iconMat.opacity = 0.9;
+      }
 
       // Scale icon to be visible at any zoom
       visual.icon.scale.set(iconScale, iconScale, 1);

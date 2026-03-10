@@ -1,5 +1,7 @@
 import { Component, EntityId } from '../types';
 
+export type { SensorArray, DetectedContact, ContactTracker } from './sensor-components';
+
 // --- Core spatial components ---
 
 export interface Position extends Component {
@@ -139,4 +141,6 @@ export const COMPONENT = {
   Orders: 'Orders',
   NavigationOrder: 'NavigationOrder',
   RotationState: 'RotationState',
+  SensorArray: 'SensorArray',
+  ContactTracker: 'ContactTracker',
 } as const;

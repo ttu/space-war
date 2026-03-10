@@ -7,6 +7,7 @@ import { CameraController } from '../core/Camera';
 import { InputManager } from '../core/InputManager';
 import { PhysicsSystem } from '../engine/systems/PhysicsSystem';
 import { NavigationSystem } from '../engine/systems/NavigationSystem';
+import { SensorSystem } from '../engine/systems/SensorSystem';
 import { RadarRenderer } from '../rendering/RadarRenderer';
 import { ShipRenderer } from '../rendering/ShipRenderer';
 import { CelestialRenderer } from '../rendering/CelestialRenderer';
@@ -20,6 +21,9 @@ import {
   CelestialBody,
   Selectable,
   RotationState,
+  ThermalSignature,
+  SensorArray,
+  ContactTracker,
   COMPONENT,
 } from '../engine/components';
 
@@ -36,6 +40,7 @@ export class SpaceWarGame {
 
   private physicsSystem = new PhysicsSystem();
   private navigationSystem = new NavigationSystem();
+  private sensorSystem = new SensorSystem(30, this.eventBus);
   private commandHandler!: CommandHandler;
   private radarRenderer!: RadarRenderer;
   private shipRenderer!: ShipRenderer;
@@ -214,6 +219,7 @@ export class SpaceWarGame {
   // --- Simulation ---
 
   private fixedUpdate(dt: number): void {
+    this.sensorSystem.update(this.world, dt, this.gameTime.elapsed);
     this.navigationSystem.update(this.world, dt, this.gameTime.elapsed);
     this.physicsSystem.update(this.world, dt);
     this.trailRenderer.recordPositions(this.world);
@@ -234,13 +240,23 @@ export class SpaceWarGame {
     this.radarRenderer.update(camPos.x, camPos.y, zoom);
     this.radarRenderer.updateScaleLabel(zoom, this.container);
     this.celestialRenderer.update(this.world, zoom);
-    this.shipRenderer.update(this.world, alpha, zoom);
+    const playerContacts = this.getPlayerContacts();
+    this.shipRenderer.update(this.world, alpha, zoom, playerContacts, this.gameTime.elapsed);
     this.trailRenderer.update(this.world, zoom);
 
     // Update time display
     this.gameTimeLabel.textContent = this.gameTime.formatElapsed();
 
     this.renderer.render(this.scene, this.camera.camera);
+  }
+
+  private getPlayerContacts(): ContactTracker | undefined {
+    const trackerEntities = this.world.query(COMPONENT.ContactTracker);
+    for (const id of trackerEntities) {
+      const tracker = this.world.getComponent<ContactTracker>(id, COMPONENT.ContactTracker);
+      if (tracker && tracker.faction === 'player') return tracker;
+    }
+    return undefined;
   }
 
   // --- Demo scenario ---
@@ -305,6 +321,12 @@ export class SpaceWarGame {
       targetAngle: 0,
       rotating: false,
     });
+    this.world.addComponent<ThermalSignature>(flagship, {
+      type: 'ThermalSignature', baseSignature: 50, thrustMultiplier: 200,
+    });
+    this.world.addComponent<SensorArray>(flagship, {
+      type: 'SensorArray', maxRange: 500_000, sensitivity: 1e-12,
+    });
 
     // Player escort destroyer
     const escort = this.world.createEntity();
@@ -343,6 +365,12 @@ export class SpaceWarGame {
       currentAngle: 0,
       targetAngle: 0,
       rotating: false,
+    });
+    this.world.addComponent<ThermalSignature>(escort, {
+      type: 'ThermalSignature', baseSignature: 40, thrustMultiplier: 180,
+    });
+    this.world.addComponent<SensorArray>(escort, {
+      type: 'SensorArray', maxRange: 400_000, sensitivity: 2e-12,
     });
 
     // Enemy ships approaching from far away
@@ -383,6 +411,12 @@ export class SpaceWarGame {
       targetAngle: 0,
       rotating: false,
     });
+    this.world.addComponent<ThermalSignature>(enemy1, {
+      type: 'ThermalSignature', baseSignature: 50, thrustMultiplier: 200,
+    });
+    this.world.addComponent<SensorArray>(enemy1, {
+      type: 'SensorArray', maxRange: 500_000, sensitivity: 1e-12,
+    });
 
     const enemy2 = this.world.createEntity();
     this.world.addComponent<Position>(enemy2, {
@@ -421,6 +455,12 @@ export class SpaceWarGame {
       targetAngle: 0,
       rotating: false,
     });
+    this.world.addComponent<ThermalSignature>(enemy2, {
+      type: 'ThermalSignature', baseSignature: 30, thrustMultiplier: 150,
+    });
+    this.world.addComponent<SensorArray>(enemy2, {
+      type: 'SensorArray', maxRange: 300_000, sensitivity: 3e-12,
+    });
 
     // Moon
     const moon = this.world.createEntity();
@@ -437,6 +477,16 @@ export class SpaceWarGame {
       mass: 7.342e22,
       radius: 1737,
       bodyType: 'moon',
+    });
+
+    // Faction contact trackers
+    const playerTracker = this.world.createEntity();
+    this.world.addComponent<ContactTracker>(playerTracker, {
+      type: 'ContactTracker', faction: 'player', contacts: new Map(),
+    });
+    const enemyTracker = this.world.createEntity();
+    this.world.addComponent<ContactTracker>(enemyTracker, {
+      type: 'ContactTracker', faction: 'enemy', contacts: new Map(),
     });
 
     // Center camera on player fleet
