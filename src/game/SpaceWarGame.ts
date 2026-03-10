@@ -21,14 +21,19 @@ import { TrailRenderer } from '../rendering/TrailRenderer';
 import { MissileRenderer } from '../rendering/MissileRenderer';
 import { ProjectileRenderer } from '../rendering/ProjectileRenderer';
 import { CommandHandler } from './CommandHandler';
-import { applyBoxSelection } from './Selection';
+import { SelectionManager } from './SelectionManager';
 import { loadScenario } from '../engine/data/ScenarioLoader';
 import { demoScenario } from '../engine/data/scenarios/demo';
 import { showShipConfigScreen } from '../ui/ShipConfigScreen';
+import { TimeControls } from '../ui/TimeControls';
+import { FleetPanel } from '../ui/FleetPanel';
+import { ShipDetailPanel } from '../ui/ShipDetailPanel';
+import { OrderBar } from '../ui/OrderBar';
+import { CombatLog } from '../ui/CombatLog';
+import type { PendingOrderType } from '../ui/OrderBar';
 import {
   Position,
   Ship,
-  Selectable,
   ContactTracker,
   NavigationOrder,
   COMPONENT,
@@ -62,11 +67,14 @@ export class SpaceWarGame {
   private missileRenderer!: MissileRenderer;
   private projectileRenderer!: ProjectileRenderer;
 
-  // UI elements
-  private pausedLabel!: HTMLElement;
-  private gameTimeLabel!: HTMLElement;
-  private speedButtons!: HTMLButtonElement[];
-  private targetingReadout!: HTMLElement;
+  private selectionManager!: SelectionManager;
+  private timeControls!: TimeControls;
+  private fleetPanel!: FleetPanel;
+  private shipDetailPanel!: ShipDetailPanel;
+  private orderBar!: OrderBar;
+  private combatLog!: CombatLog;
+  private pendingOrder: PendingOrderType = 'none';
+
   private targetingReadoutTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // Box-drag selection state (screen coords while dragging)
@@ -75,6 +83,7 @@ export class SpaceWarGame {
 
   constructor(private canvas: HTMLCanvasElement, private container: HTMLElement) {
     this.setupRenderer();
+    this.selectionManager = new SelectionManager(this.world);
     this.setupUI();
     this.setupInput();
     this.loadDemoScenario();
@@ -83,13 +92,14 @@ export class SpaceWarGame {
 
     this.eventBus.subscribe('RailgunFired', (e) => {
       const p = e.data?.hitProbability as number | undefined;
-      if (p != null && this.targetingReadout) {
-        this.targetingReadout.textContent = `Hit: ${Math.round(p * 100)}%`;
-        this.targetingReadout.classList.add('visible');
+      const readout = this.timeControls?.getTargetingReadoutElement();
+      if (p != null && readout) {
+        readout.textContent = `Hit: ${Math.round(p * 100)}%`;
+        readout.classList.add('visible');
         if (this.targetingReadoutTimeout) clearTimeout(this.targetingReadoutTimeout);
         this.targetingReadoutTimeout = setTimeout(() => {
-          this.targetingReadout.classList.remove('visible');
-          this.targetingReadout.textContent = '';
+          readout.classList.remove('visible');
+          readout.textContent = '';
           this.targetingReadoutTimeout = null;
         }, 2000);
       }
@@ -115,15 +125,13 @@ export class SpaceWarGame {
     playerShipsWithMoveOrder: number;
     visibleDestinationMarkerCount: number;
   } {
+    const selectedCount = this.selectionManager.getSelectedIds().length;
     const ships = this.world.query(COMPONENT.Ship, COMPONENT.Selectable);
-    let selectedCount = 0;
     let playerShipsWithMoveOrder = 0;
     let visibleDestinationMarkerCount = 0;
     for (const id of ships) {
       const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
       if (ship.faction !== 'player') continue;
-      const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
-      if (sel.selected) selectedCount++;
       const nav = this.world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder);
       if (nav) {
         playerShipsWithMoveOrder++;
@@ -166,31 +174,53 @@ export class SpaceWarGame {
   }
 
   private setupUI(): void {
-    this.pausedLabel = document.getElementById('paused-label')!;
-    this.gameTimeLabel = document.getElementById('game-time')!;
-    this.targetingReadout = document.getElementById('targeting-readout')!;
+    const uiRoot = document.createElement('div');
+    uiRoot.id = 'ui-root';
+    uiRoot.className = 'ui-root';
+    this.container.appendChild(uiRoot);
 
-    const btnPause = document.getElementById('btn-pause')!;
-    const btn1x = document.getElementById('btn-1x')! as HTMLButtonElement;
-    const btn2x = document.getElementById('btn-2x')! as HTMLButtonElement;
-    const btn4x = document.getElementById('btn-4x')! as HTMLButtonElement;
-    const btn10x = document.getElementById('btn-10x')! as HTMLButtonElement;
-    const btn20x = document.getElementById('btn-20x')! as HTMLButtonElement;
-    const btn50x = document.getElementById('btn-50x')! as HTMLButtonElement;
-    const btn100x = document.getElementById('btn-100x')! as HTMLButtonElement;
-    this.speedButtons = [btn1x, btn2x, btn4x, btn10x, btn20x, btn50x, btn100x];
+    this.timeControls = new TimeControls(uiRoot, this.gameTime, {
+      onPauseToggle: () => this.togglePause(),
+      onSpeedChange: (scale) => this.setSpeed(scale),
+      onLoadoutClick: () => this.openLoadoutScreen(),
+    });
 
-    btnPause.addEventListener('click', () => this.togglePause());
-    btn1x.addEventListener('click', () => this.setSpeed(1));
-    btn2x.addEventListener('click', () => this.setSpeed(2));
-    btn4x.addEventListener('click', () => this.setSpeed(4));
-    btn10x.addEventListener('click', () => this.setSpeed(10));
-    btn20x.addEventListener('click', () => this.setSpeed(20));
-    btn50x.addEventListener('click', () => this.setSpeed(50));
-    btn100x.addEventListener('click', () => this.setSpeed(100));
+    const leftPanel = document.createElement('div');
+    leftPanel.id = 'left-panel';
+    leftPanel.className = 'left-panel';
+    uiRoot.appendChild(leftPanel);
 
-    const btnLoadout = document.getElementById('btn-loadout')!;
-    btnLoadout.addEventListener('click', () => this.openLoadoutScreen());
+    this.fleetPanel = new FleetPanel(
+      leftPanel,
+      this.world,
+      () => this.selectionManager.getSelectedIds(),
+    );
+    this.shipDetailPanel = new ShipDetailPanel(
+      leftPanel,
+      this.world,
+      () => this.selectionManager.getSelectedIds(),
+    );
+
+    const orderBarWrap = document.createElement('div');
+    orderBarWrap.id = 'order-bar-wrap';
+    orderBarWrap.className = 'order-bar-wrap';
+    uiRoot.appendChild(orderBarWrap);
+    this.orderBar = new OrderBar(orderBarWrap, {
+      onPendingOrderChange: (order) => {
+        this.pendingOrder = order;
+      },
+    });
+
+    const combatLogWrap = document.createElement('div');
+    combatLogWrap.id = 'combat-log-wrap';
+    combatLogWrap.className = 'combat-log-wrap';
+    uiRoot.appendChild(combatLogWrap);
+    this.combatLog = new CombatLog(combatLogWrap, this.eventBus);
+
+    const infoOverlay = document.createElement('div');
+    infoOverlay.id = 'info-overlay';
+    infoOverlay.textContent = 'WASD/Arrows: Pan | Scroll: Zoom | Space: Pause | +/-: Speed';
+    uiRoot.appendChild(infoOverlay);
 
     this.updatePauseUI();
     this.updateSpeedUI();
@@ -257,49 +287,18 @@ export class SpaceWarGame {
   }
 
   private updatePauseUI(): void {
-    this.pausedLabel.classList.toggle('visible', this.gameTime.paused);
+    this.timeControls?.update();
   }
 
   private updateSpeedUI(): void {
-    const scales: TimeScale[] = [1, 2, 4, 10, 20, 50, 100];
-    for (let i = 0; i < this.speedButtons.length; i++) {
-      this.speedButtons[i].classList.toggle('active', scales[i] === this.gameTime.timeScale);
-    }
+    this.timeControls?.update();
   }
 
   private handleClick(screenX: number, screenY: number, shiftKey: boolean): void {
     const worldPos = this.camera.screenToWorld(screenX, screenY, this.canvas);
     const zoom = this.camera.getZoom();
     const pickRadius = zoom * 0.04;
-
-    const ships = this.world.query(COMPONENT.Position, COMPONENT.Ship, COMPONENT.Selectable);
-
-    // Deselect all if not shift-clicking
-    if (!shiftKey) {
-      for (const id of ships) {
-        const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
-        sel.selected = false;
-      }
-    }
-
-    // Find closest ship to click
-    let closestId: string | null = null;
-    let closestDist = pickRadius;
-    for (const id of ships) {
-      const pos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
-      const dx = pos.x - worldPos.x;
-      const dy = pos.y - worldPos.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < closestDist) {
-        closestDist = dist;
-        closestId = id;
-      }
-    }
-
-    if (closestId) {
-      const sel = this.world.getComponent<Selectable>(closestId, COMPONENT.Selectable)!;
-      sel.selected = !sel.selected || !shiftKey;
-    }
+    this.selectionManager.setSelectionFromClick(worldPos.x, worldPos.y, pickRadius, shiftKey);
   }
 
   private handleBoxSelect(
@@ -318,7 +317,7 @@ export class SpaceWarGame {
     const worldMinY = Math.min(p1.y, p2.y);
     const worldMaxY = Math.max(p1.y, p2.y);
 
-    applyBoxSelection(this.world, worldMinX, worldMinY, worldMaxX, worldMaxY, shiftKey);
+    this.selectionManager.setSelectionFromBox(worldMinX, worldMinY, worldMaxX, worldMaxY, shiftKey);
   }
 
   private createSelectionBoxLine(): THREE.LineSegments {
@@ -372,7 +371,6 @@ export class SpaceWarGame {
     const zoom = this.camera.getZoom();
     const pickRadius = zoom * 0.04;
 
-    // Check if we right-clicked on a detected enemy ship
     const ships = this.world.query(COMPONENT.Position, COMPONENT.Ship);
     const playerContacts = this.getPlayerContacts();
     let clickedEnemy: string | null = null;
@@ -382,11 +380,10 @@ export class SpaceWarGame {
       const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
       if (ship.faction === 'player') continue;
 
-      // Use detected position for enemy ships
       let checkX: number, checkY: number;
       if (playerContacts) {
         const contact = playerContacts.contacts.get(id);
-        if (!contact) continue; // can't target undetected ships
+        if (!contact) continue;
         checkX = contact.lastKnownX;
         checkY = contact.lastKnownY;
       } else {
@@ -404,11 +401,29 @@ export class SpaceWarGame {
       }
     }
 
+    const order = this.pendingOrder;
+
     if (clickedEnemy) {
-      this.commandHandler.launchMissile(clickedEnemy, this.gameTime.elapsed);
-      this.commandHandler.fireRailgun(clickedEnemy, this.gameTime.elapsed);
+      if (order === 'fireMissile') {
+        this.commandHandler.launchMissile(clickedEnemy, this.gameTime.elapsed);
+        this.orderBar.setPendingOrder('none');
+        this.pendingOrder = 'none';
+      } else if (order === 'fireRailgun') {
+        this.commandHandler.fireRailgun(clickedEnemy, this.gameTime.elapsed);
+        this.orderBar.setPendingOrder('none');
+        this.pendingOrder = 'none';
+      } else {
+        this.commandHandler.launchMissile(clickedEnemy, this.gameTime.elapsed);
+        this.commandHandler.fireRailgun(clickedEnemy, this.gameTime.elapsed);
+      }
     } else {
-      this.commandHandler.issueMoveTo(worldPos.x, worldPos.y);
+      if (order === 'move' || order === 'none') {
+        this.commandHandler.issueMoveTo(worldPos.x, worldPos.y);
+        if (order === 'move') {
+          this.orderBar.setPendingOrder('none');
+          this.pendingOrder = 'none';
+        }
+      }
     }
   }
 
@@ -451,8 +466,10 @@ export class SpaceWarGame {
 
     this.updateSelectionBoxVisual();
 
-    // Update time display
-    this.gameTimeLabel.textContent = this.gameTime.formatElapsed();
+    this.timeControls.update();
+    this.fleetPanel.update();
+    this.shipDetailPanel.update();
+    this.combatLog.update();
 
     this.renderer.render(this.scene, this.camera.camera);
   }

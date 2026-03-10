@@ -47,8 +47,21 @@
         height: 100%;
       }
 
-      /* Time controls overlay */
-      #time-controls {
+      /* UI root (panels created by JS) */
+      #ui-root {
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+        pointer-events: none;
+      }
+
+      #ui-root > * {
+        pointer-events: auto;
+      }
+
+      /* Time controls (created by TimeControls.ts) */
+      #time-controls,
+      .time-controls-panel {
         position: absolute;
         top: 12px;
         left: 50%;
@@ -61,19 +74,17 @@
         padding: 6px 16px;
         border-radius: 4px;
         font-size: 13px;
-        z-index: 10;
         user-select: none;
-        pointer-events: none;
       }
 
-      #time-controls button,
-      #time-controls .game-time,
-      #time-controls .paused-label,
-      #time-controls #btn-loadout {
+      .time-controls-panel button,
+      .time-controls-panel .game-time,
+      .time-controls-panel .paused-label,
+      .time-controls-panel #btn-loadout {
         pointer-events: auto;
       }
 
-      #time-controls button {
+      .time-controls-panel button {
         background: transparent;
         border: 1px solid var(--border-subtle);
         color: var(--text-secondary);
@@ -84,48 +95,226 @@
         border-radius: 3px;
       }
 
-      #time-controls button:hover {
+      .time-controls-panel button:hover {
         color: var(--text-primary);
         border-color: var(--accent-blue);
       }
 
-      #time-controls button.active {
+      .time-controls-panel button.active {
         color: var(--accent-cyan);
         border-color: var(--accent-cyan);
       }
 
-      #time-controls .game-time {
+      .time-controls-panel .game-time {
         color: var(--accent-cyan);
         margin-left: 12px;
         min-width: 80px;
       }
 
-      #time-controls .paused-label {
+      .time-controls-panel .paused-label {
         color: var(--status-yellow);
         font-weight: bold;
         display: none;
       }
 
-      #time-controls .paused-label.visible {
+      .time-controls-panel .paused-label.visible {
         display: inline;
       }
 
-      #time-controls .targeting-readout {
+      .time-controls-panel .targeting-readout {
         color: var(--status-green);
         margin-left: 8px;
         font-size: 11px;
         display: none;
       }
 
-      #time-controls .targeting-readout.visible {
+      .time-controls-panel .targeting-readout.visible {
         display: inline;
+      }
+
+      /* Left sidebar: fleet + ship detail */
+      .left-panel {
+        position: absolute;
+        left: 12px;
+        top: 56px;
+        bottom: 120px;
+        width: 220px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .fleet-panel,
+      .ship-detail-panel {
+        background: rgba(10, 14, 24, 0.9);
+        border: 1px solid var(--border-subtle);
+        border-radius: 4px;
+        padding: 8px;
+        font-size: 12px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .fleet-panel-header,
+      .ship-detail-header,
+      .order-bar-header,
+      .combat-log-header {
+        color: var(--accent-cyan);
+        font-weight: bold;
+        margin-bottom: 6px;
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+
+      .fleet-panel-list {
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .fleet-panel-row {
+        padding: 4px 6px;
+        border-radius: 3px;
+        margin-bottom: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .fleet-panel-row.selected {
+        background: rgba(68, 136, 204, 0.2);
+        border: 1px solid var(--accent-blue);
+      }
+
+      .fleet-panel-name {
+        font-weight: bold;
+      }
+
+      .fleet-panel-bar-wrap {
+        height: 4px;
+        background: var(--bg-deepest);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+
+      .fleet-panel-bar {
+        height: 100%;
+        background: var(--status-green);
+        transition: width 0.15s ease;
+      }
+
+      .ship-detail-content {
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      .ship-detail-name {
+        font-weight: bold;
+        margin-bottom: 6px;
+        color: var(--text-primary);
+      }
+
+      .ship-detail-row {
+        margin-bottom: 4px;
+        color: var(--text-secondary);
+      }
+
+      .ship-detail-empty,
+      .ship-detail-multi {
+        color: var(--text-muted);
+        font-style: italic;
+      }
+
+      /* Order bar */
+      .order-bar-wrap {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        z-index: 11;
+      }
+
+      .order-bar-panel {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        background: rgba(10, 14, 24, 0.9);
+        border: 1px solid var(--border-subtle);
+        border-radius: 4px;
+        padding: 8px;
+        font-size: 12px;
+      }
+
+      .order-bar-header {
+        width: 100%;
+        margin-bottom: 4px;
+      }
+
+      .order-bar-btn {
+        background: transparent;
+        border: 1px solid var(--border-subtle);
+        color: var(--text-secondary);
+        padding: 4px 10px;
+        cursor: pointer;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        border-radius: 3px;
+      }
+
+      .order-bar-btn:hover {
+        color: var(--text-primary);
+        border-color: var(--accent-blue);
+      }
+
+      .order-bar-btn.active {
+        color: var(--accent-cyan);
+        border-color: var(--accent-cyan);
+      }
+
+      /* Combat log */
+      .combat-log-wrap {
+        position: absolute;
+        right: 12px;
+        bottom: 12px;
+        width: 280px;
+        max-height: 180px;
+        z-index: 11;
+      }
+
+      .combat-log-panel {
+        background: rgba(10, 14, 24, 0.9);
+        border: 1px solid var(--border-subtle);
+        border-radius: 4px;
+        padding: 8px;
+        font-size: 11px;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        max-height: 180px;
+      }
+
+      .combat-log-list {
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+        font-family: var(--font-mono);
+      }
+
+      .combat-log-line {
+        padding: 2px 0;
+        border-bottom: 1px solid var(--border-subtle);
+        color: var(--text-secondary);
       }
 
       /* Info overlay */
       #info-overlay {
         position: absolute;
         bottom: 12px;
-        left: 12px;
+        left: 240px;
         font-size: 11px;
         color: var(--text-muted);
         z-index: 10;
@@ -137,25 +326,6 @@
   <body>
     <div id="game-container">
       <canvas id="game-canvas"></canvas>
-
-      <div id="time-controls">
-        <span class="paused-label" id="paused-label">PAUSED</span>
-        <button id="btn-pause" title="Space">⏸</button>
-        <button id="btn-1x" class="active">1x</button>
-        <button id="btn-2x">2x</button>
-        <button id="btn-4x">4x</button>
-        <button id="btn-10x">10x</button>
-        <button id="btn-20x">20x</button>
-        <button id="btn-50x">50x</button>
-        <button id="btn-100x">100x</button>
-        <span class="game-time" id="game-time">T+00:00</span>
-        <span class="targeting-readout" id="targeting-readout"></span>
-        <button id="btn-loadout" title="Edit fleet loadout">Loadout</button>
-      </div>
-
-      <div id="info-overlay">
-        WASD/Arrows: Pan | Scroll: Zoom | Space: Pause | +/-: Speed
-      </div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>
