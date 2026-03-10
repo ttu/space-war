@@ -20,22 +20,14 @@ import { MissileRenderer } from '../rendering/MissileRenderer';
 import { ProjectileRenderer } from '../rendering/ProjectileRenderer';
 import { CommandHandler } from './CommandHandler';
 import { applyBoxSelection } from './Selection';
+import { loadScenario } from '../engine/data/ScenarioLoader';
+import { demoScenario } from '../engine/data/scenarios/demo';
+import { showShipConfigScreen } from '../ui/ShipConfigScreen';
 import {
   Position,
-  Velocity,
   Ship,
-  Thruster,
-  Hull,
-  createShipSystems,
-  CelestialBody,
   Selectable,
-  RotationState,
-  ThermalSignature,
-  SensorArray,
   ContactTracker,
-  MissileLauncher,
-  PDC,
-  Railgun,
   NavigationOrder,
   COMPONENT,
 } from '../engine/components';
@@ -191,6 +183,9 @@ export class SpaceWarGame {
     btn20x.addEventListener('click', () => this.setSpeed(20));
     btn50x.addEventListener('click', () => this.setSpeed(50));
     btn100x.addEventListener('click', () => this.setSpeed(100));
+
+    const btnLoadout = document.getElementById('btn-loadout')!;
+    btnLoadout.addEventListener('click', () => this.openLoadoutScreen());
 
     this.updatePauseUI();
     this.updateSpeedUI();
@@ -467,299 +462,22 @@ export class SpaceWarGame {
   // --- Demo scenario ---
 
   loadDemoScenario(): void {
-    this.world.clear();
-
-    // Earth-like planet at origin
-    const earth = this.world.createEntity();
-    this.world.addComponent<Position>(earth, {
-      type: 'Position',
-      x: 0,
-      y: 0,
-      prevX: 0,
-      prevY: 0,
-    });
-    this.world.addComponent<CelestialBody>(earth, {
-      type: 'CelestialBody',
-      name: 'Terra',
-      mass: 5.972e24,
-      radius: 6371,
-      bodyType: 'planet',
-    });
-
-    // Player flagship in high orbit
-    const flagship = this.world.createEntity();
-    this.world.addComponent<Position>(flagship, {
-      type: 'Position',
-      x: 42000,
-      y: 0,
-      prevX: 42000,
-      prevY: 0,
-    });
-    // Orbital velocity for ~42000 km orbit
-    const orbitalSpeed = Math.sqrt((6.674e-20 * 5.972e24) / 42000);
-    this.world.addComponent<Velocity>(flagship, {
-      type: 'Velocity',
-      vx: 0,
-      vy: orbitalSpeed,
-    });
-    this.world.addComponent<Ship>(flagship, {
-      type: 'Ship',
-      name: 'TCS Resolute',
-      hullClass: 'cruiser',
-      faction: 'player',
-      flagship: true,
-    });
-    this.world.addComponent<Hull>(flagship, {
-      type: 'Hull', current: 100, max: 100, armor: 5,
-    });
-    this.world.addComponent(flagship, createShipSystems(100, 100, 100));
-    this.world.addComponent<Thruster>(flagship, {
-      type: 'Thruster',
-      maxThrust: 0.1,
-      thrustAngle: 0,
-      throttle: 0,
-      rotationSpeed: 0.5,
-    });
-    this.world.addComponent<Selectable>(flagship, {
-      type: 'Selectable',
-      selected: false,
-    });
-    this.world.addComponent<RotationState>(flagship, {
-      type: 'RotationState',
-      currentAngle: 0,
-      targetAngle: 0,
-      rotating: false,
-    });
-    this.world.addComponent<ThermalSignature>(flagship, {
-      type: 'ThermalSignature', baseSignature: 50, thrustMultiplier: 200,
-    });
-    this.world.addComponent<SensorArray>(flagship, {
-      type: 'SensorArray', maxRange: 500_000, sensitivity: 1e-12,
-    });
-    this.world.addComponent<MissileLauncher>(flagship, {
-      type: 'MissileLauncher',
-      salvoSize: 6, reloadTime: 30, lastFiredTime: 0,
-      maxRange: 50_000, missileAccel: 0.5, ammo: 24,
-      seekerRange: 5_000, seekerSensitivity: 1e-8,
-    });
-    this.world.addComponent<PDC>(flagship, {
-      type: 'PDC', range: 5, fireRate: 100, lastFiredTime: 0, damagePerHit: 1,
-    });
-    this.world.addComponent<Railgun>(flagship, {
-      type: 'Railgun', projectileSpeed: 100, maxRange: 10_000, reloadTime: 2, lastFiredTime: 0, damage: 50,
-    });
-
-    // Player escort destroyer
-    const escort = this.world.createEntity();
-    this.world.addComponent<Position>(escort, {
-      type: 'Position',
-      x: 42500,
-      y: 1000,
-      prevX: 42500,
-      prevY: 1000,
-    });
-    this.world.addComponent<Velocity>(escort, {
-      type: 'Velocity',
-      vx: 0,
-      vy: orbitalSpeed * 0.99,
-    });
-    this.world.addComponent<Ship>(escort, {
-      type: 'Ship',
-      name: 'TCS Vigilant',
-      hullClass: 'destroyer',
-      faction: 'player',
-      flagship: false,
-    });
-    this.world.addComponent<Hull>(escort, {
-      type: 'Hull', current: 80, max: 80, armor: 4,
-    });
-    this.world.addComponent(escort, createShipSystems(80, 80, 80));
-    this.world.addComponent<Thruster>(escort, {
-      type: 'Thruster',
-      maxThrust: 0.15,
-      thrustAngle: 0,
-      throttle: 0,
-      rotationSpeed: 0.8,
-    });
-    this.world.addComponent<Selectable>(escort, {
-      type: 'Selectable',
-      selected: false,
-    });
-    this.world.addComponent<RotationState>(escort, {
-      type: 'RotationState',
-      currentAngle: 0,
-      targetAngle: 0,
-      rotating: false,
-    });
-    this.world.addComponent<ThermalSignature>(escort, {
-      type: 'ThermalSignature', baseSignature: 40, thrustMultiplier: 180,
-    });
-    this.world.addComponent<SensorArray>(escort, {
-      type: 'SensorArray', maxRange: 400_000, sensitivity: 2e-12,
-    });
-    this.world.addComponent<MissileLauncher>(escort, {
-      type: 'MissileLauncher',
-      salvoSize: 4, reloadTime: 25, lastFiredTime: 0,
-      maxRange: 40_000, missileAccel: 0.6, ammo: 16,
-      seekerRange: 4_000, seekerSensitivity: 2e-8,
-    });
-    this.world.addComponent<PDC>(escort, {
-      type: 'PDC', range: 5, fireRate: 80, lastFiredTime: 0, damagePerHit: 1,
-    });
-    this.world.addComponent<Railgun>(escort, {
-      type: 'Railgun', projectileSpeed: 120, maxRange: 8_000, reloadTime: 1.5, lastFiredTime: 0, damage: 40,
-    });
-
-    // Enemy ships approaching from far away
-    const enemy1 = this.world.createEntity();
-    this.world.addComponent<Position>(enemy1, {
-      type: 'Position',
-      x: -80000,
-      y: 60000,
-      prevX: -80000,
-      prevY: 60000,
-    });
-    this.world.addComponent<Velocity>(enemy1, {
-      type: 'Velocity',
-      vx: 2.0,
-      vy: -1.5,
-    });
-    this.world.addComponent<Ship>(enemy1, {
-      type: 'Ship',
-      name: 'UES Aggressor',
-      hullClass: 'cruiser',
-      faction: 'enemy',
-      flagship: true,
-    });
-    this.world.addComponent<Hull>(enemy1, {
-      type: 'Hull', current: 100, max: 100, armor: 5,
-    });
-    this.world.addComponent(enemy1, createShipSystems(100, 100, 100));
-    this.world.addComponent<Thruster>(enemy1, {
-      type: 'Thruster',
-      maxThrust: 0.1,
-      thrustAngle: 0,
-      throttle: 0.3,
-      rotationSpeed: 0.5,
-    });
-    this.world.addComponent<Selectable>(enemy1, {
-      type: 'Selectable',
-      selected: false,
-    });
-    this.world.addComponent<RotationState>(enemy1, {
-      type: 'RotationState',
-      currentAngle: 0,
-      targetAngle: 0,
-      rotating: false,
-    });
-    this.world.addComponent<ThermalSignature>(enemy1, {
-      type: 'ThermalSignature', baseSignature: 50, thrustMultiplier: 200,
-    });
-    this.world.addComponent<SensorArray>(enemy1, {
-      type: 'SensorArray', maxRange: 500_000, sensitivity: 1e-12,
-    });
-    this.world.addComponent<MissileLauncher>(enemy1, {
-      type: 'MissileLauncher',
-      salvoSize: 6, reloadTime: 30, lastFiredTime: 0,
-      maxRange: 50_000, missileAccel: 0.5, ammo: 24,
-      seekerRange: 5_000, seekerSensitivity: 1e-8,
-    });
-    this.world.addComponent<PDC>(enemy1, {
-      type: 'PDC', range: 5, fireRate: 100, lastFiredTime: 0, damagePerHit: 1,
-    });
-    this.world.addComponent<Railgun>(enemy1, {
-      type: 'Railgun', projectileSpeed: 100, maxRange: 10_000, reloadTime: 2, lastFiredTime: 0, damage: 50,
-    });
-
-    const enemy2 = this.world.createEntity();
-    this.world.addComponent<Position>(enemy2, {
-      type: 'Position',
-      x: -75000,
-      y: 65000,
-      prevX: -75000,
-      prevY: 65000,
-    });
-    this.world.addComponent<Velocity>(enemy2, {
-      type: 'Velocity',
-      vx: 2.2,
-      vy: -1.3,
-    });
-    this.world.addComponent<Ship>(enemy2, {
-      type: 'Ship',
-      name: 'UES Raider',
-      hullClass: 'frigate',
-      faction: 'enemy',
-      flagship: false,
-    });
-    this.world.addComponent<Hull>(enemy2, {
-      type: 'Hull', current: 60, max: 60, armor: 3,
-    });
-    this.world.addComponent(enemy2, createShipSystems(60, 60, 60));
-    this.world.addComponent<Thruster>(enemy2, {
-      type: 'Thruster',
-      maxThrust: 0.18,
-      thrustAngle: 0,
-      throttle: 0.3,
-      rotationSpeed: 0.9,
-    });
-    this.world.addComponent<Selectable>(enemy2, {
-      type: 'Selectable',
-      selected: false,
-    });
-    this.world.addComponent<RotationState>(enemy2, {
-      type: 'RotationState',
-      currentAngle: 0,
-      targetAngle: 0,
-      rotating: false,
-    });
-    this.world.addComponent<ThermalSignature>(enemy2, {
-      type: 'ThermalSignature', baseSignature: 30, thrustMultiplier: 150,
-    });
-    this.world.addComponent<SensorArray>(enemy2, {
-      type: 'SensorArray', maxRange: 300_000, sensitivity: 3e-12,
-    });
-    this.world.addComponent<MissileLauncher>(enemy2, {
-      type: 'MissileLauncher',
-      salvoSize: 3, reloadTime: 20, lastFiredTime: 0,
-      maxRange: 35_000, missileAccel: 0.6, ammo: 12,
-      seekerRange: 3_000, seekerSensitivity: 3e-8,
-    });
-    this.world.addComponent<PDC>(enemy2, {
-      type: 'PDC', range: 4, fireRate: 60, lastFiredTime: 0, damagePerHit: 1,
-    });
-    this.world.addComponent<Railgun>(enemy2, {
-      type: 'Railgun', projectileSpeed: 90, maxRange: 6_000, reloadTime: 1.8, lastFiredTime: 0, damage: 35,
-    });
-
-    // Moon
-    const moon = this.world.createEntity();
-    this.world.addComponent<Position>(moon, {
-      type: 'Position',
-      x: 0,
-      y: 384400,
-      prevX: 0,
-      prevY: 384400,
-    });
-    this.world.addComponent<CelestialBody>(moon, {
-      type: 'CelestialBody',
-      name: 'Luna',
-      mass: 7.342e22,
-      radius: 1737,
-      bodyType: 'moon',
-    });
-
-    // Faction contact trackers
-    const playerTracker = this.world.createEntity();
-    this.world.addComponent<ContactTracker>(playerTracker, {
-      type: 'ContactTracker', faction: 'player', contacts: new Map(),
-    });
-    const enemyTracker = this.world.createEntity();
-    this.world.addComponent<ContactTracker>(enemyTracker, {
-      type: 'ContactTracker', faction: 'enemy', contacts: new Map(),
-    });
-
-    // Center camera on player fleet
+    loadScenario(this.world, demoScenario);
     this.camera.setPosition(42000, 0);
     this.camera.zoomToFit(30000, 30000);
+  }
+
+  /** Open pre-battle loadout editor; on Apply reloads scenario with chosen loadouts. */
+  openLoadoutScreen(): void {
+    showShipConfigScreen(
+      demoScenario,
+      this.container,
+      (scenario) => {
+        loadScenario(this.world, scenario);
+        this.camera.setPosition(42000, 0);
+        this.camera.zoomToFit(30000, 30000);
+      },
+      () => {},
+    );
   }
 }
