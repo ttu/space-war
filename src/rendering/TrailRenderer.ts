@@ -43,18 +43,25 @@ export class TrailStore {
 
 const TRAIL_COLOR_PLAYER = 0x4488cc;
 const TRAIL_COLOR_ENEMY = 0xcc4444;
-const PROJECTION_COLOR = 0xffcc44;
+const PROJECTION_COLOR_DRIFT = 0xffcc44;
+const PROJECTION_COLOR_NAV = 0x44ddff;
+const DESTINATION_COLOR = 0x44ddff;
 const TRAIL_OPACITY = 0.3;
-const PROJECTION_OPACITY = 0.4;
+const PROJECTION_OPACITY_DRIFT = 0.3;
+const PROJECTION_OPACITY_NAV = 0.7;
+const DESTINATION_OPACITY = 0.8;
 const MAX_TRAIL_POINTS = 200;
 const PROJECTION_STEPS = 60;
 const PROJECTION_DT = 2; // seconds per step
+const DESTINATION_MARKER_SIZE = 0.008; // relative to zoom
+const MAX_NAV_PROJECTION_STEPS = 2000; // cap for navigating ships
 
 export class TrailRenderer {
   private group = new THREE.Group();
   private trailStore = new TrailStore(MAX_TRAIL_POINTS);
   private trailLines: Map<EntityId, THREE.Line> = new Map();
   private projectionLines: Map<EntityId, THREE.Line> = new Map();
+  private destinationMarkers: Map<EntityId, THREE.Group> = new Map();
   private tickCounter = 0;
   private recordInterval = 5; // Record every N ticks
 
@@ -93,11 +100,18 @@ export class TrailRenderer {
         this.projectionLines.delete(id);
       }
     }
+    for (const [id, marker] of this.destinationMarkers) {
+      if (!activeIds.has(id)) {
+        this.group.remove(marker);
+        this.destinationMarkers.delete(id);
+      }
+    }
 
     for (const entityId of ships) {
       const ship = world.getComponent<Ship>(entityId, COMPONENT.Ship)!;
       this.updateTrailLine(entityId, ship.faction === 'player' ? TRAIL_COLOR_PLAYER : TRAIL_COLOR_ENEMY);
       this.updateProjectionLine(world, entityId, zoom);
+      this.updateDestinationMarker(world, entityId, zoom);
     }
   }
 
@@ -136,11 +150,12 @@ export class TrailRenderer {
     const thruster = world.getComponent<Thruster>(entityId, COMPONENT.Thruster);
     const nav = world.getComponent<NavigationOrder>(entityId, COMPONENT.NavigationOrder);
 
+    const hasNav = nav && nav.phase !== 'arrived';
+
     // Only show projection for ships with velocity or active navigation
     if (!vel) return;
     const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
-    if (speed < 0.01 && !nav) {
-      // Remove projection line if it exists
+    if (speed < 0.01 && !hasNav) {
       const existing = this.projectionLines.get(entityId);
       if (existing) {
         existing.visible = false;
@@ -148,17 +163,34 @@ export class TrailRenderer {
       return;
     }
 
+    const color = hasNav ? PROJECTION_COLOR_NAV : PROJECTION_COLOR_DRIFT;
+    const opacity = hasNav ? PROJECTION_OPACITY_NAV : PROJECTION_OPACITY_DRIFT;
+
+    const points = this.projectPath(pos, vel, thruster, nav);
+    const maxPoints = points.length;
+
     let line = this.projectionLines.get(entityId);
+    // Reallocate buffer if it's too small for the current trajectory
+    if (line) {
+      const posAttr = line.geometry.getAttribute('position') as THREE.BufferAttribute;
+      if (posAttr.count < maxPoints) {
+        this.group.remove(line);
+        line.geometry.dispose();
+        this.projectionLines.delete(entityId);
+        line = undefined;
+      }
+    }
+
     if (!line) {
-      // Pre-allocate buffer for max projection steps + 1 (start point)
-      const positions = new Float32Array((PROJECTION_STEPS + 1) * 3);
+      const bufferSize = Math.max(PROJECTION_STEPS + 1, maxPoints);
+      const positions = new Float32Array(bufferSize * 3);
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
       geo.setDrawRange(0, 0);
       const mat = new THREE.LineDashedMaterial({
-        color: PROJECTION_COLOR,
+        color,
         transparent: true,
-        opacity: PROJECTION_OPACITY,
+        opacity,
         dashSize: 500,
         gapSize: 300,
       });
@@ -167,9 +199,13 @@ export class TrailRenderer {
       this.group.add(line);
     }
 
+    // Update color and opacity based on navigation state
+    const mat = line.material as THREE.LineDashedMaterial;
+    mat.color.setHex(color);
+    mat.opacity = opacity;
+
     line.visible = true;
 
-    const points = this.projectPath(pos, vel, thruster, nav);
     const posAttr = line.geometry.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < points.length; i++) {
       posAttr.setXYZ(i, points[i].x, points[i].y, 0.3);
@@ -177,6 +213,71 @@ export class TrailRenderer {
     posAttr.needsUpdate = true;
     line.geometry.setDrawRange(0, points.length);
     line.computeLineDistances();
+  }
+
+  private updateDestinationMarker(world: World, entityId: EntityId, zoom: number): void {
+    const nav = world.getComponent<NavigationOrder>(entityId, COMPONENT.NavigationOrder);
+    const ship = world.getComponent<Ship>(entityId, COMPONENT.Ship);
+
+    // Only show for player ships with active navigation
+    if (!nav || nav.phase === 'arrived' || !ship || ship.faction !== 'player') {
+      const existing = this.destinationMarkers.get(entityId);
+      if (existing) existing.visible = false;
+      return;
+    }
+
+    let marker = this.destinationMarkers.get(entityId);
+    if (!marker) {
+      marker = this.createDestinationMarker();
+      this.destinationMarkers.set(entityId, marker);
+      this.group.add(marker);
+    }
+
+    marker.visible = true;
+    marker.position.set(nav.targetX, nav.targetY, 0.4);
+
+    // Scale marker with zoom so it stays visible
+    const s = zoom * DESTINATION_MARKER_SIZE;
+    marker.scale.set(s, s, 1);
+  }
+
+  private createDestinationMarker(): THREE.Group {
+    const group = new THREE.Group();
+
+    // Crosshair: 4 lines forming a +
+    const armLength = 1;
+    const gapRadius = 0.3;
+    const arms = [
+      [0, gapRadius, 0, armLength],    // up
+      [0, -gapRadius, 0, -armLength],  // down
+      [gapRadius, 0, armLength, 0],    // right
+      [-gapRadius, 0, -armLength, 0],  // left
+    ];
+    for (const [x1, y1, x2, y2] of arms) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute([x1, y1, 0, x2, y2, 0], 3));
+      const mat = new THREE.LineBasicMaterial({
+        color: DESTINATION_COLOR,
+        transparent: true,
+        opacity: DESTINATION_OPACITY,
+      });
+      group.add(new THREE.Line(geo, mat));
+    }
+
+    // Diamond outline around the crosshair
+    const d = 0.5;
+    const diamondGeo = new THREE.BufferGeometry();
+    diamondGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+      0, d, 0,  d, 0, 0,  0, -d, 0,  -d, 0, 0,
+    ], 3));
+    const diamondMat = new THREE.LineBasicMaterial({
+      color: DESTINATION_COLOR,
+      transparent: true,
+      opacity: DESTINATION_OPACITY * 0.6,
+    });
+    group.add(new THREE.LineLoop(diamondGeo, diamondMat));
+
+    return group;
   }
 
   private projectPath(
@@ -188,23 +289,24 @@ export class TrailRenderer {
     let px = pos.x, py = pos.y;
     let vx = vel.vx, vy = vel.vy;
 
-    // If navigating with a burn plan, simulate the full trajectory
+    // If navigating with a burn plan, simulate the full trajectory to destination
     if (nav && thruster && nav.phase !== 'arrived') {
       const a = thruster.maxThrust;
       const plan = nav.burnPlan;
-      // Remaining time in current phase (approximate)
       let phase: string = nav.phase;
       let remaining = this.estimatePhaseRemaining(nav, thruster);
 
-      for (let i = 0; i < PROJECTION_STEPS; i++) {
-        // Apply thrust based on current phase
+      // Calculate total remaining burn time to size the step count
+      const totalTime = plan.accelTime + plan.decelTime + 10; // +10s buffer
+      const maxSteps = Math.min(Math.ceil(totalTime / PROJECTION_DT) + 10, MAX_NAV_PROJECTION_STEPS);
+
+      for (let i = 0; i < maxSteps; i++) {
         if (phase === 'accelerating') {
           vx += Math.cos(plan.burnDirection) * a * PROJECTION_DT;
           vy += Math.sin(plan.burnDirection) * a * PROJECTION_DT;
           remaining -= PROJECTION_DT;
           if (remaining <= 0) { phase = 'flipping'; remaining = 0; }
         } else if (phase === 'flipping') {
-          // No thrust during flip — skip to decel
           phase = 'decelerating';
           remaining = plan.decelTime;
         } else if (phase === 'decelerating') {
@@ -213,19 +315,19 @@ export class TrailRenderer {
           remaining -= PROJECTION_DT;
           if (remaining <= 0) { phase = 'arrived'; }
         } else if (phase === 'rotating') {
-          // No thrust during rotation — skip to accel
           phase = 'accelerating';
           remaining = plan.accelTime;
         }
-        // 'arrived' — no thrust, just drift
 
         px += vx * PROJECTION_DT;
         py += vy * PROJECTION_DT;
         points.push({ x: px, y: py });
 
+        // Stop once we reach the destination
         const dx = nav.targetX - px;
         const dy = nav.targetY - py;
         if (Math.sqrt(dx * dx + dy * dy) < nav.arrivalThreshold) break;
+        if (phase === 'arrived') break;
       }
     } else {
       // No navigation — simple velocity extrapolation
@@ -264,8 +366,12 @@ export class TrailRenderer {
       line.geometry.dispose();
       this.group.remove(line);
     }
+    for (const [, marker] of this.destinationMarkers) {
+      this.group.remove(marker);
+    }
     this.trailLines.clear();
     this.projectionLines.clear();
+    this.destinationMarkers.clear();
     this.scene.remove(this.group);
   }
 }

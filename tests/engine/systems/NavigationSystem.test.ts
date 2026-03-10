@@ -66,20 +66,21 @@ describe('NavigationSystem', () => {
     expect(thruster.thrustAngle).toBe(0); // burnDirection
   });
 
-  it('flips thrust direction during deceleration', () => {
+  it('thrusts retrograde during deceleration', () => {
     const world = new WorldImpl();
     const system = new NavigationSystem();
+    // Ship moving toward target at +x, should thrust in -x (retrograde)
     const id = createShipWithNav(world, {
       phase: 'decelerating',
-      burnDirection: 0,
-      flipAngle: Math.PI,
+      vx: 5, vy: 0,
+      targetX: 10000, targetY: 0,
     });
 
     system.update(world, 1, 10);
 
     const thruster = world.getComponent<Thruster>(id, COMPONENT.Thruster)!;
     expect(thruster.throttle).toBe(1);
-    expect(thruster.thrustAngle).toBeCloseTo(Math.PI); // reversed
+    expect(thruster.thrustAngle).toBeCloseTo(Math.PI); // opposite to velocity
   });
 
   it('stops thrust when arrived', () => {
@@ -105,12 +106,13 @@ describe('NavigationSystem', () => {
     }
   });
 
-  it('rotates ship toward burn direction before accelerating', () => {
+  it('rotates ship toward target direction before accelerating', () => {
     const world = new WorldImpl();
     const system = new NavigationSystem();
+    // Target is above ship — burn direction should be recalculated to PI/2
     const id = createShipWithNav(world, {
       phase: 'rotating',
-      burnDirection: Math.PI / 2,
+      targetX: 0, targetY: 10000,
       currentAngle: 0,
       rotationSpeed: 1.0,
     });
@@ -118,7 +120,7 @@ describe('NavigationSystem', () => {
     system.update(world, 0.5, 5);
 
     const rot = world.getComponent<RotationState>(id, COMPONENT.RotationState)!;
-    // Should have rotated 0.5 radians toward PI/2
+    // Should have rotated 0.5 radians toward PI/2 (direction to target)
     expect(rot.currentAngle).toBeCloseTo(0.5);
     expect(rot.rotating).toBe(true);
   });
@@ -141,16 +143,21 @@ describe('NavigationSystem', () => {
     expect(nav.phase).toBe('accelerating');
   });
 
-  it('transitions from accelerating to flipping after accelTime', () => {
+  it('transitions from accelerating to flipping when stopping distance exceeds remaining', () => {
     const world = new WorldImpl();
     const system = new NavigationSystem();
+    // Ship close to target with high velocity — stopping distance > remaining distance
     const id = createShipWithNav(world, {
       phase: 'accelerating',
-      accelTime: 100,
+      px: 9500, py: 0,
+      vx: 10, vy: 0,
+      targetX: 10000, targetY: 0,
+      maxThrust: 0.1,
     });
 
-    // Simulate 100+ seconds of game time
-    system.update(world, 1, 101);
+    // distance=500, speed=10, stoppingDist = 10²/(2*0.1) = 500
+    // With FLIP_MARGIN (1.15): 500*1.15=575 >= 500 → should flip
+    system.update(world, 1, 10);
 
     const nav = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder)!;
     expect(nav.phase).toBe('flipping');

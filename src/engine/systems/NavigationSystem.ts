@@ -7,6 +7,7 @@ import { shortestAngleDelta, normalizeAngle } from '../../game/TrajectoryCalcula
 
 const ALIGNMENT_THRESHOLD = 0.05; // radians — close enough to "aligned"
 const ARRIVAL_SPEED_THRESHOLD = 0.5; // km/s — slow enough to consider stopped
+const FLIP_MARGIN = 1.15; // flip slightly early to avoid overshoot
 
 export class NavigationSystem {
   update(world: World, dt: number, gameTime: number): void {
@@ -42,16 +43,16 @@ export class NavigationSystem {
 
     switch (nav.phase) {
       case 'rotating':
-        this.handleRotating(nav, rot, thruster, dt, gameTime);
+        this.handleRotating(nav, pos, vel, rot, thruster, dt, gameTime);
         break;
       case 'accelerating':
-        this.handleAccelerating(nav, rot, thruster, gameTime);
+        this.handleAccelerating(nav, pos, vel, rot, thruster, distToTarget, speed, gameTime);
         break;
       case 'flipping':
-        this.handleFlipping(nav, rot, thruster, dt, gameTime);
+        this.handleFlipping(nav, vel, rot, thruster, dt, gameTime);
         break;
       case 'decelerating':
-        this.handleDecelerating(nav, thruster);
+        this.handleDecelerating(nav, pos, vel, rot, thruster, distToTarget, speed, gameTime);
         break;
       case 'arrived':
         thruster.throttle = 0;
@@ -66,10 +67,18 @@ export class NavigationSystem {
   }
 
   private handleRotating(
-    nav: NavigationOrder, rot: RotationState, thruster: Thruster,
+    nav: NavigationOrder, pos: Position, _vel: Velocity,
+    rot: RotationState, thruster: Thruster,
     dt: number, gameTime: number,
   ): void {
     thruster.throttle = 0;
+
+    // Continuously recalculate burn direction from current state (ship drifts during rotation)
+    const dx = nav.targetX - pos.x;
+    const dy = nav.targetY - pos.y;
+    nav.burnPlan.burnDirection = normalizeAngle(Math.atan2(dy, dx));
+    nav.burnPlan.flipAngle = normalizeAngle(nav.burnPlan.burnDirection + Math.PI);
+
     rot.targetAngle = nav.burnPlan.burnDirection;
     const rotated = this.rotateToward(rot, thruster.rotationSpeed, dt);
 
@@ -81,15 +90,26 @@ export class NavigationSystem {
   }
 
   private handleAccelerating(
-    nav: NavigationOrder, rot: RotationState, thruster: Thruster,
-    gameTime: number,
+    nav: NavigationOrder, pos: Position, _vel: Velocity,
+    rot: RotationState, thruster: Thruster,
+    distToTarget: number, speed: number, gameTime: number,
   ): void {
-    thruster.thrustAngle = nav.burnPlan.burnDirection;
-    thruster.throttle = 1;
-    rot.currentAngle = nav.burnPlan.burnDirection;
+    // Continuously update thrust direction toward target
+    const dx = nav.targetX - pos.x;
+    const dy = nav.targetY - pos.y;
+    const dirToTarget = normalizeAngle(Math.atan2(dy, dx));
 
-    const elapsed = gameTime - nav.phaseStartTime;
-    if (elapsed >= nav.burnPlan.accelTime) {
+    nav.burnPlan.burnDirection = dirToTarget;
+    nav.burnPlan.flipAngle = normalizeAngle(dirToTarget + Math.PI);
+
+    thruster.thrustAngle = dirToTarget;
+    thruster.throttle = 1;
+    rot.currentAngle = dirToTarget;
+
+    // Dynamic flip decision: compare stopping distance to remaining distance
+    const stoppingDist = (speed * speed) / (2 * thruster.maxThrust);
+
+    if (stoppingDist * FLIP_MARGIN >= distToTarget) {
       nav.phase = 'flipping';
       nav.phaseStartTime = gameTime;
       thruster.throttle = 0;
@@ -97,10 +117,19 @@ export class NavigationSystem {
   }
 
   private handleFlipping(
-    nav: NavigationOrder, rot: RotationState, thruster: Thruster,
+    nav: NavigationOrder, vel: Velocity,
+    rot: RotationState, thruster: Thruster,
     dt: number, gameTime: number,
   ): void {
     thruster.throttle = 0;
+
+    // Flip to retrograde (opposite current velocity) to cancel all velocity components
+    const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
+    if (speed > 0.01) {
+      const retrograde = normalizeAngle(Math.atan2(-vel.vy, -vel.vx));
+      nav.burnPlan.flipAngle = retrograde;
+    }
+
     rot.targetAngle = nav.burnPlan.flipAngle;
     const rotated = this.rotateToward(rot, thruster.rotationSpeed, dt);
 
@@ -112,10 +141,29 @@ export class NavigationSystem {
   }
 
   private handleDecelerating(
-    nav: NavigationOrder, thruster: Thruster,
+    nav: NavigationOrder, pos: Position, vel: Velocity,
+    rot: RotationState, thruster: Thruster,
+    distToTarget: number, speed: number, gameTime: number,
   ): void {
-    thruster.thrustAngle = nav.burnPlan.flipAngle;
+    // Thrust retrograde (opposite to velocity) to cancel all velocity components
+    if (speed > 0.01) {
+      const retrograde = normalizeAngle(Math.atan2(-vel.vy, -vel.vx));
+      thruster.thrustAngle = retrograde;
+      rot.currentAngle = retrograde;
+    }
     thruster.throttle = 1;
+
+    // If we overshot or velocity is now pointing away from target and we're slow,
+    // switch back to accelerating toward target
+    if (speed < ARRIVAL_SPEED_THRESHOLD * 2 && distToTarget > nav.arrivalThreshold * 2) {
+      const dx = nav.targetX - pos.x;
+      const dy = nav.targetY - pos.y;
+      nav.burnPlan.burnDirection = normalizeAngle(Math.atan2(dy, dx));
+      nav.burnPlan.flipAngle = normalizeAngle(nav.burnPlan.burnDirection + Math.PI);
+      nav.phase = 'rotating';
+      nav.phaseStartTime = gameTime;
+      thruster.throttle = 0;
+    }
   }
 
   private arrive(world: World, entityId: EntityId, thruster: Thruster): void {
