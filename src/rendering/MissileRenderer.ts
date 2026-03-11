@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { World, EntityId } from '../engine/types';
 import {
-  Position, Missile,
+  Position, Missile, ContactTracker,
   COMPONENT,
 } from '../engine/components';
 
@@ -9,6 +9,7 @@ interface MissileVisual {
   group: THREE.Group;
   dots: THREE.Mesh[];
   trail: THREE.Line;
+  targetLine: THREE.Line;
 }
 
 const MISSILE_COLOR_PLAYER = 0x88bbff;
@@ -16,6 +17,9 @@ const MISSILE_COLOR_ENEMY = 0xff6644;
 const TRAIL_OPACITY = 0.4;
 const MAX_TRAIL_POINTS = 50;
 const BALLISTIC_OPACITY = 0.3;
+const TARGET_LINE_OPACITY = 0.25;
+const TARGET_LINE_COLOR_PLAYER = 0x88bbff;
+const TARGET_LINE_COLOR_ENEMY = 0xff6644;
 
 export class MissileRenderer {
   private visuals: Map<EntityId, MissileVisual> = new Map();
@@ -47,7 +51,7 @@ export class MissileRenderer {
     }
   }
 
-  update(world: World, zoom: number): void {
+  update(world: World, zoom: number, playerContacts?: ContactTracker): void {
     const missileEntities = world.query(COMPONENT.Position, COMPONENT.Missile);
     const activeIds = new Set(missileEntities);
 
@@ -56,7 +60,9 @@ export class MissileRenderer {
       if (!activeIds.has(id)) {
         this.group.remove(visual.group);
         this.group.remove(visual.trail);
+        this.group.remove(visual.targetLine);
         visual.trail.geometry.dispose();
+        visual.targetLine.geometry.dispose();
         for (const dot of visual.dots) {
           dot.geometry.dispose();
         }
@@ -77,6 +83,7 @@ export class MissileRenderer {
         this.visuals.set(entityId, visual);
         this.group.add(visual.group);
         this.group.add(visual.trail);
+        this.group.add(visual.targetLine);
       }
 
       // Position the dot group
@@ -96,6 +103,9 @@ export class MissileRenderer {
 
       // Update trail
       this.updateTrail(entityId, visual.trail);
+
+      // Update target line: from missile position to target position
+      this.updateTargetLine(world, missile, pos, visual.targetLine, playerContacts);
     }
   }
 
@@ -132,7 +142,51 @@ export class MissileRenderer {
     });
     const trail = new THREE.Line(trailGeo, trailMat);
 
-    return { group, dots, trail };
+    // Target line (dashed, world space)
+    const tlColor = missile.launcherFaction === 'player' ? TARGET_LINE_COLOR_PLAYER : TARGET_LINE_COLOR_ENEMY;
+    const tlGeo = new THREE.BufferGeometry();
+    tlGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
+    const tlMat = new THREE.LineDashedMaterial({
+      color: tlColor,
+      transparent: true,
+      opacity: TARGET_LINE_OPACITY,
+      dashSize: 3,
+      gapSize: 3,
+    });
+    const targetLine = new THREE.Line(tlGeo, tlMat);
+
+    return { group, dots, trail, targetLine };
+  }
+
+  private updateTargetLine(
+    world: World, missile: Missile, missilePos: Position,
+    targetLine: THREE.Line, playerContacts?: ContactTracker,
+  ): void {
+    // Get target position (use fog-of-war contact data for player missiles targeting enemies)
+    const targetPos = world.getComponent<Position>(missile.targetId, COMPONENT.Position);
+    if (!targetPos) {
+      targetLine.visible = false;
+      return;
+    }
+
+    let tx = targetPos.x;
+    let ty = targetPos.y;
+
+    // For player missiles, use contact (light-delayed) position if available
+    if (missile.launcherFaction === 'player' && playerContacts) {
+      const contact = playerContacts.contacts.get(missile.targetId);
+      if (contact) {
+        tx = contact.lastKnownX;
+        ty = contact.lastKnownY;
+      }
+    }
+
+    const posAttr = targetLine.geometry.getAttribute('position') as THREE.BufferAttribute;
+    posAttr.setXYZ(0, missilePos.x, missilePos.y, 1.2);
+    posAttr.setXYZ(1, tx, ty, 1.2);
+    posAttr.needsUpdate = true;
+    targetLine.visible = true;
+    targetLine.computeLineDistances();
   }
 
   private updateTrail(entityId: EntityId, trail: THREE.Line): void {
@@ -151,7 +205,9 @@ export class MissileRenderer {
     for (const [, visual] of this.visuals) {
       this.group.remove(visual.group);
       this.group.remove(visual.trail);
+      this.group.remove(visual.targetLine);
       visual.trail.geometry.dispose();
+      visual.targetLine.geometry.dispose();
     }
     this.visuals.clear();
     this.trailHistory.clear();

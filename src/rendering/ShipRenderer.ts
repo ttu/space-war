@@ -2,13 +2,14 @@ import * as THREE from 'three';
 import { World, EntityId } from '../engine/types';
 import {
   Position, Velocity, Ship, Selectable, Thruster, COMPONENT, Faction,
-  ContactTracker, DetectedContact,
+  ContactTracker, DetectedContact, Missile,
 } from '../engine/components';
 
 interface ShipVisual {
   group: THREE.Group;
   icon: THREE.Mesh;
   selectionRing: THREE.LineLoop;
+  targetReticle: THREE.Group;
   velocityLine: THREE.Line;
   thrustIndicator: THREE.Mesh;
   label: THREE.Sprite;
@@ -21,6 +22,7 @@ const FACTION_COLORS: Record<Faction, number> = {
 };
 
 const SELECTION_COLOR = 0x44cccc;
+const TARGET_RETICLE_COLOR = 0xff4444;
 
 export class ShipRenderer {
   private visuals: Map<EntityId, ShipVisual> = new Map();
@@ -39,6 +41,16 @@ export class ShipRenderer {
       if (!activeIds.has(id)) {
         this.group.remove(visual.group);
         this.visuals.delete(id);
+      }
+    }
+
+    // Build set of entities targeted by player missiles
+    const targetedByPlayer = new Set<EntityId>();
+    const missileEntities = world.query(COMPONENT.Position, COMPONENT.Missile);
+    for (const mid of missileEntities) {
+      const missile = world.getComponent<Missile>(mid, COMPONENT.Missile)!;
+      if (missile.launcherFaction === 'player') {
+        targetedByPlayer.add(missile.targetId);
       }
     }
 
@@ -101,6 +113,13 @@ export class ShipRenderer {
 
       // Selection ring visibility
       visual.selectionRing.visible = selectable?.selected ?? false;
+
+      // Target reticle visibility (enemy ships targeted by player missiles)
+      const isTargeted = targetedByPlayer.has(entityId);
+      visual.targetReticle.visible = isTargeted;
+      if (isTargeted) {
+        visual.targetReticle.scale.set(iconScale * 1.6, iconScale * 1.6, 1);
+      }
 
       // Velocity vector line
       if (vel) {
@@ -172,6 +191,11 @@ export class ShipRenderer {
     selectionRing.visible = false;
     group.add(selectionRing);
 
+    // Target reticle: four corner brackets forming a square reticle
+    const targetReticle = this.createTargetReticle();
+    targetReticle.visible = false;
+    group.add(targetReticle);
+
     // Velocity vector line
     const velGeo = new THREE.BufferGeometry();
     velGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
@@ -194,7 +218,31 @@ export class ShipRenderer {
     const label = this.createTextSprite('');
     group.add(label);
 
-    return { group, icon, selectionRing, velocityLine, thrustIndicator, label };
+    return { group, icon, selectionRing, targetReticle, velocityLine, thrustIndicator, label };
+  }
+
+  private createTargetReticle(): THREE.Group {
+    const g = new THREE.Group();
+    const mat = new THREE.LineBasicMaterial({ color: TARGET_RETICLE_COLOR, transparent: true, opacity: 0.8 });
+    // Four corner brackets at ±1, each bracket is an L-shape (0.4 length)
+    const bracketLen = 0.4;
+    const corners = [
+      { x: -1, y: 1, dx: 1, dy: -1 },   // top-left
+      { x: 1, y: 1, dx: -1, dy: -1 },    // top-right
+      { x: -1, y: -1, dx: 1, dy: 1 },    // bottom-left
+      { x: 1, y: -1, dx: -1, dy: 1 },    // bottom-right
+    ];
+    for (const c of corners) {
+      const points = new Float32Array([
+        c.x + c.dx * bracketLen, c.y, 0,
+        c.x, c.y, 0,
+        c.x, c.y + c.dy * bracketLen, 0,
+      ]);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+      g.add(new THREE.Line(geo, mat));
+    }
+    return g;
   }
 
   private createTextSprite(_text: string): THREE.Sprite {

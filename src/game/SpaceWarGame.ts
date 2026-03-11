@@ -505,7 +505,7 @@ export class SpaceWarGame {
     const playerContacts = this.getPlayerContacts();
     this.shipRenderer.update(this.world, alpha, zoom, playerContacts, this.gameTime.elapsed);
     this.trailRenderer.update(this.world, zoom);
-    this.missileRenderer.update(this.world, zoom);
+    this.missileRenderer.update(this.world, zoom, playerContacts);
     this.projectileRenderer.update(this.world, zoom);
 
     this.updateSelectionBoxVisual();
