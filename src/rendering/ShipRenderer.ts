@@ -125,7 +125,7 @@ export class ShipRenderer {
       if (vel) {
         const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
         if (speed > 0.01) {
-          const lineLength = Math.min(speed * 50, zoom * 0.3);
+          const lineLength = Math.min(speed * 120, zoom * 0.5);
           const nx = vel.vx / speed;
           const ny = vel.vy / speed;
           const positions = visual.velocityLine.geometry.getAttribute('position');
@@ -199,7 +199,7 @@ export class ShipRenderer {
     // Velocity vector line
     const velGeo = new THREE.BufferGeometry();
     velGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
-    const velMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.4 });
+    const velMat = new THREE.LineBasicMaterial({ color: 0xcccccc, transparent: true, opacity: 0.6 });
     const velocityLine = new THREE.Line(velGeo, velMat);
     group.add(velocityLine);
 

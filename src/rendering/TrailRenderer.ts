@@ -289,45 +289,42 @@ export class TrailRenderer {
     let px = pos.x, py = pos.y;
     let vx = vel.vx, vy = vel.vy;
 
-    // If navigating with a burn plan, simulate the full trajectory to destination
+    // If navigating, simulate the PN guidance forward
     if (nav && thruster && nav.phase !== 'arrived') {
       const a = thruster.maxThrust;
-      const plan = nav.burnPlan;
-      let phase: string = nav.phase;
-      let remaining = this.estimatePhaseRemaining(nav, thruster);
+      const rotSpeed = thruster.rotationSpeed;
 
-      // Calculate total remaining burn time to size the step count
-      const totalTime = plan.accelTime + plan.decelTime + 10; // +10s buffer
-      const maxSteps = Math.min(Math.ceil(totalTime / PROJECTION_DT) + 10, MAX_NAV_PROJECTION_STEPS);
+      for (let i = 0; i < MAX_NAV_PROJECTION_STEPS; i++) {
+        const dx = nav.targetX - px;
+        const dy = nav.targetY - py;
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
-      for (let i = 0; i < maxSteps; i++) {
-        if (phase === 'accelerating') {
-          vx += Math.cos(plan.burnDirection) * a * PROJECTION_DT;
-          vy += Math.sin(plan.burnDirection) * a * PROJECTION_DT;
-          remaining -= PROJECTION_DT;
-          if (remaining <= 0) { phase = 'flipping'; remaining = 0; }
-        } else if (phase === 'flipping') {
-          phase = 'decelerating';
-          remaining = plan.decelTime;
-        } else if (phase === 'decelerating') {
-          vx += Math.cos(plan.flipAngle) * a * PROJECTION_DT;
-          vy += Math.sin(plan.flipAngle) * a * PROJECTION_DT;
-          remaining -= PROJECTION_DT;
-          if (remaining <= 0) { phase = 'arrived'; }
-        } else if (phase === 'rotating') {
-          phase = 'accelerating';
-          remaining = plan.accelTime;
+        if (dist < nav.arrivalThreshold) break;
+
+        const dirX = dx / dist;
+        const dirY = dy / dist;
+        const speed = Math.sqrt(vx * vx + vy * vy);
+
+        // Same PN logic as NavigationSystem
+        const rotTime = Math.PI / rotSpeed;
+        const rotBuffer = speed * rotTime * 0.5;
+        const effectiveDist = Math.max(0, dist - rotBuffer);
+        const maxApproachSpeed = Math.sqrt(2 * a * effectiveDist);
+
+        const desiredVx = dirX * maxApproachSpeed;
+        const desiredVy = dirY * maxApproachSpeed;
+        const dvx = desiredVx - vx;
+        const dvy = desiredVy - vy;
+        const dvMag = Math.sqrt(dvx * dvx + dvy * dvy);
+
+        if (dvMag > 0.01) {
+          vx += (dvx / dvMag) * a * PROJECTION_DT;
+          vy += (dvy / dvMag) * a * PROJECTION_DT;
         }
 
         px += vx * PROJECTION_DT;
         py += vy * PROJECTION_DT;
         points.push({ x: px, y: py });
-
-        // Stop once we reach the destination
-        const dx = nav.targetX - px;
-        const dy = nav.targetY - py;
-        if (Math.sqrt(dx * dx + dy * dy) < nav.arrivalThreshold) break;
-        if (phase === 'arrived') break;
       }
     } else {
       // No navigation — simple velocity extrapolation
@@ -344,17 +341,6 @@ export class TrailRenderer {
     }
 
     return points;
-  }
-
-  /** Estimate remaining time in current nav phase (approximate — no gameTime access). */
-  private estimatePhaseRemaining(nav: NavigationOrder, _thruster: Thruster): number {
-    switch (nav.phase) {
-      case 'rotating': return 0;
-      case 'accelerating': return nav.burnPlan.accelTime;
-      case 'flipping': return 0;
-      case 'decelerating': return nav.burnPlan.decelTime;
-      default: return 0;
-    }
   }
 
   dispose(): void {

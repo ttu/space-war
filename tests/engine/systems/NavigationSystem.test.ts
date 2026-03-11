@@ -66,21 +66,29 @@ describe('NavigationSystem', () => {
     expect(thruster.thrustAngle).toBe(0); // burnDirection
   });
 
-  it('thrusts retrograde during deceleration', () => {
+  it('decelerates when approaching target too fast', () => {
     const world = new WorldImpl();
     const system = new NavigationSystem();
-    // Ship moving toward target at +x, should thrust in -x (retrograde)
+    // Ship moving toward target fast, close enough that it needs to slow down
+    // distance=500, speed=10, maxApproachSpeed = sqrt(2*0.1*500) = 10
+    // Ship is at the braking point — thrust should be roughly retrograde
     const id = createShipWithNav(world, {
       phase: 'decelerating',
-      vx: 5, vy: 0,
+      px: 9500, py: 0,
+      vx: 15, vy: 0,
       targetX: 10000, targetY: 0,
+      maxThrust: 0.1,
+      currentAngle: Math.PI,
     });
 
     system.update(world, 1, 10);
 
     const thruster = world.getComponent<Thruster>(id, COMPONENT.Thruster)!;
     expect(thruster.throttle).toBe(1);
-    expect(thruster.thrustAngle).toBeCloseTo(Math.PI); // opposite to velocity
+    // PN guidance: desired speed < current speed, so thrust has a retrograde component
+    // The exact angle depends on PN calculation, but thrust should be roughly opposite to velocity
+    const thrustDirX = Math.cos(thruster.thrustAngle);
+    expect(thrustDirX).toBeLessThan(0); // thrusting in -x direction to slow down
   });
 
   it('stops thrust when arrived', () => {
@@ -143,23 +151,24 @@ describe('NavigationSystem', () => {
     expect(nav.phase).toBe('accelerating');
   });
 
-  it('transitions from accelerating to flipping when stopping distance exceeds remaining', () => {
+  it('switches to decelerating phase when too fast for remaining distance', () => {
     const world = new WorldImpl();
     const system = new NavigationSystem();
-    // Ship close to target with high velocity — stopping distance > remaining distance
+    // Ship close to target with high velocity — needs to decelerate
     const id = createShipWithNav(world, {
       phase: 'accelerating',
       px: 9500, py: 0,
-      vx: 10, vy: 0,
+      vx: 15, vy: 0,
       targetX: 10000, targetY: 0,
       maxThrust: 0.1,
+      currentAngle: Math.PI,
     });
 
-    // distance=500, speed=10, stoppingDist = 10²/(2*0.1) = 500
-    // With FLIP_MARGIN (1.15): 500*1.15=575 >= 500 → should flip
+    // distance=500, speed=15, maxApproachSpeed=sqrt(2*0.1*~500)≈10
+    // Current speed > max approach speed → PN guidance computes retrograde thrust → decelerating phase
     system.update(world, 1, 10);
 
     const nav = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder)!;
-    expect(nav.phase).toBe('flipping');
+    expect(nav.phase).toBe('decelerating');
   });
 });
