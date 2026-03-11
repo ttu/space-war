@@ -24,6 +24,7 @@ import { CommandHandler } from './CommandHandler';
 import { SelectionManager } from './SelectionManager';
 import { loadScenario } from '../engine/data/ScenarioLoader';
 import { demoScenario } from '../engine/data/scenarios/demo';
+import { e2eScenario } from '../engine/data/scenarios/e2e';
 import { showShipConfigScreen } from '../ui/ShipConfigScreen';
 import { TimeControls } from '../ui/TimeControls';
 import { FleetPanel } from '../ui/FleetPanel';
@@ -83,10 +84,18 @@ export class SpaceWarGame {
 
   constructor(private canvas: HTMLCanvasElement, private container: HTMLElement) {
     this.setupRenderer();
-    this.selectionManager = new SelectionManager(this.world);
+    this.selectionManager = new SelectionManager(this.world, (id) => {
+      const contacts = this.getPlayerContacts();
+      const c = contacts?.contacts.get(id);
+      return c ? { x: c.lastKnownX, y: c.lastKnownY } : undefined;
+    });
     this.setupUI();
     this.setupInput();
-    this.loadDemoScenario();
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('e2e') === '1') {
+      this.loadE2eScenario();
+    } else {
+      this.loadDemoScenario();
+    }
     this.commandHandler = new CommandHandler(this.world, this.eventBus);
     this.aiTacticalSystem = new AITacticalSystem(this.commandHandler);
 
@@ -122,10 +131,16 @@ export class SpaceWarGame {
    */
   getTestState(): {
     selectedCount: number;
+    selectedEnemyCount: number;
     playerShipsWithMoveOrder: number;
     visibleDestinationMarkerCount: number;
+    firstEnemyScreenPosition: { x: number; y: number } | null;
   } {
-    const selectedCount = this.selectionManager.getSelectedIds().length;
+    const selectedCount = this.selectionManager.getSelectedPlayerIds().length;
+    const selectedEnemyCount = this.selectionManager.getSelectedIds().filter((id) => {
+      const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship);
+      return ship?.faction === 'enemy';
+    }).length;
     const ships = this.world.query(COMPONENT.Ship, COMPONENT.Selectable);
     let playerShipsWithMoveOrder = 0;
     let visibleDestinationMarkerCount = 0;
@@ -138,7 +153,29 @@ export class SpaceWarGame {
         if (nav.phase !== 'arrived') visibleDestinationMarkerCount++;
       }
     }
-    return { selectedCount, playerShipsWithMoveOrder, visibleDestinationMarkerCount };
+    let firstEnemyScreenPosition: { x: number; y: number } | null = null;
+    const enemies = this.world.query(COMPONENT.Position, COMPONENT.Ship).filter((id) => {
+      const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
+      return ship.faction === 'enemy';
+    });
+    if (enemies.length > 0) {
+      const enemyId = enemies[0];
+      const pos = this.world.getComponent<Position>(enemyId, COMPONENT.Position)!;
+      const contacts = this.getPlayerContacts();
+      const contact = contacts?.contacts.get(enemyId);
+      const worldX = contact ? contact.lastKnownX : pos.x;
+      const worldY = contact ? contact.lastKnownY : pos.y;
+      const screen = this.camera.worldToScreen(worldX, worldY, this.canvas);
+      const rect = this.canvas.getBoundingClientRect();
+      firstEnemyScreenPosition = { x: screen.x - rect.left, y: screen.y - rect.top };
+    }
+    return {
+      selectedCount,
+      selectedEnemyCount,
+      playerShipsWithMoveOrder,
+      visibleDestinationMarkerCount,
+      firstEnemyScreenPosition,
+    };
   }
 
   private setupRenderer(): void {
@@ -193,12 +230,13 @@ export class SpaceWarGame {
     this.fleetPanel = new FleetPanel(
       leftPanel,
       this.world,
-      () => this.selectionManager.getSelectedIds(),
+      () => this.selectionManager.getSelectedPlayerIds(),
     );
     this.shipDetailPanel = new ShipDetailPanel(
       leftPanel,
       this.world,
       () => this.selectionManager.getSelectedIds(),
+      (id) => this.getPlayerContacts()?.contacts.get(id),
     );
 
     const orderBarWrap = document.createElement('div');
@@ -487,6 +525,12 @@ export class SpaceWarGame {
 
   loadDemoScenario(): void {
     loadScenario(this.world, demoScenario);
+    this.camera.setPosition(42000, 0);
+    this.camera.zoomToFit(30000, 30000);
+  }
+
+  loadE2eScenario(): void {
+    loadScenario(this.world, e2eScenario);
     this.camera.setPosition(42000, 0);
     this.camera.zoomToFit(30000, 30000);
   }

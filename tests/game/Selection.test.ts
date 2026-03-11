@@ -37,18 +37,31 @@ function addEnemyShip(world: WorldImpl, x: number, y: number, selected = false):
 }
 
 describe('applyBoxSelection', () => {
-  it('selects only player ships inside the world rect', () => {
+  it('selects player and enemy ships inside the world rect', () => {
     const world = new WorldImpl();
-    const inside = addPlayerShip(world, 50, 50);
-    const outside = addPlayerShip(world, 0, 0);
-    addEnemyShip(world, 50, 50);
+    const playerInside = addPlayerShip(world, 50, 50);
+    const playerOutside = addPlayerShip(world, 0, 0);
+    const enemyInside = addEnemyShip(world, 50, 50);
 
     applyBoxSelection(world, 10, 10, 90, 90, false);
 
-    expect(world.getComponent<Selectable>(inside, COMPONENT.Selectable)!.selected).toBe(true);
-    expect(world.getComponent<Selectable>(outside, COMPONENT.Selectable)!.selected).toBe(false);
-    const enemyId = world.query(COMPONENT.Ship).find((id) => world.getComponent<Ship>(id, COMPONENT.Ship)!.faction === 'enemy')!;
-    expect(world.getComponent<Selectable>(enemyId, COMPONENT.Selectable)!.selected).toBe(false);
+    expect(world.getComponent<Selectable>(playerInside, COMPONENT.Selectable)!.selected).toBe(true);
+    expect(world.getComponent<Selectable>(playerOutside, COMPONENT.Selectable)!.selected).toBe(false);
+    expect(world.getComponent<Selectable>(enemyInside, COMPONENT.Selectable)!.selected).toBe(true);
+  });
+
+  it('uses getEnemyPosition for enemy display position when provided', () => {
+    const world = new WorldImpl();
+    addPlayerShip(world, 0, 0);
+    const enemyRealPos = addEnemyShip(world, 200, 200);
+    const enemyDisplayPos = addEnemyShip(world, 5, 5);
+
+    applyBoxSelection(world, 10, 10, 90, 90, false, (id) =>
+      id === enemyDisplayPos ? { x: 50, y: 50 } : undefined,
+    );
+
+    expect(world.getComponent<Selectable>(enemyRealPos, COMPONENT.Selectable)!.selected).toBe(false);
+    expect(world.getComponent<Selectable>(enemyDisplayPos, COMPONENT.Selectable)!.selected).toBe(true);
   });
 
   it('deselects all player ships when not shiftKey, then selects those in rect', () => {

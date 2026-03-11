@@ -106,4 +106,39 @@ describe('SelectionManager', () => {
     expect(changes).toHaveLength(2);
     expect(changes[1]).toEqual(['e_1']);
   });
+
+  it('getSelectedPlayerIds returns only player ships', () => {
+    manager.setSelectionFromClick(0, 0, 5, false);
+    expect(manager.getSelectedIds()).toContain('e_0');
+    expect(manager.getSelectedPlayerIds()).toEqual(['e_0']);
+  });
+
+  it('selects enemy ship when getEnemyPickPosition returns position', () => {
+    const enemyId = world.createEntity();
+    world.addComponent(enemyId, {
+      type: 'Position',
+      x: 50,
+      y: 50,
+      prevX: 50,
+      prevY: 50,
+    } as import('../../src/engine/components').Position);
+    world.addComponent(enemyId, {
+      type: 'Ship',
+      name: 'Enemy-1',
+      hullClass: 'frigate',
+      faction: 'enemy',
+      flagship: false,
+    } as import('../../src/engine/components').Ship);
+    world.addComponent(enemyId, {
+      type: 'Selectable',
+      selected: false,
+    } as import('../../src/engine/components').Selectable);
+
+    const managerWithEnemyPos = new SelectionManager(world, (id) =>
+      id === enemyId ? { x: 15, y: 0 } : undefined,
+    );
+    managerWithEnemyPos.setSelectionFromClick(15, 0, 5, false);
+    expect(managerWithEnemyPos.getSelectedIds()).toContain(enemyId);
+    expect(managerWithEnemyPos.getSelectedPlayerIds()).toEqual([]);
+  });
 });

@@ -1,5 +1,6 @@
 import type { World } from '../engine/types';
 import type { EntityId } from '../engine/types';
+import type { DetectedContact } from '../engine/components';
 import {
   Ship,
   Hull,
@@ -19,6 +20,7 @@ function pct(current: number, max: number): string {
 
 /**
  * Selected ship systems, weapons, and current order. Single selection shows full detail.
+ * For enemy ships shows contact intel (last known position, data age, velocity) when getContact is provided.
  */
 export class ShipDetailPanel {
   private root: HTMLElement;
@@ -28,6 +30,7 @@ export class ShipDetailPanel {
     container: HTMLElement,
     private world: World,
     private getSelectedIds: () => EntityId[],
+    private getContact?: (entityId: EntityId) => DetectedContact | undefined,
   ) {
     this.root = document.createElement('div');
     this.root.id = 'ship-detail-panel';
@@ -70,10 +73,44 @@ export class ShipDetailPanel {
     const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship);
     if (!ship) return;
 
+    const isEnemy = ship.faction !== 'player';
+    const contact = isEnemy ? this.getContact?.(id) : undefined;
+
     const nameLine = document.createElement('div');
     nameLine.className = 'ship-detail-name';
-    nameLine.textContent = `${ship.name} (${ship.hullClass})`;
+    nameLine.textContent = `${ship.name} (${ship.hullClass})${isEnemy ? ' — Contact' : ''}`;
     this.content.appendChild(nameLine);
+
+    if (isEnemy && contact) {
+      const dataAge = contact.receivedTime > 0 ? 'Data age: ' + contact.receivedTime.toFixed(1) + ' s' : '—';
+      const row1 = document.createElement('div');
+      row1.className = 'ship-detail-row';
+      row1.textContent = `Last known: (${Math.round(contact.lastKnownX)}, ${Math.round(contact.lastKnownY)})`;
+      this.content.appendChild(row1);
+      const row2 = document.createElement('div');
+      row2.className = 'ship-detail-row';
+      row2.textContent = `Velocity: ${contact.lastKnownVx.toFixed(2)}, ${contact.lastKnownVy.toFixed(2)} km/s`;
+      this.content.appendChild(row2);
+      const row3 = document.createElement('div');
+      row3.className = 'ship-detail-row';
+      row3.textContent = dataAge;
+      this.content.appendChild(row3);
+      if (contact.lost) {
+        const row4 = document.createElement('div');
+        row4.className = 'ship-detail-row ship-detail-lost';
+        row4.textContent = 'Contact lost';
+        this.content.appendChild(row4);
+      }
+      return;
+    }
+
+    if (isEnemy) {
+      const row = document.createElement('div');
+      row.className = 'ship-detail-row ship-detail-muted';
+      row.textContent = 'No sensor data — not currently detected';
+      this.content.appendChild(row);
+      return;
+    }
 
     const hull = this.world.getComponent<Hull>(id, COMPONENT.Hull);
     if (hull) {

@@ -70,4 +70,53 @@ test.describe('Ship selection and move command', () => {
       )
       .toBeGreaterThanOrEqual(1);
   });
+
+  test('selecting an enemy ship shows enemy as selected', async ({ page }) => {
+    await page.goto('/?e2e=1');
+
+    const canvas = page.locator('#game-canvas');
+    await expect(canvas).toBeVisible();
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            () => (window as unknown as { __spaceWarGame?: unknown }).__spaceWarGame != null,
+          ),
+        { timeout: 5000 },
+      )
+      .toBe(true);
+
+    const state = await page.evaluate(() => {
+      const g = (window as unknown as {
+        __spaceWarGame?: {
+          getTestState(): {
+            firstEnemyScreenPosition: { x: number; y: number } | null;
+            selectedEnemyCount: number;
+          };
+        };
+      }).__spaceWarGame;
+      return g?.getTestState() ?? { firstEnemyScreenPosition: null, selectedEnemyCount: 0 };
+    });
+
+    expect(state.firstEnemyScreenPosition).not.toBeNull();
+    const pos = state.firstEnemyScreenPosition!;
+
+    await canvas.click({ position: { x: pos.x, y: pos.y } });
+
+    await expect
+      .poll(
+        async () => {
+          const s = await page.evaluate(() => {
+            const g = (window as unknown as {
+              __spaceWarGame?: { getTestState(): { selectedEnemyCount: number } };
+            }).__spaceWarGame;
+            return g?.getTestState()?.selectedEnemyCount ?? 0;
+          });
+          return s;
+        },
+        { timeout: 2000 },
+      )
+      .toBeGreaterThanOrEqual(1);
+  });
 });

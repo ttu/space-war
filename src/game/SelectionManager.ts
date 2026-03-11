@@ -2,17 +2,34 @@ import type { World, EntityId } from '../engine/types';
 import { Position, Ship, Selectable, COMPONENT } from '../engine/components';
 import { applyBoxSelection } from './Selection';
 
+/** Optional: return display position for enemy ships (e.g. last-known from sensors). */
+export type GetEnemyPickPosition = (entityId: EntityId) => { x: number; y: number } | undefined;
+
 /**
  * Manages ship selection: click, shift-click, and box select.
- * Only player ships with Selectable are considered.
+ * Player and enemy ships with Selectable can be selected (enemies use last-known position when provided).
  */
 export class SelectionManager {
   private selectionChangeCallbacks: Array<(ids: EntityId[]) => void> = [];
 
-  constructor(private world: World) {}
+  constructor(
+    private world: World,
+    private getEnemyPickPosition?: GetEnemyPickPosition,
+  ) {}
 
-  /** Get currently selected player ship entity IDs. */
+  /** Get all currently selected ship entity IDs (player and enemy). */
   getSelectedIds(): EntityId[] {
+    const ships = this.world.query(COMPONENT.Ship, COMPONENT.Selectable);
+    const out: EntityId[] = [];
+    for (const id of ships) {
+      const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
+      if (sel.selected) out.push(id);
+    }
+    return out;
+  }
+
+  /** Get currently selected player ship entity IDs only (for orders / fleet panel). */
+  getSelectedPlayerIds(): EntityId[] {
     const ships = this.world.query(COMPONENT.Ship, COMPONENT.Selectable);
     const out: EntityId[] = [];
     for (const id of ships) {
@@ -26,8 +43,7 @@ export class SelectionManager {
 
   /**
    * Update selection from a single click in world coordinates.
-   * If shiftKey is false, deselects all then selects (or toggles) the ship under the point.
-   * If shiftKey is true, adds/removes the ship under the point from selection.
+   * Considers both player and enemy ships. Enemy position uses getEnemyPickPosition when available.
    */
   setSelectionFromClick(
     worldX: number,
@@ -39,8 +55,6 @@ export class SelectionManager {
 
     if (!shiftKey) {
       for (const id of ships) {
-        const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
-        if (ship.faction !== 'player') continue;
         const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
         sel.selected = false;
       }
@@ -50,10 +64,13 @@ export class SelectionManager {
     let closestDist = pickRadiusKm;
     for (const id of ships) {
       const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
-      if (ship.faction !== 'player') continue;
       const pos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
-      const dx = pos.x - worldX;
-      const dy = pos.y - worldY;
+      const displayPos =
+        ship.faction === 'player'
+          ? { x: pos.x, y: pos.y }
+          : this.getEnemyPickPosition?.(id) ?? { x: pos.x, y: pos.y };
+      const dx = displayPos.x - worldX;
+      const dy = displayPos.y - worldY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < closestDist) {
         closestDist = dist;
@@ -71,7 +88,7 @@ export class SelectionManager {
 
   /**
    * Update selection from a box in world coordinates.
-   * Selects all player ships inside the axis-aligned rect. If shiftKey is true, adds to selection.
+   * Selects all ships (player and enemy) whose display position is inside the rect. If shiftKey is true, adds to selection.
    */
   setSelectionFromBox(
     worldMinX: number,
@@ -80,7 +97,15 @@ export class SelectionManager {
     worldMaxY: number,
     shiftKey: boolean,
   ): void {
-    applyBoxSelection(this.world, worldMinX, worldMinY, worldMaxX, worldMaxY, shiftKey);
+    applyBoxSelection(
+      this.world,
+      worldMinX,
+      worldMinY,
+      worldMaxX,
+      worldMaxY,
+      shiftKey,
+      this.getEnemyPickPosition,
+    );
     this.notifySelectionChange();
   }
 

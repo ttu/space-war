@@ -1,10 +1,14 @@
+import type { EntityId } from '../engine/types';
 import { World } from '../engine/types';
 import { Position, Ship, Selectable, COMPONENT } from '../engine/components';
 
+/** Optional: return display position for enemy ships (e.g. last-known from sensors). */
+export type GetEnemyPosition = (entityId: EntityId) => { x: number; y: number } | undefined;
+
 /**
- * Applies box selection in world coordinates: selects all player ships whose
- * position is inside the given axis-aligned rect. Non-player ships are ignored.
- * If shiftKey is false, all player ships are deselected first.
+ * Applies box selection in world coordinates: selects all ships (player and enemy) whose
+ * display position is inside the given axis-aligned rect. Enemy position uses getEnemyPosition when provided.
+ * If shiftKey is false, all ships are deselected first.
  */
 export function applyBoxSelection(
   world: World,
@@ -13,13 +17,12 @@ export function applyBoxSelection(
   worldMaxX: number,
   worldMaxY: number,
   shiftKey: boolean,
+  getEnemyPosition?: GetEnemyPosition,
 ): void {
   const entities = world.query(COMPONENT.Position, COMPONENT.Ship, COMPONENT.Selectable);
 
   if (!shiftKey) {
     for (const id of entities) {
-      const ship = world.getComponent<Ship>(id, COMPONENT.Ship)!;
-      if (ship.faction !== 'player') continue;
       const sel = world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
       sel.selected = false;
     }
@@ -27,9 +30,17 @@ export function applyBoxSelection(
 
   for (const id of entities) {
     const ship = world.getComponent<Ship>(id, COMPONENT.Ship)!;
-    if (ship.faction !== 'player') continue;
     const pos = world.getComponent<Position>(id, COMPONENT.Position)!;
-    if (pos.x >= worldMinX && pos.x <= worldMaxX && pos.y >= worldMinY && pos.y <= worldMaxY) {
+    const displayPos =
+      ship.faction === 'player'
+        ? { x: pos.x, y: pos.y }
+        : getEnemyPosition?.(id) ?? { x: pos.x, y: pos.y };
+    if (
+      displayPos.x >= worldMinX &&
+      displayPos.x <= worldMaxX &&
+      displayPos.y >= worldMinY &&
+      displayPos.y <= worldMaxY
+    ) {
       const sel = world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
       sel.selected = true;
     }
