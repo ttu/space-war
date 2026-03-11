@@ -1,0 +1,35 @@
+{
+  "celestials": [
+    { "name": "Luna", "mass": 7.342e22, "radius": 1737, "bodyType": "moon", "x": 0, "y": 384400 }
+  ],
+  "ships": [
+    {
+      "templateId": "cruiser",
+      "name": "TCS Approach",
+      "faction": "player",
+      "flagship": true,
+      "x": 350000,
+      "y": 384400,
+      "vx": 0,
+      "vy": 0
+    },
+    {
+      "templateId": "frigate",
+      "name": "UES Lurker",
+      "faction": "enemy",
+      "x": 5000,
+      "y": 384400,
+      "vx": 0,
+      "vy": 1.02
+    },
+    {
+      "templateId": "corvette",
+      "name": "UES Shadow",
+      "faction": "enemy",
+      "x": -8000,
+      "y": 382000,
+      "vx": 0,
+      "vy": 1.0
+    }
+  ]
+}

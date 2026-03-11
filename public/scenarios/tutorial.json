@@ -1,0 +1,26 @@
+{
+  "celestials": [
+    { "name": "Terra", "mass": 5.972e24, "radius": 6371, "bodyType": "planet", "x": 0, "y": 0 }
+  ],
+  "ships": [
+    {
+      "templateId": "frigate",
+      "name": "TCS Cadet",
+      "faction": "player",
+      "flagship": true,
+      "x": 45000,
+      "y": 0,
+      "vx": 0,
+      "vy": 3.5
+    },
+    {
+      "templateId": "frigate",
+      "name": "UES Target",
+      "faction": "enemy",
+      "x": 50000,
+      "y": 5000,
+      "vx": 0,
+      "vy": 0
+    }
+  ]
+}

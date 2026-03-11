@@ -1,0 +1,61 @@
+{
+  "celestials": [],
+  "ships": [
+    {
+      "templateId": "cruiser",
+      "name": "TCS Resolute",
+      "faction": "player",
+      "flagship": true,
+      "x": -60000,
+      "y": 0,
+      "vx": 0,
+      "vy": 0
+    },
+    {
+      "templateId": "destroyer",
+      "name": "TCS Vigilant",
+      "faction": "player",
+      "x": -58000,
+      "y": 3000,
+      "vx": 0,
+      "vy": 0
+    },
+    {
+      "templateId": "frigate",
+      "name": "TCS Swift",
+      "faction": "player",
+      "x": -59000,
+      "y": -2000,
+      "vx": 0,
+      "vy": 0
+    },
+    {
+      "templateId": "cruiser",
+      "name": "UES Aggressor",
+      "faction": "enemy",
+      "flagship": true,
+      "x": 60000,
+      "y": 0,
+      "vx": 0,
+      "vy": 0
+    },
+    {
+      "templateId": "destroyer",
+      "name": "UES Striker",
+      "faction": "enemy",
+      "x": 58000,
+      "y": -3000,
+      "vx": 0,
+      "vy": 0
+    },
+    {
+      "templateId": "frigate",
+      "name": "UES Raider",
+      "faction": "enemy",
+      "x": 59000,
+      "y": 2000,
+      "vx": 0,
+      "vy": 0
+    }
+  ]
+}

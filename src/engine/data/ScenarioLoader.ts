@@ -215,3 +215,14 @@ export function parseScenarioJson(json: string): Scenario {
   }
   return data as Scenario;
 }
+
+/**
+ * Fetch a scenario by name from /scenarios/{name}.json.
+ * Use for loading tutorial, patrol, fleet-action, ambush from public/scenarios/.
+ */
+export async function fetchScenario(name: string): Promise<Scenario> {
+  const res = await fetch(`/scenarios/${name}.json`);
+  if (!res.ok) throw new Error(`Failed to load scenario: ${res.status} ${res.statusText}`);
+  const json = await res.text();
+  return parseScenarioJson(json);
+}

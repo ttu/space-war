@@ -14,6 +14,7 @@ import { RailgunSystem } from '../engine/systems/RailgunSystem';
 import { DamageSystem } from '../engine/systems/DamageSystem';
 import { AIStrategicSystem } from '../engine/systems/AIStrategicSystem';
 import { AITacticalSystem } from '../engine/systems/AITacticalSystem';
+import { VictorySystem } from '../engine/systems/VictorySystem';
 import { RadarRenderer } from '../rendering/RadarRenderer';
 import { ShipRenderer } from '../rendering/ShipRenderer';
 import { CelestialRenderer } from '../rendering/CelestialRenderer';
@@ -22,7 +23,7 @@ import { MissileRenderer } from '../rendering/MissileRenderer';
 import { ProjectileRenderer } from '../rendering/ProjectileRenderer';
 import { CommandHandler } from './CommandHandler';
 import { SelectionManager } from './SelectionManager';
-import { loadScenario } from '../engine/data/ScenarioLoader';
+import { loadScenario, fetchScenario } from '../engine/data/ScenarioLoader';
 import { demoScenario } from '../engine/data/scenarios/demo';
 import { e2eScenario } from '../engine/data/scenarios/e2e';
 import { showShipConfigScreen } from '../ui/ShipConfigScreen';
@@ -60,6 +61,7 @@ export class SpaceWarGame {
   private damageSystem = new DamageSystem(this.eventBus);
   private aiStrategicSystem = new AIStrategicSystem();
   private aiTacticalSystem!: AITacticalSystem;
+  private victorySystem = new VictorySystem(this.eventBus);
   private commandHandler!: CommandHandler;
   private radarRenderer!: RadarRenderer;
   private shipRenderer!: ShipRenderer;
@@ -91,8 +93,11 @@ export class SpaceWarGame {
     });
     this.setupUI();
     this.setupInput();
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('e2e') === '1') {
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    if (params?.get('e2e') === '1') {
       this.loadE2eScenario();
+    } else if (params?.get('scenario')) {
+      // Scenario loaded async in main.ts via loadScenarioByName()
     } else {
       this.loadDemoScenario();
     }
@@ -477,6 +482,7 @@ export class SpaceWarGame {
     this.aiTacticalSystem.update(this.world, dt, this.gameTime.elapsed);
     this.navigationSystem.update(this.world, dt, this.gameTime.elapsed);
     this.physicsSystem.update(this.world, dt);
+    this.victorySystem.update(this.world, this.gameTime.elapsed);
     this.trailRenderer.recordPositions(this.world);
     this.missileRenderer.recordPositions(this.world);
   }
@@ -525,14 +531,28 @@ export class SpaceWarGame {
 
   loadDemoScenario(): void {
     loadScenario(this.world, demoScenario);
+    this.victorySystem.reset();
     this.camera.setPosition(42000, 0);
     this.camera.zoomToFit(30000, 30000);
   }
 
   loadE2eScenario(): void {
     loadScenario(this.world, e2eScenario);
+    this.victorySystem.reset();
     this.camera.setPosition(42000, 0);
     this.camera.zoomToFit(30000, 30000);
+  }
+
+  /**
+   * Load a scenario by name from /scenarios/{name}.json.
+   * Use for tutorial, patrol, fleet-action, ambush.
+   */
+  async loadScenarioByName(name: string): Promise<void> {
+    const scenario = await fetchScenario(name);
+    loadScenario(this.world, scenario);
+    this.victorySystem.reset();
+    this.camera.setPosition(0, 0);
+    this.camera.zoomToFit(150000, 150000);
   }
 
   /** Open pre-battle loadout editor; on Apply reloads scenario with chosen loadouts. */
@@ -542,6 +562,7 @@ export class SpaceWarGame {
       this.container,
       (scenario) => {
         loadScenario(this.world, scenario);
+        this.victorySystem.reset();
         this.camera.setPosition(42000, 0);
         this.camera.zoomToFit(30000, 30000);
       },

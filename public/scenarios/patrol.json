@@ -1,0 +1,46 @@
+{
+  "celestials": [
+    { "name": "Terra", "mass": 5.972e24, "radius": 6371, "bodyType": "planet", "x": 0, "y": 0 },
+    { "name": "Belt Station", "mass": 1e18, "radius": 50, "bodyType": "station", "x": 120000, "y": 80000 },
+    { "name": "Asteroid", "mass": 1e15, "radius": 5, "bodyType": "asteroid", "x": 115000, "y": 75000 }
+  ],
+  "ships": [
+    {
+      "templateId": "destroyer",
+      "name": "TCS Sentinel",
+      "faction": "player",
+      "flagship": true,
+      "x": 100000,
+      "y": 70000,
+      "vx": -0.5,
+      "vy": 0.3
+    },
+    {
+      "templateId": "frigate",
+      "name": "TCS Scout",
+      "faction": "player",
+      "x": 102000,
+      "y": 72000,
+      "vx": -0.5,
+      "vy": 0.3
+    },
+    {
+      "templateId": "corvette",
+      "name": "Pirate Raider Alpha",
+      "faction": "enemy",
+      "x": 118000,
+      "y": 78000,
+      "vx": -0.8,
+      "vy": -0.2
+    },
+    {
+      "templateId": "corvette",
+      "name": "Pirate Raider Beta",
+      "faction": "enemy",
+      "x": 119000,
+      "y": 79000,
+      "vx": -0.7,
+      "vy": -0.1
+    }
+  ]
+}
