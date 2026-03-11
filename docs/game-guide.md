@@ -15,6 +15,7 @@ The game simulates realistic space combat: there is no friction, sensors are lim
 | Input | Action |
 |-------|--------|
 | Scroll wheel | Zoom in/out |
+| **[** / **]** | Zoom out / Zoom in |
 | Right-click drag | Pan camera |
 | WASD / Arrow keys | Pan camera |
 

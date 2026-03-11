@@ -34,7 +34,7 @@ Open http://localhost:5173 in your browser.
 | Left-drag | Box select |
 | Right-click space | Move selected ships |
 | Right-click enemy | Fire weapons at target |
-| Scroll wheel | Zoom |
+| Scroll wheel / **[** **]** | Zoom |
 | Right-drag / WASD | Pan camera |
 | Space | Pause / Resume |
 

@@ -18,6 +18,8 @@ export class InputManager {
   private lastMouseScreen = { x: 0, y: 0 };
   private hasRightDragged = false;
   private rightClickEmitted = false;
+  /** Set on mousedown(button 2); used to avoid emitting rightClick twice when both mouseup and contextmenu fire (real mouse). */
+  private rightMouseButtonDown = false;
   private isLeftMouseDown = false;
   private leftDragStart = { x: 0, y: 0 };
   private hasLeftDragged = false;
@@ -43,6 +45,12 @@ export class InputManager {
     }
   }
 
+  /** True if (clientX, clientY) is inside the canvas's bounding rect (for overlay-insensitive hit test). */
+  private isPointOverCanvas(clientX: number, clientY: number): boolean {
+    const rect = this.canvas.getBoundingClientRect();
+    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+  }
+
   private addListener(target: EventTarget, type: string, handler: EventListener): void {
     target.addEventListener(type, handler);
     this.boundHandlers.push({ type, handler, target });
@@ -63,6 +71,14 @@ export class InputManager {
       if (e.code === 'Escape') this.emit({ type: 'escape' });
       if (e.code === 'Minus' || e.code === 'NumpadSubtract') this.emit({ type: 'changeSpeed', delta: -1 });
       if (e.code === 'Equal' || e.code === 'NumpadAdd') this.emit({ type: 'changeSpeed', delta: 1 });
+      if (e.code === 'BracketRight') {
+        e.preventDefault();
+        this.emit({ type: 'zoom', delta: -100 });
+      }
+      if (e.code === 'BracketLeft') {
+        e.preventDefault();
+        this.emit({ type: 'zoom', delta: 100 });
+      }
     }) as EventListener);
 
     this.addListener(window, 'keyup', ((e: KeyboardEvent) => {
@@ -77,6 +93,7 @@ export class InputManager {
         this.hasLeftDragged = false;
       } else if (e.button === 2) {
         this.isRightMouseDown = true;
+        this.rightMouseButtonDown = true;
         this.hasRightDragged = false;
         this.rightClickEmitted = false;
       }
@@ -103,6 +120,7 @@ export class InputManager {
           this.rightClickEmitted = true;
           this.emit({ type: 'rightClick', screenX: e.clientX, screenY: e.clientY });
         }
+        // Leave rightMouseButtonDown true so contextmenu (fires after mouseup) can skip emitting; contextmenu clears it.
       }
     }) as EventListener);
 
@@ -147,14 +165,24 @@ export class InputManager {
 
     this.addListener(this.canvas, 'contextmenu', ((e: Event) => e.preventDefault()) as EventListener);
 
-    // When right-click lands on an overlay, canvas doesn't get mousedown/mouseup; emit rightClick from contextmenu
+    // When right-click lands on an overlay, canvas doesn't get mousedown/mouseup; emit rightClick from contextmenu.
+    // On macOS touchpad, two-finger tap often fires only contextmenu (no button 2 mousedown/mouseup). The event target
+    // can be the overlay div (stacked above canvas) rather than the canvas, so we also treat any contextmenu whose
+    // position is over the canvas as a rightClick. Use rightMouseButtonDown to avoid double-emit when real mouse
+    // triggers both mouseup and contextmenu.
     this.addListenerCapture(document, 'contextmenu', ((e: Event) => {
       e.preventDefault();
       const me = e as MouseEvent;
       const el = me.target as Element;
-      if (el !== this.canvas && !el.closest?.('button')) {
+      const overCanvas = this.isPointOverCanvas(me.clientX, me.clientY);
+      if (overCanvas) {
+        if (!this.rightMouseButtonDown) {
+          this.emit({ type: 'rightClick', screenX: me.clientX, screenY: me.clientY });
+        }
+      } else if (!el.closest?.('button')) {
         this.emit({ type: 'rightClick', screenX: me.clientX, screenY: me.clientY });
       }
+      this.rightMouseButtonDown = false;
     }) as EventListener);
   }
 
