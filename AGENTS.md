@@ -32,22 +32,52 @@ src/
 │   └── InputManager.ts              # Mouse/keyboard event handling
 ├── engine/                          # Game engine (ECS-based)
 │   ├── types.ts                     # Core types (EntityId, Component, World, GameEvent)
-│   ├── components/index.ts          # ECS components (Position, Velocity, Ship, etc.)
+│   ├── components/                  # ECS components
+│   │   ├── index.ts                 # Core components + re-exports
+│   │   ├── sensor-components.ts     # Sensor/contact types
+│   │   ├── weapon-components.ts     # Weapon/projectile types
+│   │   └── damage-components.ts     # Ship systems types
 │   ├── core/
 │   │   ├── EventBus.ts              # Typed pub-sub event system
-│   │   └── GameTime.ts              # Pause, time scaling (1x/2x/4x)
+│   │   └── GameTime.ts              # Pause, time scaling (1x–100x)
 │   ├── ecs/
 │   │   └── World.ts                 # ECS world (entities & components)
-│   ├── systems/                     # ECS systems
-│   │   └── PhysicsSystem.ts         # Newtonian movement + gravity
-│   └── data/                        # Ship templates, scenarios (future)
+│   ├── systems/                     # ECS systems (10 systems)
+│   │   ├── PhysicsSystem.ts         # Newtonian movement + gravity
+│   │   ├── NavigationSystem.ts      # Burn plan execution
+│   │   ├── SensorSystem.ts          # Detection + fog of war
+│   │   ├── MissileSystem.ts         # Missile guidance (PN)
+│   │   ├── PDCSystem.ts             # Point defense
+│   │   ├── RailgunSystem.ts         # Railgun projectiles
+│   │   ├── DamageSystem.ts          # Damage processing
+│   │   ├── AIStrategicSystem.ts     # Fleet AI decisions
+│   │   ├── AITacticalSystem.ts      # Per-ship AI
+│   │   └── VictorySystem.ts         # Win/loss conditions
+│   └── data/                        # Ship templates, scenarios
+│       ├── ShipTemplates.ts         # Hull class definitions
+│       ├── ModuleTemplates.ts       # Weapon/sensor modules
+│       ├── ScenarioLoader.ts        # Scenario loading
+│       └── scenarios/               # Scenario definitions
 ├── game/                            # Game coordination
-│   └── SpaceWarGame.ts              # Main orchestrator
+│   ├── SpaceWarGame.ts              # Main orchestrator
+│   ├── CommandHandler.ts            # Player/AI commands
+│   ├── TrajectoryCalculator.ts      # Burn planning math
+│   ├── FiringComputer.ts            # Lead targeting
+│   ├── SelectionManager.ts          # Ship selection
+│   └── Selection.ts                 # Box select utility
 ├── rendering/                       # Three.js rendering
 │   ├── RadarRenderer.ts             # Background grid
 │   ├── ShipRenderer.ts              # Ship icons, selection, velocity vectors
-│   └── CelestialRenderer.ts         # Planets, gravity wells, labels
-├── ui/                              # DOM UI panels (future)
+│   ├── CelestialRenderer.ts         # Planets, gravity wells, labels
+│   ├── TrailRenderer.ts             # Ship trails + trajectory projections
+│   ├── MissileRenderer.ts           # Missile salvos + trails
+│   └── ProjectileRenderer.ts        # Railgun projectile dots
+├── ui/                              # DOM UI panels
+│   ├── TimeControls.ts              # Clock + speed buttons
+│   ├── FleetPanel.ts                # Ship roster
+│   ├── ShipDetailPanel.ts           # Selected ship info
+│   ├── OrderBar.ts                  # Order buttons
+│   └── CombatLog.ts                 # Event log
 └── utils/
     └── OrbitalMechanics.ts          # Gravity calculations
 ```
@@ -71,21 +101,34 @@ src/
 
 ## Key Systems
 
-| System           | Location                         | Purpose                                     |
-| ---------------- | -------------------------------- | ------------------------------------------- |
-| ECS World        | `engine/ecs/World.ts`            | Entity-component storage and queries        |
-| EventBus         | `engine/core/EventBus.ts`        | Typed pub-sub event system                  |
-| GameTime         | `engine/core/GameTime.ts`        | Pause state, time scaling                   |
-| GameLoop         | `core/GameLoop.ts`               | Fixed timestep simulation + render interp   |
-| Physics          | `engine/systems/PhysicsSystem.ts`| Newtonian movement, gravity from bodies     |
-| Camera           | `core/Camera.ts`                 | Orthographic pan/zoom, screen↔world coords  |
-| Input            | `core/InputManager.ts`           | Mouse/keyboard events → callbacks           |
-| SpaceWarGame     | `game/SpaceWarGame.ts`           | Main orchestrator, wires all systems        |
-| Orbital Math     | `utils/OrbitalMechanics.ts`      | Gravity acceleration, orbital velocity      |
+| System           | Location                          | Purpose                                     |
+| ---------------- | --------------------------------- | ------------------------------------------- |
+| ECS World        | `engine/ecs/World.ts`             | Entity-component storage and queries        |
+| EventBus         | `engine/core/EventBus.ts`         | Typed pub-sub event system                  |
+| GameTime         | `engine/core/GameTime.ts`         | Pause state, time scaling                   |
+| GameLoop         | `core/GameLoop.ts`                | Fixed timestep simulation + render interp   |
+| Physics          | `engine/systems/PhysicsSystem.ts` | Newtonian movement, gravity from bodies     |
+| Navigation       | `engine/systems/NavigationSystem.ts` | Brachistochrone burn plan execution      |
+| Sensors          | `engine/systems/SensorSystem.ts`  | Detection, light-speed delay, fog of war    |
+| Missiles         | `engine/systems/MissileSystem.ts` | Proportional navigation guidance            |
+| PDC              | `engine/systems/PDCSystem.ts`     | Auto point defense against missiles         |
+| Railgun          | `engine/systems/RailgunSystem.ts` | Projectile travel and impact                |
+| Damage           | `engine/systems/DamageSystem.ts`  | Hull/subsystem/weapon damage processing     |
+| AI Strategic     | `engine/systems/AIStrategicSystem.ts` | Fleet-level AI decisions                |
+| AI Tactical      | `engine/systems/AITacticalSystem.ts`  | Per-ship AI weapon/movement             |
+| Victory          | `engine/systems/VictorySystem.ts` | Win/loss condition checking                 |
+| Camera           | `core/Camera.ts`                  | Orthographic pan/zoom, screen↔world coords  |
+| Input            | `core/InputManager.ts`            | Mouse/keyboard events → callbacks           |
+| SpaceWarGame     | `game/SpaceWarGame.ts`            | Main orchestrator, wires all systems        |
+| CommandHandler   | `game/CommandHandler.ts`          | Player/AI commands → game actions           |
+| FiringComputer   | `game/FiringComputer.ts`          | Railgun lead targeting + hit probability    |
+| TrajectoryCalc   | `game/TrajectoryCalculator.ts`    | Brachistochrone burn planning math           |
 
 ## Documentation
 
-- `docs/plans/2026-03-09-space-war-design.md` - Full game design and implementation plan
+- `docs/design.md` - Game design principles and decisions
+- `docs/architecture.md` - Technical architecture and systems reference
+- `docs/game-guide.md` - How to play the game
 
 ## Guidelines for Agents
 
