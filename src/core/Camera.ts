@@ -113,6 +113,10 @@ export class CameraController {
     return this.zoom;
   }
 
+  getAspect(): number {
+    return this.aspect;
+  }
+
   /** Set zoom level (visible half-height in km). Clamped to min/max. */
   setZoom(zoom: number): void {
     this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, zoom));

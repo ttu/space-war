@@ -121,10 +121,11 @@ const railguns: RailgunModule[] = [
 ];
 
 const sensors: SensorModule[] = [
-  { id: 'sensor_light', name: 'Sensor Light', kind: 'sensor', maxRange: 300_000, sensitivity: 3e-12 },
-  { id: 'sensor_medium', name: 'Sensor Medium', kind: 'sensor', maxRange: 400_000, sensitivity: 2e-12 },
-  { id: 'sensor_heavy', name: 'Sensor Heavy', kind: 'sensor', maxRange: 500_000, sensitivity: 1e-12 },
-  { id: 'sensor_carrier', name: 'Sensor Carrier', kind: 'sensor', maxRange: 600_000, sensitivity: 8e-13 },
+  // Earth–Moon ~384k km: easy detection. Ranges set for light-delay realism (8 min ≈ 144M km).
+  { id: 'sensor_light', name: 'Sensor Light', kind: 'sensor', maxRange: 1_000_000, sensitivity: 3e-12 },
+  { id: 'sensor_medium', name: 'Sensor Medium', kind: 'sensor', maxRange: 10_000_000, sensitivity: 5e-13 },
+  { id: 'sensor_heavy', name: 'Sensor Heavy', kind: 'sensor', maxRange: 50_000_000, sensitivity: 2e-14 },
+  { id: 'sensor_carrier', name: 'Sensor Carrier', kind: 'sensor', maxRange: 150_000_000, sensitivity: 5e-16 },
 ];
 
 const byId = new Map<string, ModuleTemplate>();

@@ -22,6 +22,8 @@ import { CelestialRenderer } from '../rendering/CelestialRenderer';
 import { TrailRenderer } from '../rendering/TrailRenderer';
 import { MissileRenderer } from '../rendering/MissileRenderer';
 import { ProjectileRenderer } from '../rendering/ProjectileRenderer';
+import { OffScreenContactRenderer } from '../rendering/OffScreenContactRenderer';
+import { PlanetContactIndicatorsRenderer } from '../rendering/PlanetContactIndicatorsRenderer';
 import { CommandHandler } from './CommandHandler';
 import { SelectionManager } from './SelectionManager';
 import { loadScenario, fetchScenario } from '../engine/data/ScenarioLoader';
@@ -73,6 +75,8 @@ export class SpaceWarGame {
   private trailRenderer!: TrailRenderer;
   private missileRenderer!: MissileRenderer;
   private projectileRenderer!: ProjectileRenderer;
+  private offScreenContactRenderer!: OffScreenContactRenderer;
+  private planetContactIndicatorsRenderer!: PlanetContactIndicatorsRenderer;
 
   private selectionManager!: SelectionManager;
   private timeControls!: TimeControls;
@@ -85,13 +89,34 @@ export class SpaceWarGame {
 
   private targetingReadoutTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  private lastContactsPanelUpdate = 0;
+  private readonly contactsPanelIntervalMs = 400;
+
+  /** Camera focus animation: zoom out → pan to target → zoom in fast. */
+  private cameraFocusAnimation: {
+    phase: 'zoomOut' | 'pan' | 'zoomIn';
+    startTime: number;
+    fromX: number;
+    fromY: number;
+    fromZoom: number;
+    targetX: number;
+    targetY: number;
+    targetZoom: number;
+    zoomOutLevel: number;
+  } | null = null;
+  private static readonly FOCUS_ZOOM_OUT_S = 0.15;
+  private static readonly FOCUS_PAN_S = 0.25;
+  private static readonly FOCUS_ZOOM_IN_S = 0.12;
+  private static readonly FOCUS_ZOOM_OUT_LEVEL = 120_000;
+  private static readonly FOCUS_FINAL_ZOOM = 8000;
+
   // Box-drag selection state (screen coords while dragging)
   private selectionBoxState: { startScreenX: number; startScreenY: number; endScreenX: number; endScreenY: number } | null = null;
   private selectionBoxLine!: THREE.LineSegments;
 
   constructor(private canvas: HTMLCanvasElement, private container: HTMLElement) {
     this.setupRenderer();
-    this.selectionManager = new SelectionManager(this.world, (id) => {
+    this.selectionManager = new SelectionManager(this.world, (id: EntityId) => {
       const contacts = this.getPlayerContacts();
       const c = contacts?.contacts.get(id);
       return c ? { x: c.lastKnownX, y: c.lastKnownY } : undefined;
@@ -208,6 +233,8 @@ export class SpaceWarGame {
     this.trailRenderer = new TrailRenderer(this.scene);
     this.missileRenderer = new MissileRenderer(this.scene);
     this.projectileRenderer = new ProjectileRenderer(this.scene);
+    this.offScreenContactRenderer = new OffScreenContactRenderer(this.scene);
+    this.planetContactIndicatorsRenderer = new PlanetContactIndicatorsRenderer(this.scene);
 
     this.selectionBoxLine = this.createSelectionBoxLine();
     this.scene.add(this.selectionBoxLine);
@@ -251,7 +278,10 @@ export class SpaceWarGame {
       this.world,
       () => this.getPlayerContacts() ?? undefined,
       () => this.gameTime.elapsed,
-      (entityId) => this.focusCameraOnContact(entityId),
+      (entityId) => {
+        this.selectionManager.setSelectionToEntity(entityId);
+        this.focusCameraOnContact(entityId);
+      },
     );
     this.shipDetailPanel = new ShipDetailPanel(
       leftPanel,
@@ -512,11 +542,15 @@ export class SpaceWarGame {
   // --- Rendering ---
 
   private render(alpha: number): void {
-    // Camera keyboard panning
-    const camMove = this.input.getCameraMovement();
-    if (camMove.x !== 0 || camMove.y !== 0) {
-      this.camera.pan(camMove.x, camMove.y, 1 / 60);
+    // Camera keyboard panning (skip during focus animation so we don't fight it)
+    if (!this.cameraFocusAnimation) {
+      const camMove = this.input.getCameraMovement();
+      if (camMove.x !== 0 || camMove.y !== 0) {
+        this.camera.pan(camMove.x, camMove.y, 1 / 60);
+      }
     }
+
+    this.updateCameraFocusAnimation();
 
     const camPos = this.camera.getPosition();
     const zoom = this.camera.getZoom();
@@ -529,12 +563,31 @@ export class SpaceWarGame {
     this.trailRenderer.update(this.world, zoom);
     this.missileRenderer.update(this.world, zoom, playerContacts);
     this.projectileRenderer.update(this.world, zoom);
+    this.offScreenContactRenderer.update(
+      this.world,
+      camPos.x,
+      camPos.y,
+      zoom,
+      this.camera.getAspect(),
+      playerContacts,
+      this.gameTime.elapsed,
+    );
+    this.planetContactIndicatorsRenderer.update(
+      this.world,
+      zoom,
+      playerContacts,
+      this.gameTime.elapsed,
+    );
 
     this.updateSelectionBoxVisual();
 
     this.timeControls.update();
     this.fleetPanel.update();
-    this.contactsPanel.update();
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (now - this.lastContactsPanelUpdate >= this.contactsPanelIntervalMs) {
+      this.lastContactsPanelUpdate = now;
+      this.contactsPanel.update();
+    }
     this.shipDetailPanel.update();
     this.combatLog.update();
 
@@ -575,8 +628,7 @@ export class SpaceWarGame {
   private focusCameraOnShip(entityId: EntityId): void {
     const pos = this.world.getComponent<Position>(entityId, COMPONENT.Position);
     if (!pos) return;
-    this.camera.setPosition(pos.x, pos.y);
-    this.camera.setZoom(8000); // ~16,000 km visible height for a tight focus
+    this.startCameraFocusAnimation(pos.x, pos.y);
   }
 
   /** Center camera on a detected enemy contact (last-known position extrapolated by velocity). */
@@ -587,8 +639,68 @@ export class SpaceWarGame {
     const age = this.gameTime.elapsed - contact.receivedTime;
     const x = contact.lastKnownX + contact.lastKnownVx * age;
     const y = contact.lastKnownY + contact.lastKnownVy * age;
-    this.camera.setPosition(x, y);
-    this.camera.setZoom(8000);
+    this.startCameraFocusAnimation(x, y);
+  }
+
+  private startCameraFocusAnimation(targetX: number, targetY: number): void {
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const pos = this.camera.getPosition();
+    const fromZoom = this.camera.getZoom();
+    const zoomOutLevel = Math.max(fromZoom, SpaceWarGame.FOCUS_ZOOM_OUT_LEVEL);
+    this.cameraFocusAnimation = {
+      phase: 'zoomOut',
+      startTime: now,
+      fromX: pos.x,
+      fromY: pos.y,
+      fromZoom,
+      targetX,
+      targetY,
+      targetZoom: SpaceWarGame.FOCUS_FINAL_ZOOM,
+      zoomOutLevel,
+    };
+  }
+
+  private updateCameraFocusAnimation(): void {
+    const a = this.cameraFocusAnimation;
+    if (!a) return;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const elapsedMs = now - a.startTime;
+
+    if (a.phase === 'zoomOut') {
+      const durationMs = SpaceWarGame.FOCUS_ZOOM_OUT_S * 1000;
+      const t = Math.min(1, elapsedMs / durationMs);
+      const smooth = t * t;
+      const zoom = a.fromZoom + (a.zoomOutLevel - a.fromZoom) * smooth;
+      this.camera.setPosition(a.fromX, a.fromY);
+      this.camera.setZoom(zoom);
+      if (t >= 1) {
+        a.phase = 'pan';
+        a.startTime = now;
+      }
+      return;
+    }
+    if (a.phase === 'pan') {
+      const durationMs = SpaceWarGame.FOCUS_PAN_S * 1000;
+      const t = Math.min(1, elapsedMs / durationMs);
+      const smooth = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+      const x = a.fromX + (a.targetX - a.fromX) * smooth;
+      const y = a.fromY + (a.targetY - a.fromY) * smooth;
+      this.camera.setPosition(x, y);
+      this.camera.setZoom(a.zoomOutLevel);
+      if (t >= 1) {
+        a.phase = 'zoomIn';
+        a.startTime = now;
+      }
+      return;
+    }
+    // zoomIn
+    const durationMs = SpaceWarGame.FOCUS_ZOOM_IN_S * 1000;
+    const t = Math.min(1, elapsedMs / durationMs);
+    const smooth = 1 - (1 - t) * (1 - t);
+    const zoom = a.zoomOutLevel + (a.targetZoom - a.zoomOutLevel) * smooth;
+    this.camera.setPosition(a.targetX, a.targetY);
+    this.camera.setZoom(zoom);
+    if (t >= 1) this.cameraFocusAnimation = null;
   }
 
   /** Focus camera on nearest detected enemy (keyboard shortcut E). */

@@ -1,15 +1,105 @@
 import type { World } from '../engine/types';
 import type { EntityId } from '../engine/types';
 import type { ContactTracker } from '../engine/components';
-import { Ship, COMPONENT } from '../engine/components';
+import { Ship, Position, CelestialBody, COMPONENT } from '../engine/components';
+
+/** Max distance (km) to show "Near X" instead of "X km from Y". */
+const NEAR_THRESHOLD_KM = 150_000;
+
+/** Same radius as PlanetContactIndicatorsRenderer for "at planet" grouping. */
+const NEAR_BODY_RADIUS_KM = 8_000_000;
+
+function formatDataAge(ageSeconds: number): string {
+  if (ageSeconds < 60) return `${ageSeconds.toFixed(0)}s ago`;
+  const min = Math.floor(ageSeconds / 60);
+  return `Data ${min} min old (light delay)`;
+}
+
+function getNearestBody(world: World, x: number, y: number): { name: string; distance: number } | null {
+  const bodies = world.query(COMPONENT.Position, COMPONENT.CelestialBody);
+  let nearest: { name: string; distance: number } | null = null;
+  for (const id of bodies) {
+    const pos = world.getComponent<Position>(id, COMPONENT.Position)!;
+    const body = world.getComponent<CelestialBody>(id, COMPONENT.CelestialBody)!;
+    const dx = x - pos.x;
+    const dy = y - pos.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (!nearest || d < nearest.distance) {
+      nearest = { name: body.name, distance: d };
+    }
+  }
+  return nearest;
+}
+
+function formatLocation(nearest: { name: string; distance: number } | null): string {
+  if (!nearest) return '—';
+  if (nearest.distance < NEAR_THRESHOLD_KM) {
+    return `Near ${nearest.name}`;
+  }
+  if (nearest.distance >= 1_000_000) {
+    return `${(nearest.distance / 1_000_000).toFixed(0)}M km from ${nearest.name}`;
+  }
+  if (nearest.distance >= 1000) {
+    return `${(nearest.distance / 1000).toFixed(0)}k km from ${nearest.name}`;
+  }
+  return `${Math.round(nearest.distance)} km from ${nearest.name}`;
+}
+
+/** Group contact count by nearest body (for "Enemies at Mars" summary). */
+function getContactsByBody(
+  world: World,
+  tracker: ContactTracker,
+  gameTime: number,
+): Map<string, { count: number; minAgeSec: number; maxAgeSec: number }> {
+  const bodies = world.query(COMPONENT.Position, COMPONENT.CelestialBody);
+  const bodyInfo: { name: string; x: number; y: number }[] = [];
+  for (const id of bodies) {
+    const pos = world.getComponent<Position>(id, COMPONENT.Position)!;
+    const body = world.getComponent<CelestialBody>(id, COMPONENT.CelestialBody)!;
+    bodyInfo.push({ name: body.name, x: pos.x, y: pos.y });
+  }
+  const byBody = new Map<string, { count: number; minAgeSec: number; maxAgeSec: number }>();
+  for (const [, contact] of tracker.contacts) {
+    if (contact.lost) continue;
+    const age = gameTime - contact.receivedTime;
+    const x = contact.lastKnownX + contact.lastKnownVx * age;
+    const y = contact.lastKnownY + contact.lastKnownVy * age;
+    let nearestName: string | null = null;
+    let nearestDist = Infinity;
+    for (const b of bodyInfo) {
+      const dx = x - b.x;
+      const dy = y - b.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < NEAR_BODY_RADIUS_KM && d < nearestDist) {
+        nearestDist = d;
+        nearestName = b.name;
+      }
+    }
+    if (nearestName) {
+      const cur = byBody.get(nearestName) ?? { count: 0, minAgeSec: age, maxAgeSec: age };
+      cur.count += 1;
+      cur.minAgeSec = Math.min(cur.minAgeSec, age);
+      cur.maxAgeSec = Math.max(cur.maxAgeSec, age);
+      byBody.set(nearestName, cur);
+    }
+  }
+  return byBody;
+}
 
 /**
  * Lists detected enemy contacts (sensor contacts). Clicking a name focuses the camera on that contact.
  */
 export class ContactsPanel {
   private root: HTMLElement;
+  private summaryEl: HTMLElement;
   private list: HTMLElement;
   private contactRows = new Map<EntityId, HTMLElement>();
+  private lastSummaryText = '';
+  private summaryVisible = true; // avoid setting display every frame
+  /** Cache last displayed values per contact to avoid DOM writes when unchanged. */
+  private lastRowState = new Map<EntityId, { name: string; meta: string; metaClass: string; location: string }>();
+  private lastUpdateTime = 0;
+  private readonly updateIntervalMs = 500;
 
   constructor(
     container: HTMLElement,
@@ -27,6 +117,10 @@ export class ContactsPanel {
     header.textContent = 'Contacts';
     this.root.appendChild(header);
 
+    this.summaryEl = document.createElement('div');
+    this.summaryEl.className = 'contacts-panel-summary';
+    this.root.appendChild(this.summaryEl);
+
     this.list = document.createElement('div');
     this.list.className = 'contacts-panel-list';
     this.root.appendChild(this.list);
@@ -39,6 +133,44 @@ export class ContactsPanel {
     const tracker = this.getContacts();
     const contactIds = tracker ? Array.from(tracker.contacts.keys()) : [];
     const gameTime = this.getGameTime();
+
+    // Summary: "Enemies at Mars (2), Venus (3). Data 1–5 min old (light delay)."
+    if (tracker && contactIds.length > 0) {
+      const byBody = getContactsByBody(this.world, tracker, gameTime);
+      const parts: string[] = [];
+      let minAge = Infinity;
+      let maxAge = 0;
+      for (const [name, info] of byBody) {
+        parts.push(`${name} (${info.count})`);
+        minAge = Math.min(minAge, info.minAgeSec);
+        maxAge = Math.max(maxAge, info.maxAgeSec);
+      }
+      const ageStr =
+        maxAge >= 60
+          ? ` Data ${Math.floor(minAge / 60)}–${Math.ceil(maxAge / 60)} min old (light delay).`
+          : maxAge > 0
+            ? ` Data ${minAge.toFixed(0)}–${maxAge.toFixed(0)} s old.`
+            : '';
+      const summaryText = `Enemies at: ${parts.join(', ')}.${ageStr}`;
+      if (this.lastSummaryText !== summaryText) {
+        this.lastSummaryText = summaryText;
+        this.summaryEl.textContent = summaryText;
+      }
+      if (!this.summaryVisible) {
+        this.summaryVisible = true;
+        this.summaryEl.style.display = 'block';
+      }
+    } else {
+      this.lastSummaryText = '';
+      if (this.summaryVisible) {
+        this.summaryVisible = false;
+        this.summaryEl.style.display = 'none';
+      }
+    }
+
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const shouldUpdateContent = (now - this.lastUpdateTime) >= this.updateIntervalMs;
+    if (shouldUpdateContent) this.lastUpdateTime = now;
 
     for (const id of contactIds) {
       const contact = tracker!.contacts.get(id)!;
@@ -56,6 +188,9 @@ export class ContactsPanel {
         const meta = document.createElement('span');
         meta.className = 'contacts-panel-meta';
         row.appendChild(meta);
+        const locationEl = document.createElement('span');
+        locationEl.className = 'contacts-panel-location';
+        row.appendChild(locationEl);
         this.list.appendChild(row);
         this.contactRows.set(id, row);
         if (this.onContactClick) {
@@ -67,23 +202,39 @@ export class ContactsPanel {
       }
 
       const nameEl = row.querySelector('.contacts-panel-name')!;
-      nameEl.textContent = ship.name;
-
       const metaEl = row.querySelector('.contacts-panel-meta') as HTMLElement;
-      if (contact.lost) {
-        metaEl.textContent = 'Lost';
-        metaEl.className = 'contacts-panel-meta contacts-panel-lost';
-      } else {
-        const age = gameTime > 0 && contact.receivedTime > 0 ? gameTime - contact.receivedTime : 0;
-        metaEl.textContent = age > 0 ? `${age.toFixed(0)}s ago` : '—';
-        metaEl.className = 'contacts-panel-meta';
+      const age = gameTime - contact.receivedTime;
+      const metaText = contact.lost ? 'Lost' : (gameTime > 0 && contact.receivedTime > 0 && age > 0 ? formatDataAge(age) : '—');
+      const metaClass = contact.lost ? 'contacts-panel-meta contacts-panel-lost' : 'contacts-panel-meta';
+
+      const locX = contact.lastKnownX + contact.lastKnownVx * age;
+      const locY = contact.lastKnownY + contact.lastKnownVy * age;
+      const nearest = getNearestBody(this.world, locX, locY);
+      const locationText = formatLocation(nearest);
+
+      const cached = this.lastRowState.get(id);
+      const nameChanged = cached?.name !== ship.name;
+      const metaChanged = cached?.meta !== metaText || cached?.metaClass !== metaClass;
+      const locationChanged = cached?.location !== locationText;
+      const isNewRow = cached === undefined;
+
+      if ((shouldUpdateContent || isNewRow) && (nameChanged || metaChanged || locationChanged)) {
+        if (nameChanged) nameEl.textContent = ship.name;
+        if (metaChanged) {
+          metaEl.textContent = metaText;
+          metaEl.className = metaClass;
+        }
+        const locationEl = row.querySelector('.contacts-panel-location') as HTMLElement | null;
+        if (locationEl && locationChanged) locationEl.textContent = locationText;
       }
+      this.lastRowState.set(id, { name: ship.name, meta: metaText, metaClass, location: locationText });
     }
 
     for (const [id, row] of this.contactRows) {
       if (!contactIds.includes(id)) {
         row.remove();
         this.contactRows.delete(id);
+        this.lastRowState.delete(id);
       }
     }
   }

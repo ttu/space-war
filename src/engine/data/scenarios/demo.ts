@@ -1,6 +1,6 @@
 /**
  * Default demo scenario: Inner solar system — Mercury, Venus, Terra, Mars.
- * Player fleet near Terra, enemy fleets at Venus, Terra, and Mars.
+ * Player fleet near Terra, enemy fleets at Venus, Terra, and Mars, plus enemies in transit Venus → Terra.
  */
 
 import type { Scenario } from '../ScenarioLoader';
@@ -70,6 +70,14 @@ const TERRA_Y = 0;
 
 const MARS_X = 0; // 90° = +Y axis
 const MARS_Y = MARS_ORBITAL_RADIUS;
+
+// Venus → Terra transfer: direction and speed (km/s) for ships in transit
+const VENUS_TO_TERRA_DX = TERRA_X - VENUS_X;
+const VENUS_TO_TERRA_DY = TERRA_Y - VENUS_Y;
+const VENUS_TO_TERRA_DIST = Math.sqrt(VENUS_TO_TERRA_DX ** 2 + VENUS_TO_TERRA_DY ** 2);
+const TRANSFER_SPEED_KMS = 12;
+const transferVx = VENUS_VX + (VENUS_TO_TERRA_DX / VENUS_TO_TERRA_DIST) * TRANSFER_SPEED_KMS;
+const transferVy = VENUS_VY + (VENUS_TO_TERRA_DY / VENUS_TO_TERRA_DIST) * TRANSFER_SPEED_KMS;
 
 export const demoScenario: Scenario = {
   celestials: [
@@ -172,6 +180,22 @@ export const demoScenario: Scenario = {
       templateId: 'frigate', name: 'UES Viper', faction: 'enemy',
       x: VENUS_X + 17500, y: VENUS_Y - 600,
       vx: VENUS_VX, vy: VENUS_VY + shipOrbitalSpeedVenus * 1.02,
+    },
+    // --- Enemy ships in transit Venus → Terra ---
+    {
+      templateId: 'cruiser', name: 'UES Invader', faction: 'enemy',
+      x: VENUS_X + VENUS_TO_TERRA_DX * 0.25, y: VENUS_Y + VENUS_TO_TERRA_DY * 0.25,
+      vx: transferVx, vy: transferVy,
+    },
+    {
+      templateId: 'destroyer', name: 'UES Marauder', faction: 'enemy',
+      x: VENUS_X + VENUS_TO_TERRA_DX * 0.5, y: VENUS_Y + VENUS_TO_TERRA_DY * 0.5,
+      vx: transferVx * 0.98, vy: transferVy * 1.02,
+    },
+    {
+      templateId: 'frigate', name: 'UES Scout', faction: 'enemy',
+      x: VENUS_X + VENUS_TO_TERRA_DX * 0.75, y: VENUS_Y + VENUS_TO_TERRA_DY * 0.75,
+      vx: transferVx * 1.01, vy: transferVy * 0.99,
     },
     // --- Enemy fleet near Mars ---
     {
