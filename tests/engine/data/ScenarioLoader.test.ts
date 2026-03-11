@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { WorldImpl } from '../../../src/engine/ecs/World';
 import { loadScenario, parseScenarioJson } from '../../../src/engine/data/ScenarioLoader';
 import { COMPONENT } from '../../../src/engine/components';
+import type { CelestialBody, OrbitalPrimary, Position } from '../../../src/engine/components';
+import { demoScenario } from '../../../src/engine/data/scenarios/demo';
+import { PhysicsSystem } from '../../../src/engine/systems/PhysicsSystem';
 
 describe('ScenarioLoader', () => {
   it('loadScenario creates celestials from scenario', () => {
@@ -98,5 +101,53 @@ describe('ScenarioLoader', () => {
   it('parseScenarioJson throws on missing ships', () => {
     expect(() => parseScenarioJson('{}')).toThrow('Invalid scenario');
     expect(() => parseScenarioJson('{"ships": null}')).toThrow('Invalid scenario');
+  });
+
+  it('loadScenario assigns OrbitalPrimary to moons with primaryName', () => {
+    const world = new WorldImpl();
+    loadScenario(world, demoScenario);
+
+    const celestials = world.query(COMPONENT.CelestialBody);
+    let terraId: string | null = null;
+    let lunaId: string | null = null;
+    for (const id of celestials) {
+      const body = world.getComponent<CelestialBody>(id, COMPONENT.CelestialBody)!;
+      if (body.name === 'Terra') terraId = id;
+      if (body.name === 'Luna') lunaId = id;
+    }
+    expect(terraId).not.toBeNull();
+    expect(lunaId).not.toBeNull();
+
+    const orbitalPrimary = world.getComponent<OrbitalPrimary>(lunaId!, COMPONENT.OrbitalPrimary);
+    expect(orbitalPrimary).toBeDefined();
+    expect(orbitalPrimary!.primaryId).toBe(terraId);
+  });
+
+  it('moon orbits primary when physics runs (demo scenario)', () => {
+    const world = new WorldImpl();
+    loadScenario(world, demoScenario);
+
+    const celestials = world.query(COMPONENT.CelestialBody);
+    let lunaId: string | null = null;
+    for (const id of celestials) {
+      const body = world.getComponent<CelestialBody>(id, COMPONENT.CelestialBody)!;
+      if (body.name === 'Luna') lunaId = id;
+    }
+    expect(lunaId).not.toBeNull();
+
+    const pos0 = world.getComponent<Position>(lunaId!, COMPONENT.Position)!;
+    const x0 = pos0.x;
+    const y0 = pos0.y;
+
+    const physics = new PhysicsSystem();
+    const dt = 0.1;
+    for (let i = 0; i < 500; i++) physics.update(world, dt);
+
+    const pos1 = world.getComponent<Position>(lunaId!, COMPONENT.Position)!;
+    const dx = pos1.x - x0;
+    const dy = pos1.y - y0;
+    const drift = Math.sqrt(dx * dx + dy * dy);
+    // Luna should have moved (orbit ~384400 km; 50s at ~1 km/s tangent is ~50 km minimum drift)
+    expect(drift).toBeGreaterThan(1000);
   });
 });

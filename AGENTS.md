@@ -42,9 +42,10 @@ src/
 │   │   └── GameTime.ts              # Pause, time scaling (1x–100x)
 │   ├── ecs/
 │   │   └── World.ts                 # ECS world (entities & components)
-│   ├── systems/                     # ECS systems (10 systems)
+│   ├── systems/                     # ECS systems (11 systems)
 │   │   ├── PhysicsSystem.ts         # Newtonian movement + gravity
 │   │   ├── NavigationSystem.ts      # Burn plan execution
+│   │   ├── CollisionSystem.ts       # Celestial danger zones, damage/destruction
 │   │   ├── SensorSystem.ts          # Detection + fog of war
 │   │   ├── MissileSystem.ts         # Missile guidance (PN)
 │   │   ├── PDCSystem.ts             # Point defense
@@ -61,6 +62,7 @@ src/
 ├── game/                            # Game coordination
 │   ├── SpaceWarGame.ts              # Main orchestrator
 │   ├── CommandHandler.ts            # Player/AI commands
+│   ├── PlanetAvoidance.ts           # Path vs planet avoidance (waypoints)
 │   ├── TrajectoryCalculator.ts      # Burn planning math
 │   ├── FiringComputer.ts            # Lead targeting
 │   ├── SelectionManager.ts          # Ship selection
@@ -109,6 +111,7 @@ src/
 | GameLoop         | `core/GameLoop.ts`                | Fixed timestep simulation + render interp   |
 | Physics          | `engine/systems/PhysicsSystem.ts` | Newtonian movement, gravity from bodies     |
 | Navigation       | `engine/systems/NavigationSystem.ts` | Brachistochrone burn plan execution      |
+| Collision        | `engine/systems/CollisionSystem.ts` | Celestial danger zones, damage/destruction  |
 | Sensors          | `engine/systems/SensorSystem.ts`  | Detection, light-speed delay, fog of war    |
 | Missiles         | `engine/systems/MissileSystem.ts` | Proportional navigation guidance            |
 | PDC              | `engine/systems/PDCSystem.ts`     | Auto point defense against missiles         |
@@ -121,6 +124,7 @@ src/
 | Input            | `core/InputManager.ts`            | Mouse/keyboard events → callbacks           |
 | SpaceWarGame     | `game/SpaceWarGame.ts`            | Main orchestrator, wires all systems        |
 | CommandHandler   | `game/CommandHandler.ts`          | Player/AI commands → game actions           |
+| PlanetAvoidance  | `game/PlanetAvoidance.ts`         | Path vs planet checks, safe waypoints       |
 | FiringComputer   | `game/FiringComputer.ts`          | Railgun lead targeting + hit probability    |
 | TrajectoryCalc   | `game/TrajectoryCalculator.ts`    | Brachistochrone burn planning math           |
 

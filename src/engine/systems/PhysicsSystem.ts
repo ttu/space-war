@@ -1,16 +1,16 @@
 import { World, EntityId } from '../types';
-import { Position, Velocity, Thruster, CelestialBody, ShipSystems, COMPONENT } from '../components';
+import { Position, Velocity, Thruster, CelestialBody, OrbitalPrimary, ShipSystems, COMPONENT } from '../components';
 import { gravitationalAcceleration } from '../../utils/OrbitalMechanics';
 
 export class PhysicsSystem {
   update(world: World, dt: number): void {
-    // Get all celestial bodies for gravity
+    // Build list of celestial bodies with entity ids (for moon primary lookup)
     const bodyEntities = world.query(COMPONENT.Position, COMPONENT.CelestialBody);
-    const bodies: { x: number; y: number; mass: number; radius: number }[] = [];
+    const bodies: { entityId: EntityId; x: number; y: number; mass: number; radius: number }[] = [];
     for (const bodyId of bodyEntities) {
       const pos = world.getComponent<Position>(bodyId, COMPONENT.Position)!;
       const body = world.getComponent<CelestialBody>(bodyId, COMPONENT.CelestialBody)!;
-      bodies.push({ x: pos.x, y: pos.y, mass: body.mass, radius: body.radius });
+      bodies.push({ entityId: bodyId, x: pos.x, y: pos.y, mass: body.mass, radius: body.radius });
     }
 
     // Update all entities with Position + Velocity
@@ -25,11 +25,17 @@ export class PhysicsSystem {
     world: World,
     entityId: EntityId,
     dt: number,
-    bodies: { x: number; y: number; mass: number; radius: number }[],
+    bodies: { entityId: EntityId; x: number; y: number; mass: number; radius: number }[],
   ): void {
     const pos = world.getComponent<Position>(entityId, COMPONENT.Position)!;
     const vel = world.getComponent<Velocity>(entityId, COMPONENT.Velocity)!;
     const thruster = world.getComponent<Thruster>(entityId, COMPONENT.Thruster);
+    const orbitalPrimary = world.getComponent<OrbitalPrimary>(entityId, COMPONENT.OrbitalPrimary);
+
+    // Moons only feel gravity from their primary; others feel all bodies
+    const gravityBodies = orbitalPrimary
+      ? bodies.filter((b) => b.entityId === orbitalPrimary.primaryId)
+      : bodies;
 
     // Save previous position for interpolation
     pos.prevX = pos.x;
@@ -47,8 +53,8 @@ export class PhysicsSystem {
       vel.vy += Math.sin(thruster.thrustAngle) * accel * dt;
     }
 
-    // Apply gravity from all celestial bodies
-    for (const body of bodies) {
+    // Apply gravity from relevant celestial bodies
+    for (const body of gravityBodies) {
       const { ax, ay } = gravitationalAcceleration(pos.x, pos.y, body.x, body.y, body.mass);
       vel.vx += ax * dt;
       vel.vy += ay * dt;

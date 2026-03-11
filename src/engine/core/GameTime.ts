@@ -1,4 +1,4 @@
-export type TimeScale = 1 | 2 | 4 | 10 | 20 | 50 | 100;
+export type TimeScale = 1 | 2 | 4 | 10 | 20 | 50 | 100 | 1000 | 10000;
 
 export class GameTime {
   /** Elapsed simulation time in seconds */

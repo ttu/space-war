@@ -15,6 +15,7 @@ import { DamageSystem } from '../engine/systems/DamageSystem';
 import { AIStrategicSystem } from '../engine/systems/AIStrategicSystem';
 import { AITacticalSystem } from '../engine/systems/AITacticalSystem';
 import { VictorySystem } from '../engine/systems/VictorySystem';
+import { CollisionSystem } from '../engine/systems/CollisionSystem';
 import { RadarRenderer } from '../rendering/RadarRenderer';
 import { ShipRenderer } from '../rendering/ShipRenderer';
 import { CelestialRenderer } from '../rendering/CelestialRenderer';
@@ -53,6 +54,7 @@ export class SpaceWarGame {
   private gameLoop!: GameLoop;
 
   private physicsSystem = new PhysicsSystem();
+  private collisionSystem = new CollisionSystem(this.eventBus);
   private navigationSystem = new NavigationSystem();
   private sensorSystem = new SensorSystem(this.eventBus);
   private missileSystem = new MissileSystem(this.eventBus);
@@ -325,7 +327,7 @@ export class SpaceWarGame {
   }
 
   private cycleSpeed(delta: number): void {
-    const scales: TimeScale[] = [1, 2, 4, 10, 20, 50, 100];
+    const scales: TimeScale[] = [1, 2, 4, 10, 20, 50, 100, 1000, 10000];
     const idx = scales.indexOf(this.gameTime.timeScale);
     const newIdx = Math.max(0, Math.min(scales.length - 1, idx + delta));
     this.setSpeed(scales[newIdx]);
@@ -483,6 +485,7 @@ export class SpaceWarGame {
     this.aiTacticalSystem.update(this.world, dt, this.gameTime.elapsed);
     this.navigationSystem.update(this.world, dt, this.gameTime.elapsed);
     this.physicsSystem.update(this.world, dt);
+    this.collisionSystem.update(this.world);
     this.missileSystem.update(this.world, dt, this.gameTime.elapsed);
     this.victorySystem.update(this.world, this.gameTime.elapsed);
     this.trailRenderer.recordPositions(this.world);
@@ -534,8 +537,20 @@ export class SpaceWarGame {
   loadDemoScenario(): void {
     loadScenario(this.world, demoScenario);
     this.victorySystem.reset();
-    this.camera.setPosition(42000, 0);
+    this.centerCameraOnFlagship();
     this.camera.zoomToFit(30000, 30000);
+  }
+
+  private centerCameraOnFlagship(): void {
+    const ships = this.world.query(COMPONENT.Position, COMPONENT.Ship);
+    for (const id of ships) {
+      const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
+      if (ship.faction === 'player' && ship.flagship) {
+        const pos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
+        this.camera.setPosition(pos.x, pos.y);
+        return;
+      }
+    }
   }
 
   loadE2eScenario(): void {
@@ -565,7 +580,7 @@ export class SpaceWarGame {
       (scenario) => {
         loadScenario(this.world, scenario);
         this.victorySystem.reset();
-        this.camera.setPosition(42000, 0);
+        this.centerCameraOnFlagship();
         this.camera.zoomToFit(30000, 30000);
       },
       () => {},

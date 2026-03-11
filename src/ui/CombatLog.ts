@@ -47,6 +47,8 @@ function eventSummary(e: GameEvent): string {
       return `${t} Victory`;
     case 'DefeatSuffered':
       return `${t} Defeat`;
+    case 'CelestialCollision':
+      return `${t} ${e.data?.collision === 'impact' ? 'Crashed into' : 'Burned up near'} ${e.data?.bodyName ?? 'celestial body'}`;
     default:
       return `${t} ${typeLabel}`;
   }

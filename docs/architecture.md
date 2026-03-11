@@ -83,8 +83,9 @@ Systems run each simulation tick (0.1s fixed timestep). Execution order matters.
 
 | System | Purpose |
 |--------|---------|
-| NavigationSystem | Executes burn plans through 5 phases |
+| NavigationSystem | Executes burn plans; in-flight course correction when path nears a planet |
 | PhysicsSystem | Applies thrust, gravity, updates positions |
+| CollisionSystem | Celestial danger zones (1.5× radius), damage/destruction |
 | SensorSystem | Detection, light-speed delay, contact tracking |
 | MissileSystem | Missile guidance (PN), fuel, detonation |
 | PDCSystem | Auto-targets incoming missiles |
@@ -117,6 +118,7 @@ Typed publish-subscribe system for cross-system communication. Supports:
 | MissileImpact | missileId, targetId, count | MissileSystem |
 | RailgunFired | shooterId, targetId | CommandHandler |
 | RailgunHit | projectileId, targetId, damage | RailgunSystem |
+| CelestialCollision | entityId, bodyName, collision: 'impact'\|'atmosphere' | CollisionSystem |
 | PDCFiring | shipId, targetMissileId | PDCSystem |
 | ShipDetected | detectorFaction, entityId | SensorSystem |
 | ShipLostContact | detectorFaction, entityId | SensorSystem |
@@ -185,6 +187,18 @@ Translates player and AI intentions into game actions:
 - `launchMissile(targetId, gameTime)` — fire missiles from selected ships
 - `fireRailgun(targetId, gameTime)` — fire railguns from selected ships
 - Per-ship variants for AI use: `issueMoveToForShip()`, `launchMissileFromShip()`, `fireRailgunFromShip()`
+
+Move orders (player and AI) avoid celestial danger zones (1.5× body radius): when the straight-line path would intersect a body, a bypass waypoint is computed via **PlanetAvoidance** and used as the navigation target. See `docs/superpowers/specs/2026-03-11-ai-evade-planets-design.md`.
+
+### PlanetAvoidance (`src/game/PlanetAvoidance.ts`)
+
+Shared logic for path-vs-planet checks:
+
+- `getBodiesFromWorld(world)` — celestial bodies with danger radius (same as CollisionSystem)
+- `segmentIntersectsCircle()` — segment/circle intersection
+- `getSafeWaypoint(from, to, bodies)` — returns a bypass waypoint or null if path is clear
+
+Ships also **adjust course in flight**: each tick, NavigationSystem checks whether the segment from the ship’s current position to its nav target intersects any body’s avoidance zone; if so, it replaces the target with a safe waypoint and recomputes the burn plan so the ship curves away from the planet.
 
 ### TrajectoryCalculator (`src/game/TrajectoryCalculator.ts`)
 
@@ -262,6 +276,7 @@ src/
 │   ├── systems/
 │   │   ├── PhysicsSystem.ts         # Newtonian + gravity
 │   │   ├── NavigationSystem.ts      # Burn plan execution
+│   │   ├── CollisionSystem.ts       # Celestial danger zones
 │   │   ├── SensorSystem.ts          # Detection + fog of war
 │   │   ├── MissileSystem.ts         # Missile guidance
 │   │   ├── PDCSystem.ts             # Point defense
@@ -278,6 +293,7 @@ src/
 ├── game/
 │   ├── SpaceWarGame.ts              # Main orchestrator
 │   ├── CommandHandler.ts            # Player/AI commands
+│   ├── PlanetAvoidance.ts           # Path vs planet avoidance
 │   ├── TrajectoryCalculator.ts      # Burn planning math
 │   ├── FiringComputer.ts            # Lead targeting
 │   ├── SelectionManager.ts          # Ship selection

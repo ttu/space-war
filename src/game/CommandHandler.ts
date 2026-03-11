@@ -7,6 +7,7 @@ import {
 } from '../engine/components';
 import { computeBurnPlan, angleBetweenPoints } from './TrajectoryCalculator';
 import { computeLeadSolution, hitProbability } from './FiringComputer';
+import { getBodiesFromWorld, getSafeWaypoint } from './PlanetAvoidance';
 
 export class CommandHandler {
   constructor(private world: World, private eventBus?: EventBus) {}
@@ -41,10 +42,15 @@ export class CommandHandler {
       const vel = this.world.getComponent<Velocity>(id, COMPONENT.Velocity)!;
       const thruster = this.world.getComponent<Thruster>(id, COMPONENT.Thruster)!;
 
+      const bodies = getBodiesFromWorld(this.world);
+      const safe = getSafeWaypoint(pos.x, pos.y, targetX, targetY, bodies);
+      const effectiveX = safe ? safe.x : targetX;
+      const effectiveY = safe ? safe.y : targetY;
+
       const burnPlan = computeBurnPlan(
         pos.x, pos.y,
         vel.vx, vel.vy,
-        targetX, targetY,
+        effectiveX, effectiveY,
         thruster.maxThrust,
       );
 
@@ -55,8 +61,8 @@ export class CommandHandler {
 
       this.world.addComponent<NavigationOrder>(id, {
         type: 'NavigationOrder',
-        targetX,
-        targetY,
+        targetX: effectiveX,
+        targetY: effectiveY,
         phase: 'rotating',
         burnPlan,
         phaseStartTime: 0,
@@ -90,10 +96,15 @@ export class CommandHandler {
     const thruster = this.world.getComponent<Thruster>(shipId, COMPONENT.Thruster);
     if (!pos || !vel || !thruster) return;
 
+    const bodies = getBodiesFromWorld(this.world);
+    const safe = getSafeWaypoint(pos.x, pos.y, targetX, targetY, bodies);
+    const effectiveX = safe ? safe.x : targetX;
+    const effectiveY = safe ? safe.y : targetY;
+
     const burnPlan = computeBurnPlan(
       pos.x, pos.y,
       vel.vx, vel.vy,
-      targetX, targetY,
+      effectiveX, effectiveY,
       thruster.maxThrust,
     );
 
@@ -103,8 +114,8 @@ export class CommandHandler {
 
     this.world.addComponent<NavigationOrder>(shipId, {
       type: 'NavigationOrder',
-      targetX,
-      targetY,
+      targetX: effectiveX,
+      targetY: effectiveY,
       phase: 'rotating',
       burnPlan,
       phaseStartTime: 0,

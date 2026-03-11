@@ -63,6 +63,12 @@ Trajectory projections are shown as dashed lines:
 
 Ships cannot stop instantly. Heavier ships (Battleship, Carrier) have lower thrust and take longer to maneuver.
 
+Move orders automatically **avoid celestial bodies**: if the straight line to your destination would pass through a planet or moon’s danger zone, the game plots a bypass waypoint so the ship curves around. Ships also correct course in flight if their path later crosses a body.
+
+### Celestial Hazards
+
+Planets, moons, and stations have a **danger zone** (1.5× their radius). Staying inside it damages hull each tick; touching the surface destroys the ship. Missiles and railgun rounds are destroyed in the zone. Keep movement paths clear of gravity wells—the UI shows danger zones as rings around bodies.
+
 ### Sensors & Fog of War
 
 The battlefield is subject to full **fog of war**:
@@ -200,6 +206,7 @@ Context-sensitive buttons:
 Scrollable history of combat events:
 - Missile launches, interceptions, and impacts
 - Railgun shots and hits
+- Celestial collisions (ships or projectiles lost to planets/moons)
 - Ship detections and lost contacts
 - System damage and ship destructions
 - Victory/defeat announcements
@@ -210,6 +217,7 @@ Scrollable history of combat events:
 - **Watch your ammo** — missiles are limited, don't waste salvos at extreme range
 - **Use speed advantage** — corvettes and frigates can outmaneuver heavier ships
 - **Mind the delay** — distant enemy positions are old data, lead your attacks
+- **Avoid gravity wells** — don’t plot moves through planets or moons; use bypass waypoints
 - **Protect your PDCs** — ships with damaged point defense are easy missile targets
 - **Focus fire** — concentrate weapons on one target to overwhelm its defenses
 - **Check hit probability** — don't fire railguns at targets you can't reliably hit

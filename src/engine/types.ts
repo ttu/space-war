@@ -39,7 +39,8 @@ export type GameEventType =
   | 'GameResumed'
   | 'SpeedChanged'
   | 'VictoryAchieved'
-  | 'DefeatSuffered';
+  | 'DefeatSuffered'
+  | 'CelestialCollision';
 
 export interface GameEvent {
   type: GameEventType;

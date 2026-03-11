@@ -1,15 +1,18 @@
 import * as THREE from 'three';
 import { World, EntityId } from '../engine/types';
 import { Position, CelestialBody, COMPONENT } from '../engine/components';
+import { DANGER_ZONE_MULTIPLIER } from '../engine/systems/CollisionSystem';
 
 interface BodyVisual {
   group: THREE.Group;
   bodyMesh: THREE.Mesh;
   gravityRings: THREE.LineLoop[];
+  dangerRing: THREE.LineLoop;
   label: THREE.Sprite;
 }
 
 const BODY_COLORS: Record<string, number> = {
+  star: 0xaa8833,
   planet: 0x334466,
   moon: 0x445566,
   station: 0x446644,
@@ -61,9 +64,16 @@ export class CelestialRenderer {
         visual.gravityRings[i].visible = ringRadius > zoom * 0.02;
       }
 
+      // Danger zone ring (matches CollisionSystem)
+      const dangerRadius = body.radius * DANGER_ZONE_MULTIPLIER;
+      visual.dangerRing.scale.set(dangerRadius, dangerRadius, 1);
+      visual.dangerRing.visible = dangerRadius > zoom * 0.02;
+
       // Label
-      const labelScale = zoom * 0.025;
-      visual.label.scale.set(labelScale * 4, labelScale, 1);
+      const labelScale = zoom * 0.04;
+      const aspectRatio = (visual.label as THREE.Sprite & { userData: { labelAspectRatio?: number } }).userData
+        .labelAspectRatio ?? 4;
+      visual.label.scale.set(labelScale * aspectRatio, labelScale, 1);
       visual.label.position.set(0, -(visualRadius + labelScale), 0);
     }
   }
@@ -103,28 +113,52 @@ export class CelestialRenderer {
       group.add(ring);
     }
 
+    // Danger zone ring at 2x radius
+    const dangerGeo = new THREE.BufferGeometry();
+    const dangerPoints: number[] = [];
+    const dangerSegments = 64;
+    for (let j = 0; j <= dangerSegments; j++) {
+      const angle = (j / dangerSegments) * Math.PI * 2;
+      dangerPoints.push(Math.cos(angle), Math.sin(angle), 0);
+    }
+    dangerGeo.setAttribute('position', new THREE.Float32BufferAttribute(dangerPoints, 3));
+    const dangerMat = new THREE.LineBasicMaterial({
+      color: 0xcc4422,
+      transparent: true,
+      opacity: 0.15,
+    });
+    const dangerRing = new THREE.LineLoop(dangerGeo, dangerMat);
+    group.add(dangerRing);
+
     // Name label
     const label = this.createLabel(body.name);
     group.add(label);
 
-    return { group, bodyMesh, gravityRings, label };
+    return { group, bodyMesh, gravityRings, dangerRing, label };
   }
 
   private createLabel(text: string): THREE.Sprite {
+    const padding = 24;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
-    canvas.width = 256;
+    ctx.font = '36px Courier New';
+    const metrics = ctx.measureText(text);
+    const textWidth = metrics.width;
+    canvas.width = Math.max(256, Math.ceil(textWidth) + padding);
     canvas.height = 64;
     ctx.fillStyle = 'transparent';
-    ctx.fillRect(0, 0, 256, 64);
-    ctx.font = '24px Courier New';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = '36px Courier New';
     ctx.fillStyle = '#6888a8';
     ctx.textAlign = 'center';
-    ctx.fillText(text, 128, 40);
+    ctx.fillText(text, canvas.width / 2, 42);
 
     const texture = new THREE.CanvasTexture(canvas);
     const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
-    return new THREE.Sprite(material);
+    const sprite = new THREE.Sprite(material);
+    (sprite as THREE.Sprite & { userData: { labelAspectRatio?: number } }).userData.labelAspectRatio =
+      canvas.width / canvas.height;
+    return sprite;
   }
 
   dispose(): void {

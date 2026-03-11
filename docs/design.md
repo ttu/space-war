@@ -100,6 +100,10 @@ The navigation computer calculates optimal burns but doesn't account for gravity
 
 Celestial bodies exert gravity using the real gravitational constant (converted to km units). Gravity affects all entities including ships, missiles, and projectiles. At typical combat ranges, gravity is a minor perturbation.
 
+### Celestial Hazards
+
+Planets, moons, and stations have a **danger zone** (1.5× body radius). Ships and projectiles inside the zone take proximity-based hull damage each tick; contact with the surface destroys the entity instantly. Missiles and railgun projectiles are destroyed immediately in the danger zone. Move orders (player and AI) avoid these zones by computing bypass waypoints when the straight-line path would intersect a body; ships also adjust course in flight if their path crosses a body.
+
 ## Sensor Model
 
 ### Thermal Detection

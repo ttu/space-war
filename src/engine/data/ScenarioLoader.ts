@@ -3,7 +3,7 @@
  * and contact trackers. Ships can override loadout per ship.
  */
 
-import { World } from '../types';
+import { World, EntityId } from '../types';
 import { getShipTemplate, resolveLoadout, type HullClassId, type ShipLoadout } from './ShipTemplates';
 import {
   type MissileLauncherModule,
@@ -19,6 +19,7 @@ import {
   Hull,
   createShipSystems,
   CelestialBody,
+  OrbitalPrimary,
   Selectable,
   RotationState,
   ThermalSignature,
@@ -35,9 +36,13 @@ export interface ScenarioCelestial {
   name: string;
   mass: number;
   radius: number;
-  bodyType: 'planet' | 'moon' | 'station' | 'asteroid';
+  bodyType: 'star' | 'planet' | 'moon' | 'station' | 'asteroid';
   x: number;
   y: number;
+  vx?: number;
+  vy?: number;
+  /** For moons: name of the planet/star this body orbits. */
+  primaryName?: string;
 }
 
 export interface ScenarioShip {
@@ -65,8 +70,10 @@ export function loadScenario(world: World, scenario: Scenario): void {
   world.clear();
 
   const celestials = scenario.celestials ?? [];
+  const celestialIdsByName = new Map<string, EntityId>();
   for (const c of celestials) {
     const id = world.createEntity();
+    celestialIdsByName.set(c.name, id);
     world.addComponent(id, {
       type: 'Position',
       x: c.x,
@@ -81,6 +88,26 @@ export function loadScenario(world: World, scenario: Scenario): void {
       radius: c.radius,
       bodyType: c.bodyType,
     } as CelestialBody);
+    if (c.vx !== undefined || c.vy !== undefined) {
+      world.addComponent(id, {
+        type: 'Velocity',
+        vx: c.vx ?? 0,
+        vy: c.vy ?? 0,
+      } as Velocity);
+    }
+    if (c.primaryName !== undefined) {
+      const primaryId = celestialIdsByName.get(c.primaryName);
+      if (primaryId !== undefined) {
+        world.addComponent(id, {
+          type: 'OrbitalPrimary',
+          primaryId,
+        } as OrbitalPrimary);
+      } else {
+        console.warn(
+          `Scenario: celestial "${c.name}" has primaryName "${c.primaryName}" but no celestial with that name exists; moon will not orbit.`,
+        );
+      }
+    }
   }
 
   const factionsSeen = new Set<Faction>();

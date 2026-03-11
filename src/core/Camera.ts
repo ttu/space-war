@@ -11,7 +11,7 @@ export class CameraController {
   /** Visible half-height in km */
   private zoom = 50000; // Start showing 100,000 km vertically
   private minZoom = 100;
-  private maxZoom = 5_000_000;
+  private maxZoom = 200_000_000;
   private zoomSpeed = 0.001;
 
   constructor(private aspect: number) {

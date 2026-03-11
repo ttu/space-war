@@ -64,7 +64,13 @@ export interface CelestialBody extends Component {
   name: string;
   mass: number; // kg (for gravity calculation)
   radius: number; // km (for rendering and collision)
-  bodyType: 'planet' | 'moon' | 'station' | 'asteroid';
+  bodyType: 'star' | 'planet' | 'moon' | 'station' | 'asteroid';
+}
+
+/** Moon/orbiting body only: entity id of the primary (planet/star) to orbit. */
+export interface OrbitalPrimary extends Component {
+  type: 'OrbitalPrimary';
+  primaryId: EntityId;
 }
 
 // --- Selection / UI state ---
@@ -155,6 +161,7 @@ export const COMPONENT = {
   Thruster: 'Thruster',
   Hull: 'Hull',
   CelestialBody: 'CelestialBody',
+  OrbitalPrimary: 'OrbitalPrimary',
   Selectable: 'Selectable',
   ThermalSignature: 'ThermalSignature',
   Orders: 'Orders',

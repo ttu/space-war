@@ -3,7 +3,8 @@ import {
   Position, Velocity, Thruster, Facing, NavigationOrder, RotationState,
   COMPONENT,
 } from '../components';
-import { shortestAngleDelta, normalizeAngle } from '../../game/TrajectoryCalculator';
+import { shortestAngleDelta, normalizeAngle, computeBurnPlan } from '../../game/TrajectoryCalculator';
+import { getBodiesFromWorld, getSafeWaypoint, segmentPassesThroughInterior } from '../../game/PlanetAvoidance';
 
 const ALIGNMENT_THRESHOLD = 0.05; // radians — close enough to "aligned"
 const ARRIVAL_SPEED_THRESHOLD = 0.5; // km/s — slow enough to consider stopped
@@ -28,6 +29,35 @@ export class NavigationSystem {
     const thruster = world.getComponent<Thruster>(entityId, COMPONENT.Thruster)!;
     const nav = world.getComponent<NavigationOrder>(entityId, COMPONENT.NavigationOrder)!;
     const rot = world.getComponent<RotationState>(entityId, COMPONENT.RotationState)!;
+
+    // In-flight course correction: avoid planets. (1) If within caution radius of any body, escape early.
+    // (2) If path to current target passes through a body's interior, re-route to a safe waypoint.
+    const bodies = getBodiesFromWorld(world);
+    let needCorrection = false;
+    for (const body of bodies) {
+      const distToBody = Math.sqrt((pos.x - body.x) ** 2 + (pos.y - body.y) ** 2);
+      if (distToBody < body.cautionRadius) {
+        needCorrection = true;
+        break;
+      }
+      if (segmentPassesThroughInterior(pos.x, pos.y, nav.targetX, nav.targetY, body.x, body.y, body.radius)) {
+        needCorrection = true;
+        break;
+      }
+    }
+    if (needCorrection) {
+      const safe = getSafeWaypoint(pos.x, pos.y, nav.targetX, nav.targetY, bodies);
+      if (safe != null) {
+        nav.targetX = safe.x;
+        nav.targetY = safe.y;
+        nav.burnPlan = computeBurnPlan(
+          pos.x, pos.y,
+          vel.vx, vel.vy,
+          nav.targetX, nav.targetY,
+          thruster.maxThrust,
+        );
+      }
+    }
 
     // Check arrival: close to target and slow enough
     const dx = nav.targetX - pos.x;

@@ -7,7 +7,13 @@ export interface TimeControlsCallbacks {
   onLoadoutClick?: () => void;
 }
 
-const SPEED_SCALES: TimeScale[] = [1, 2, 4, 10, 20, 50, 100];
+const SPEED_SCALES: TimeScale[] = [1, 2, 4, 10, 20, 50, 100, 1000, 10000];
+
+function speedLabel(scale: TimeScale): string {
+  if (scale === 1000) return '1k';
+  if (scale === 10000) return '10k';
+  return `${scale}x`;
+}
 
 /**
  * Pause/speed buttons and game clock. Renders into the given container.
@@ -46,7 +52,7 @@ export class TimeControls {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.dataset.speed = String(scale);
-      btn.textContent = `${scale}x`;
+      btn.textContent = speedLabel(scale as TimeScale);
       btn.addEventListener('click', () => callbacks.onSpeedChange(scale as TimeScale));
       this.speedButtons.push(btn);
       this.root.appendChild(btn);

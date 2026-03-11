@@ -7,6 +7,7 @@ import {
   AIStrategicIntent,
   COMPONENT,
 } from '../components';
+import { getBodiesFromWorld, getSafeWaypoint } from '../../game/PlanetAvoidance';
 
 const STRATEGIC_INTERVAL = 3; // seconds between re-evaluation
 const DISENGAGE_HULL_RATIO = 0.35; // retreat when hull below this fraction
@@ -61,7 +62,7 @@ export class AIStrategicSystem {
   }
 
   private setDisengage(
-    _world: World,
+    world: World,
     _shipId: EntityId,
     intent: AIStrategicIntent,
     pos: Position,
@@ -88,8 +89,12 @@ export class AIStrategicSystem {
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
         const nx = dx / dist;
         const ny = dy / dist;
-        intent.moveToX = pos.x + nx * RETREAT_DISTANCE_KM;
-        intent.moveToY = pos.y + ny * RETREAT_DISTANCE_KM;
+        const goalX = pos.x + nx * RETREAT_DISTANCE_KM;
+        const goalY = pos.y + ny * RETREAT_DISTANCE_KM;
+        const bodies = getBodiesFromWorld(world);
+        const safe = getSafeWaypoint(pos.x, pos.y, goalX, goalY, bodies);
+        intent.moveToX = safe ? safe.x : goalX;
+        intent.moveToY = safe ? safe.y : goalY;
       } else {
         intent.moveToX = undefined;
         intent.moveToY = undefined;
@@ -102,7 +107,7 @@ export class AIStrategicSystem {
   }
 
   private setEngage(
-    _world: World,
+    world: World,
     _shipId: EntityId,
     intent: AIStrategicIntent,
     pos: Position,
@@ -129,8 +134,15 @@ export class AIStrategicSystem {
 
     intent.objective = 'engage';
     intent.targetId = bestId;
-    intent.moveToX = bestId !== undefined ? bestX : undefined;
-    intent.moveToY = bestId !== undefined ? bestY : undefined;
+    if (bestId !== undefined) {
+      const bodies = getBodiesFromWorld(world);
+      const safe = getSafeWaypoint(pos.x, pos.y, bestX, bestY, bodies);
+      intent.moveToX = safe ? safe.x : bestX;
+      intent.moveToY = safe ? safe.y : bestY;
+    } else {
+      intent.moveToX = undefined;
+      intent.moveToY = undefined;
+    }
     intent.nextStrategicUpdate = gameTime + STRATEGIC_INTERVAL;
   }
 }
