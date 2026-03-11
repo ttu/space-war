@@ -35,6 +35,7 @@ export class ShipDetailPanel {
     private world: World,
     private getSelectedIds: () => EntityId[],
     private getContact?: (entityId: EntityId) => DetectedContact | undefined,
+    private getDetectedEnemyIds?: () => EntityId[],
   ) {
     this.root = document.createElement('div');
     this.root.id = 'ship-detail-panel';
@@ -72,9 +73,9 @@ export class ShipDetailPanel {
       // Check if entity is a missile (no Ship component)
       const missile = this.world.getComponent<Missile>(id, COMPONENT.Missile);
       if (missile) {
-        this.renderMissileDetail(id, missile);
+        this.renderMissileDetail(id, missile, ids);
       } else {
-        this.renderShipDetail(id, missileTargets);
+        this.renderShipDetail(id, missileTargets, ids);
       }
     }
   }
@@ -112,6 +113,7 @@ export class ShipDetailPanel {
   private renderShipDetail(
     id: EntityId,
     missileTargets: Map<EntityId, { targetId: EntityId; targetName: string; count: number }[]>,
+    selectedIds: EntityId[],
   ): void {
     const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship);
     if (!ship) return;
@@ -128,6 +130,8 @@ export class ShipDetailPanel {
       const dataAge = contact.receivedTime > 0 ? 'Data age: ' + contact.receivedTime.toFixed(1) + ' s' : '—';
       this.addRow(`Last known: (${Math.round(contact.lastKnownX)}, ${Math.round(contact.lastKnownY)})`);
       this.addRow(`Velocity: ${contact.lastKnownVx.toFixed(2)}, ${contact.lastKnownVy.toFixed(2)} km/s`);
+      const contactSpeed = Math.sqrt(contact.lastKnownVx ** 2 + contact.lastKnownVy ** 2);
+      this.addRow(`Speed: ${contactSpeed.toFixed(2)} km/s`);
       this.addRow(dataAge);
       if (contact.lost) {
         this.addRow('Contact lost', 'ship-detail-row ship-detail-lost');
@@ -143,12 +147,21 @@ export class ShipDetailPanel {
       this.addRow(`⚠ ${totalCount} missile${totalCount > 1 ? 's' : ''} inbound`, 'ship-detail-row ship-detail-warning');
     }
 
+    // Distance to any selected enemy (opposite faction)
+    this.renderDistanceToSelectedEnemies(id, ship.faction, isEnemy ? contact : undefined, selectedIds);
+
     if (isEnemy) {
       this.addSeparator();
       return;
     }
 
     // Player ship details
+    const vel = this.world.getComponent<Velocity>(id, COMPONENT.Velocity);
+    if (vel) {
+      const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
+      this.addRow(`Speed: ${speed.toFixed(2)} km/s`);
+    }
+
     const hull = this.world.getComponent<Hull>(id, COMPONENT.Hull);
     if (hull) {
       this.addRow(`Hull: ${hull.current}/${hull.max}`);
@@ -193,7 +206,7 @@ export class ShipDetailPanel {
     this.addSeparator();
   }
 
-  private renderMissileDetail(id: EntityId, missile: Missile): void {
+  private renderMissileDetail(id: EntityId, missile: Missile, selectedIds: EntityId[]): void {
     const factionLabel = missile.launcherFaction === 'player' ? 'Friendly' : 'Enemy';
     const nameLine = document.createElement('div');
     nameLine.className = 'ship-detail-name';
@@ -204,6 +217,13 @@ export class ShipDetailPanel {
     const targetShip = this.world.getComponent<Ship>(missile.targetId, COMPONENT.Ship);
     const targetName = targetShip ? targetShip.name : 'Unknown';
     this.addRow(`Target: ${targetName}`, 'ship-detail-row ship-detail-target');
+
+    const pos = this.world.getComponent<Position>(id, COMPONENT.Position);
+    const targetPos = this.world.getComponent<Position>(missile.targetId, COMPONENT.Position);
+    if (pos && targetPos) {
+      const distToTarget = Math.hypot(targetPos.x - pos.x, targetPos.y - pos.y);
+      this.addRow(`Distance to target: ${distToTarget.toFixed(0)} km`);
+    }
 
     // Salvo status
     this.addRow(`Count: ${missile.count}`);
@@ -216,7 +236,6 @@ export class ShipDetailPanel {
     }
 
     // Position and velocity
-    const pos = this.world.getComponent<Position>(id, COMPONENT.Position);
     const vel = this.world.getComponent<Velocity>(id, COMPONENT.Velocity);
     if (pos) {
       this.addRow(`Pos: (${Math.round(pos.x)}, ${Math.round(pos.y)})`);
@@ -226,7 +245,65 @@ export class ShipDetailPanel {
       this.addRow(`Speed: ${speed.toFixed(2)} km/s`);
     }
 
+    // Distance to any selected enemy (opposite faction to launcher)
+    if (pos) {
+      for (const otherId of selectedIds) {
+        if (otherId === id) continue;
+        const otherShip = this.world.getComponent<Ship>(otherId, COMPONENT.Ship);
+        if (!otherShip || otherShip.faction === missile.launcherFaction) continue;
+        const otherPos = this.world.getComponent<Position>(otherId, COMPONENT.Position);
+        if (!otherPos) continue;
+        const dist = Math.hypot(otherPos.x - pos.x, otherPos.y - pos.y);
+        this.addRow(`Distance to ${otherShip.name}: ${dist.toFixed(0)} km`, 'ship-detail-row ship-detail-target');
+      }
+    }
+
     this.addSeparator();
+  }
+
+  private renderDistanceToSelectedEnemies(
+    id: EntityId,
+    myFaction: string,
+    contact: DetectedContact | undefined,
+    selectedIds: EntityId[],
+  ): void {
+    const myPos = contact
+      ? { x: contact.lastKnownX, y: contact.lastKnownY }
+      : this.world.getComponent<Position>(id, COMPONENT.Position);
+    if (!myPos) return;
+
+    let added = false;
+    for (const otherId of selectedIds) {
+      if (otherId === id) continue;
+      const otherShip = this.world.getComponent<Ship>(otherId, COMPONENT.Ship);
+      if (!otherShip || otherShip.faction === myFaction) continue;
+      const otherPos = this.world.getComponent<Position>(otherId, COMPONENT.Position);
+      if (!otherPos) continue;
+      const dist = Math.hypot(otherPos.x - myPos.x, otherPos.y - myPos.y);
+      this.addRow(`Distance to ${otherShip.name}: ${dist.toFixed(0)} km`);
+      added = true;
+    }
+
+    // When no enemy is selected, show distance to nearest detected enemy (player ships only)
+    if (!added && myFaction === 'player' && this.getDetectedEnemyIds && this.getContact) {
+      const detectedIds = this.getDetectedEnemyIds();
+      let nearestDist = Infinity;
+      let nearestName: string | null = null;
+      for (const otherId of detectedIds) {
+        const otherContact = this.getContact(otherId);
+        if (!otherContact || otherContact.lost) continue;
+        const otherShip = this.world.getComponent<Ship>(otherId, COMPONENT.Ship);
+        if (!otherShip) continue;
+        const dist = Math.hypot(otherContact.lastKnownX - myPos.x, otherContact.lastKnownY - myPos.y);
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestName = otherShip.name;
+        }
+      }
+      if (nearestName != null) {
+        this.addRow(`Distance to ${nearestName}: ${nearestDist.toFixed(0)} km`);
+      }
+    }
   }
 
   private renderActiveMissiles(shipId: EntityId): void {

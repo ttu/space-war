@@ -242,6 +242,7 @@ export class SpaceWarGame {
       this.world,
       () => this.selectionManager.getSelectedIds(),
       (id) => this.getPlayerContacts()?.contacts.get(id),
+      () => Array.from(this.getPlayerContacts()?.contacts.keys() ?? []),
     );
 
     const orderBarWrap = document.createElement('div');
