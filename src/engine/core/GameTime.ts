@@ -4,7 +4,7 @@ export class GameTime {
   /** Elapsed simulation time in seconds */
   elapsed = 0;
   /** Whether simulation is paused */
-  paused = true;
+  paused = false;
   /** Time scale multiplier */
   timeScale: TimeScale = 1;
 
