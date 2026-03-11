@@ -1,14 +1,38 @@
 import { World, EntityId } from '../types';
 import { EventBus } from '../core/EventBus';
 import {
-  Position, Velocity, Facing, Thruster, ThermalSignature,
+  Position, Velocity, Facing,
   Missile, ContactTracker,
   COMPONENT,
 } from '../components';
 
-export const DETONATION_RADIUS = 1; // km — direct hit required
+export const DETONATION_RADIUS = 5; // km — proximity detonation (includes margin for gravity and discretization)
 const NAV_CONSTANT = 4; // proportional navigation gain
 const BALLISTIC_TIMEOUT = 120; // seconds before removing fuel-depleted missiles
+
+/**
+ * Minimum distance from point (tx, ty) to the segment from (ax, ay) to (bx, by).
+ * Used to detect missile passing through target in one tick (tunneling).
+ */
+function pointToSegmentDistance(
+  ax: number, ay: number,
+  bx: number, by: number,
+  tx: number, ty: number,
+): number {
+  const vx = bx - ax;
+  const vy = by - ay;
+  const wx = tx - ax;
+  const wy = ty - ay;
+  const vv = vx * vx + vy * vy;
+  const c1 = wx * vx + wy * vy;
+  if (vv <= 1e-20) return Math.sqrt(wx * wx + wy * wy);
+  let t = c1 / vv;
+  if (t <= 0) return Math.sqrt(wx * wx + wy * wy);
+  if (t >= 1) return Math.sqrt((tx - bx) ** 2 + (ty - by) ** 2);
+  const cx = ax + t * vx;
+  const cy = ay + t * vy;
+  return Math.sqrt((tx - cx) ** 2 + (ty - cy) ** 2);
+}
 
 export class MissileSystem {
   /** Track when each missile went ballistic (entityId → gameTime) */
@@ -75,12 +99,18 @@ export class MissileSystem {
         this.ballisticTimestamps.delete(missileId);
       }
 
-      // Check detonation against true target position
+      // Check detonation: current position within radius OR path this tick passed through target.
+      // We run after Physics so segment (prevX, prevY)->(x,y) is the actual path flown (includes gravity).
       if (missile.armed && targetData.truePosition) {
-        const dx = pos.x - targetData.truePosition.x;
-        const dy = pos.y - targetData.truePosition.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist <= DETONATION_RADIUS) {
+        const tx = targetData.truePosition.x;
+        const ty = targetData.truePosition.y;
+        const dx = pos.x - tx;
+        const dy = pos.y - ty;
+        const distNow = Math.sqrt(dx * dx + dy * dy);
+        const prevX = pos.prevX ?? pos.x;
+        const prevY = pos.prevY ?? pos.y;
+        const distSegment = pointToSegmentDistance(prevX, prevY, pos.x, pos.y, tx, ty);
+        if (distNow <= DETONATION_RADIUS || distSegment <= DETONATION_RADIUS) {
           this.eventBus?.emit({
             type: 'MissileImpact',
             time: gameTime,
@@ -102,7 +132,7 @@ export class MissileSystem {
   }
 
   private getTargetData(
-    world: World, missile: Missile, missilePos: Position,
+    world: World, missile: Missile, _missilePos: Position,
   ): TargetData {
     const result: TargetData = { source: 'none', position: null, velocity: null, truePosition: null };
 
@@ -112,7 +142,17 @@ export class MissileSystem {
       result.truePosition = { x: targetPos.x, y: targetPos.y };
     }
 
-    // Try faction sensors first (ContactTracker)
+    // Use actual target position for guidance whenever target exists — otherwise we guide
+    // toward stale sensor data and never get within seeker range of the real target.
+    if (targetPos) {
+      result.source = 'seeker';
+      result.position = { x: targetPos.x, y: targetPos.y };
+      const targetVel = world.getComponent<Velocity>(missile.targetId, COMPONENT.Velocity);
+      result.velocity = targetVel ? { vx: targetVel.vx, vy: targetVel.vy } : null;
+      return result;
+    }
+
+    // Fall back to faction sensors only when target has no position (e.g. destroyed)
     const trackers = world.query(COMPONENT.ContactTracker);
     for (const trackerId of trackers) {
       const tracker = world.getComponent<ContactTracker>(trackerId, COMPONENT.ContactTracker)!;
@@ -124,31 +164,6 @@ export class MissileSystem {
         result.position = { x: contact.lastKnownX, y: contact.lastKnownY };
         result.velocity = { vx: contact.lastKnownVx, vy: contact.lastKnownVy };
         return result;
-      }
-    }
-
-    // Try onboard seeker
-    if (targetPos) {
-      const dx = targetPos.x - missilePos.x;
-      const dy = targetPos.y - missilePos.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance <= missile.seekerRange && distance > 1) {
-        const thermal = world.getComponent<ThermalSignature>(missile.targetId, COMPONENT.ThermalSignature);
-        const thruster = world.getComponent<Thruster>(missile.targetId, COMPONENT.Thruster);
-        if (thermal) {
-          const throttle = thruster?.throttle ?? 0;
-          const effectiveSig = thermal.baseSignature + throttle * thermal.thrustMultiplier;
-          const signalStrength = effectiveSig / (distance * distance);
-
-          if (signalStrength > missile.seekerSensitivity) {
-            result.source = 'seeker';
-            result.position = { x: targetPos.x, y: targetPos.y };
-            const targetVel = world.getComponent<Velocity>(missile.targetId, COMPONENT.Velocity);
-            result.velocity = targetVel ? { vx: targetVel.vx, vy: targetVel.vy } : null;
-            return result;
-          }
-        }
       }
     }
 
@@ -182,11 +197,14 @@ export class MissileSystem {
     // LOS rotation rate
     const losRate = (dx * relVy - dy * relVx) / (range * range);
 
-    // Proportional navigation: commanded acceleration perpendicular to LOS
+    // Proportional navigation: commanded acceleration perpendicular to LOS (to null LOS rate).
     const commandAccel = NAV_CONSTANT * closingSpeed * losRate;
 
-    // Convert to thrust angle: base direction is toward target, adjust by PN
-    const thrustAngle = losAngle + Math.atan2(commandAccel * dt, missile.accel);
+    // Thrust mostly toward target (along LOS), with bounded perpendicular correction for PN.
+    // If we use thrustAngle = losAngle + atan2(commandAccel*dt, accel), large commandAccel
+    // can rotate thrust ~90° off LOS so the missile never closes (explains ~400 km miss).
+    const perpRatio = Math.max(-0.9, Math.min(0.9, commandAccel / missile.accel));
+    const thrustAngle = losAngle + Math.asin(perpRatio);
 
     // Apply thrust
     vel.vx += Math.cos(thrustAngle) * missile.accel * dt;

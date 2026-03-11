@@ -93,3 +93,61 @@ export function hitProbability(
   const p = rangeFactor * speedFactor;
   return Math.max(0, Math.min(1, p));
 }
+
+/**
+ * Estimate hit probability for a guided missile (0..1).
+ * Uses range to target, closing rate, target evasion, and fuel remaining.
+ */
+export function missileHitProbability(
+  missileX: number,
+  missileY: number,
+  missileVx: number,
+  missileVy: number,
+  missileAccel: number,
+  missileFuel: number,
+  seekerRange: number,
+  targetX: number,
+  targetY: number,
+  targetVx: number,
+  targetVy: number,
+): number {
+  const dx = targetX - missileX;
+  const dy = targetY - missileY;
+  const range = Math.sqrt(dx * dx + dy * dy);
+  if (range < 1) return 1;
+  if (seekerRange <= 0) return 0;
+
+  const missileSpeed = Math.sqrt(missileVx * missileVx + missileVy * missileVy);
+  const closingSpeed = (dx * (missileVx - targetVx) + dy * (missileVy - targetVy)) / range;
+  const targetSpeed = Math.sqrt(targetVx * targetVx + targetVy * targetVy);
+
+  const refSpeed = Math.max(0.5, missileSpeed + missileAccel * 2);
+
+  // Range: smooth decay that never zeros (so launch shows non-zero P)
+  const rangeScale = seekerRange * 4;
+  const rangeFactor = 1 / (1 + range / rangeScale);
+
+  // When not yet closing (e.g. at launch) use 0.5 so we don't show 0%
+  const closingFactor = closingSpeed > 0
+    ? Math.min(1, 0.5 + 0.5 * (closingSpeed / refSpeed))
+    : 0.5;
+
+  const evasionFactor = 1 - 0.35 * Math.min(1, targetSpeed / refSpeed);
+
+  const estTimeToIntercept = closingSpeed > 0
+    ? range / closingSpeed
+    : range / Math.max(0.1, missileSpeed);
+  const fuelRatio = missileFuel > 0 && estTimeToIntercept > 0
+    ? Math.min(2, missileFuel / Math.max(0.1, estTimeToIntercept))
+    : 1;
+  const fuelFactor = 0.5 + 0.5 * Math.min(1, fuelRatio);
+
+  let p = rangeFactor * closingFactor * evasionFactor * fuelFactor;
+
+  if (range <= seekerRange && closingSpeed > 0) {
+    const terminal = 1 - range / seekerRange;
+    p = Math.min(1, p * (1 + 0.4 * terminal));
+  }
+
+  return Math.max(0, Math.min(1, p));
+}

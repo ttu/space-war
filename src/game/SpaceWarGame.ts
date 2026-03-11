@@ -243,6 +243,7 @@ export class SpaceWarGame {
       () => this.selectionManager.getSelectedIds(),
       (id) => this.getPlayerContacts()?.contacts.get(id),
       () => Array.from(this.getPlayerContacts()?.contacts.keys() ?? []),
+      () => this.gameTime.elapsed,
     );
 
     const orderBarWrap = document.createElement('div');
@@ -475,7 +476,6 @@ export class SpaceWarGame {
 
   private fixedUpdate(dt: number): void {
     this.sensorSystem.update(this.world, dt, this.gameTime.elapsed);
-    this.missileSystem.update(this.world, dt, this.gameTime.elapsed);
     this.pdcSystem.update(this.world, dt, this.gameTime.elapsed);
     this.railgunSystem.update(this.world, dt, this.gameTime.elapsed);
     this.damageSystem.processHitEvents(this.world);
@@ -483,6 +483,7 @@ export class SpaceWarGame {
     this.aiTacticalSystem.update(this.world, dt, this.gameTime.elapsed);
     this.navigationSystem.update(this.world, dt, this.gameTime.elapsed);
     this.physicsSystem.update(this.world, dt);
+    this.missileSystem.update(this.world, dt, this.gameTime.elapsed);
     this.victorySystem.update(this.world, this.gameTime.elapsed);
     this.trailRenderer.recordPositions(this.world);
     this.missileRenderer.recordPositions(this.world);

@@ -89,7 +89,7 @@ function createContactTracker(world: WorldImpl, faction: 'player' | 'enemy'): En
 }
 
 describe('MissileSystem', () => {
-  it('should steer missile toward target using sensor data', () => {
+  it('should steer missile toward target using actual position', () => {
     const world = new WorldImpl();
     const eventBus = new EventBusImpl();
     const system = new MissileSystem(eventBus);
@@ -99,20 +99,12 @@ describe('MissileSystem', () => {
       x: 0, y: 0, vx: 5, vy: 0, targetId, faction: 'player',
     });
 
-    const trackerId = createContactTracker(world, 'player');
-    const tracker = world.getComponent<ContactTracker>(trackerId, COMPONENT.ContactTracker)!;
-    tracker.contacts.set(targetId, {
-      entityId: targetId,
-      lastKnownX: 10_000, lastKnownY: 0,
-      lastKnownVx: 0, lastKnownVy: 0,
-      detectionTime: 10, receivedTime: 10,
-      signalStrength: 0.01, lost: false, lostTime: 0,
-    });
+    createContactTracker(world, 'player');
 
     system.update(world, 0.1, 10.0);
 
     const missile = world.getComponent<Missile>(missileId, COMPONENT.Missile)!;
-    expect(missile.guidanceMode).toBe('sensor');
+    expect(missile.guidanceMode).toBe('seeker');
     expect(missile.fuel).toBeLessThan(60);
   });
 
@@ -137,14 +129,12 @@ describe('MissileSystem', () => {
     expect(missile.guidanceMode).toBe('seeker');
   });
 
-  it('should go ballistic when target lost from sensors and out of seeker range', () => {
+  it('should go ballistic when target has no position (e.g. destroyed)', () => {
     const world = new WorldImpl();
     const eventBus = new EventBusImpl();
     const system = new MissileSystem(eventBus);
 
-    const targetId = createTargetShip(world, {
-      x: 100_000, y: 0, faction: 'enemy', throttle: 0,
-    });
+    const targetId = createTargetShip(world, { x: 100_000, y: 0, faction: 'enemy', throttle: 0 });
     const missileId = createMissile(world, {
       x: 0, y: 0, vx: 5, vy: 0, targetId, faction: 'player',
       seekerRange: 5_000, seekerSensitivity: 1e-8,
@@ -153,6 +143,11 @@ describe('MissileSystem', () => {
     createContactTracker(world, 'player');
 
     system.update(world, 0.1, 10.0);
+    const missileBefore = world.getComponent<Missile>(missileId, COMPONENT.Missile)!;
+    expect(missileBefore.guidanceMode).toBe('seeker');
+
+    world.removeComponent(targetId, COMPONENT.Position);
+    system.update(world, 0.1, 10.1);
 
     const missile = world.getComponent<Missile>(missileId, COMPONENT.Missile)!;
     expect(missile.guidanceMode).toBe('ballistic');

@@ -15,6 +15,7 @@ import {
   Railgun,
   COMPONENT,
 } from '../engine/components';
+import { missileHitProbability } from '../game/FiringComputer';
 
 function pct(current: number, max: number): string {
   if (max <= 0) return '0%';
@@ -36,6 +37,7 @@ export class ShipDetailPanel {
     private getSelectedIds: () => EntityId[],
     private getContact?: (entityId: EntityId) => DetectedContact | undefined,
     private getDetectedEnemyIds?: () => EntityId[],
+    private getGameTime?: () => number,
   ) {
     this.root = document.createElement('div');
     this.root.id = 'ship-detail-panel';
@@ -127,7 +129,9 @@ export class ShipDetailPanel {
     this.content.appendChild(nameLine);
 
     if (isEnemy && contact) {
-      const dataAge = contact.receivedTime > 0 ? 'Data age: ' + contact.receivedTime.toFixed(1) + ' s' : '—';
+      const now = this.getGameTime?.() ?? 0;
+      const ageSeconds = now > 0 && contact.receivedTime > 0 ? now - contact.receivedTime : 0;
+      const dataAge = contact.receivedTime > 0 ? `Data age: ${Math.max(0, ageSeconds).toFixed(1)} s` : '—';
       this.addRow(`Last known: (${Math.round(contact.lastKnownX)}, ${Math.round(contact.lastKnownY)})`);
       this.addRow(`Velocity: ${contact.lastKnownVx.toFixed(2)}, ${contact.lastKnownVy.toFixed(2)} km/s`);
       const contactSpeed = Math.sqrt(contact.lastKnownVx ** 2 + contact.lastKnownVy ** 2);
@@ -200,7 +204,7 @@ export class ShipDetailPanel {
     const rg = this.world.getComponent<Railgun>(id, COMPONENT.Railgun);
     if (rg) {
       const int = (rg.integrity ?? 100) > 0 ? 'OK' : 'OFF';
-      this.addRow(`Railgun: ${int}`);
+      this.addRow(`Railgun: ${int}`, 'ship-detail-row ship-detail-weapon-railgun');
     }
 
     this.addSeparator();
@@ -223,6 +227,16 @@ export class ShipDetailPanel {
     if (pos && targetPos) {
       const distToTarget = Math.hypot(targetPos.x - pos.x, targetPos.y - pos.y);
       this.addRow(`Distance to target: ${distToTarget.toFixed(0)} km`);
+      const vel = this.world.getComponent<Velocity>(id, COMPONENT.Velocity);
+      const targetVel = this.world.getComponent<Velocity>(missile.targetId, COMPONENT.Velocity);
+      const hitP = missileHitProbability(
+        pos.x, pos.y,
+        vel?.vx ?? 0, vel?.vy ?? 0,
+        missile.accel, missile.fuel, missile.seekerRange,
+        targetPos.x, targetPos.y,
+        targetVel?.vx ?? 0, targetVel?.vy ?? 0,
+      );
+      this.addRow(`Hit probability: ${Math.round(hitP * 100)}%`, 'ship-detail-row ship-detail-target');
     }
 
     // Salvo status
