@@ -5,6 +5,8 @@ describe('Navigation Components', () => {
   it('NavigationOrder has correct structure', () => {
     const order: NavigationOrder = {
       type: 'NavigationOrder',
+      destinationX: 100,
+      destinationY: 200,
       targetX: 100,
       targetY: 200,
       phase: 'rotating',

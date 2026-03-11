@@ -2,11 +2,11 @@ import type { World } from '../engine/types';
 import { COMPONENT, type Position, type CelestialBody } from '../engine/components';
 import { DANGER_ZONE_MULTIPLIER } from '../engine/systems/CollisionSystem';
 
-/** Use a larger radius for path planning so ships re-route early and stay well clear. */
-const AVOIDANCE_PLANNING_MULTIPLIER = 4.0;
+/** Planning radius must allow for curved PN trajectories; too small and ships cut into the danger zone. */
+const AVOIDANCE_PLANNING_MULTIPLIER = 2.0;
 
 /** Start escaping when within this multiple of danger zone (before actually entering). */
-const ESCAPE_CAUTION_MULTIPLIER = 1.5;
+const ESCAPE_CAUTION_MULTIPLIER = 1.3;
 
 export interface BodyDanger {
   x: number;
@@ -103,7 +103,7 @@ export function segmentIntersectsCircle(
   return distP <= r;
 }
 
-const BYPASS_MARGIN = 1.25;
+const BYPASS_MARGIN = 1.15;
 
 /**
  * Returns a point on the circle (cx,cy) with radius r that is tangent from (fromX, fromY).

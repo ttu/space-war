@@ -40,6 +40,8 @@ describe('CommandHandler', () => {
 
     const nav = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder);
     expect(nav).toBeDefined();
+    expect(nav!.destinationX).toBe(10000);
+    expect(nav!.destinationY).toBe(0);
     expect(nav!.targetX).toBe(10000);
     expect(nav!.targetY).toBe(0);
     expect(nav!.phase).toBe('rotating');
@@ -83,6 +85,8 @@ describe('CommandHandler', () => {
 
     const nav = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder);
     expect(nav).toBeDefined();
+    expect(nav!.destinationX).toBe(10000);
+    expect(nav!.destinationY).toBe(0);
     expect(nav!.targetX).toBe(10000);
     expect(nav!.targetY).toBe(0);
   });
@@ -111,6 +115,8 @@ describe('CommandHandler', () => {
     const entities = world.query(COMPONENT.NavigationOrder);
     expect(entities).toHaveLength(1);
     const nav = world.getComponent<NavigationOrder>(entities[0], COMPONENT.NavigationOrder)!;
+    expect(nav.destinationX).toBe(5000);
+    expect(nav.destinationY).toBe(5000);
     expect(nav.targetX).toBe(5000);
     expect(nav.targetY).toBe(5000);
   });

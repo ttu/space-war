@@ -234,7 +234,7 @@ export class TrailRenderer {
     }
 
     marker.visible = true;
-    marker.position.set(nav.targetX, nav.targetY, 0.4);
+    marker.position.set(nav.destinationX, nav.destinationY, 0.4);
 
     // Scale marker with zoom so it stays visible
     const s = zoom * DESTINATION_MARKER_SIZE;

@@ -61,6 +61,8 @@ export class CommandHandler {
 
       this.world.addComponent<NavigationOrder>(id, {
         type: 'NavigationOrder',
+        destinationX: targetX,
+        destinationY: targetY,
         targetX: effectiveX,
         targetY: effectiveY,
         phase: 'rotating',
@@ -114,6 +116,8 @@ export class CommandHandler {
 
     this.world.addComponent<NavigationOrder>(shipId, {
       type: 'NavigationOrder',
+      destinationX: targetX,
+      destinationY: targetY,
       targetX: effectiveX,
       targetY: effectiveY,
       phase: 'rotating',

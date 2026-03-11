@@ -183,7 +183,10 @@ export class ShipDetailPanel {
 
     const nav = this.world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder);
     if (nav) {
-      this.addRow(`Order: Move → (${Math.round(nav.targetX)}, ${Math.round(nav.targetY)}) [${nav.phase}]`);
+      const viaWaypoint =
+        Math.abs(nav.targetX - nav.destinationX) > 1 || Math.abs(nav.targetY - nav.destinationY) > 1;
+      const suffix = viaWaypoint ? ' (via waypoint)' : '';
+      this.addRow(`Order: Move → (${Math.round(nav.destinationX)}, ${Math.round(nav.destinationY)}) [${nav.phase}]${suffix}`);
     }
 
     // Show active missile targets from this ship's missiles

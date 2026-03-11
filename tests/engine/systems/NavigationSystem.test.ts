@@ -9,12 +9,17 @@ function createShipWithNav(world: WorldImpl, opts: {
   px?: number; py?: number; vx?: number; vy?: number;
   maxThrust?: number; rotationSpeed?: number;
   targetX?: number; targetY?: number;
+  destinationX?: number; destinationY?: number;
   phase?: NavigationOrder['phase'];
   burnDirection?: number; flipAngle?: number;
   accelTime?: number; decelTime?: number;
   currentAngle?: number;
 }) {
   const id = world.createEntity();
+  const targetX = opts.targetX ?? 10000;
+  const targetY = opts.targetY ?? 0;
+  const destinationX = opts.destinationX ?? targetX;
+  const destinationY = opts.destinationY ?? targetY;
   world.addComponent<Position>(id, {
     type: 'Position', x: opts.px ?? 0, y: opts.py ?? 0, prevX: 0, prevY: 0,
   });
@@ -30,8 +35,10 @@ function createShipWithNav(world: WorldImpl, opts: {
   });
   world.addComponent<NavigationOrder>(id, {
     type: 'NavigationOrder',
-    targetX: opts.targetX ?? 10000,
-    targetY: opts.targetY ?? 0,
+    destinationX,
+    destinationY,
+    targetX,
+    targetY,
     phase: opts.phase ?? 'rotating',
     burnPlan: {
       accelTime: opts.accelTime ?? 100,
@@ -170,5 +177,32 @@ describe('NavigationSystem', () => {
 
     const nav = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder)!;
     expect(nav.phase).toBe('decelerating');
+  });
+
+  it('on arrival at waypoint, advances target to destination', () => {
+    const world = new WorldImpl();
+    const system = new NavigationSystem();
+    // Ship at waypoint (1000, 0), destination (10000, 0); close to waypoint and slow → "arrived" at waypoint
+    const id = createShipWithNav(world, {
+      px: 1005,
+      py: 0,
+      vx: 0,
+      vy: 0,
+      targetX: 1000,
+      targetY: 0,
+      destinationX: 10000,
+      destinationY: 0,
+      phase: 'decelerating',
+      currentAngle: Math.PI,
+    });
+
+    system.update(world, 1, 10);
+
+    const nav = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder);
+    expect(nav).toBeDefined();
+    expect(nav!.targetX).toBe(10000);
+    expect(nav!.targetY).toBe(0);
+    expect(nav!.destinationX).toBe(10000);
+    expect(nav!.destinationY).toBe(0);
   });
 });

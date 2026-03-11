@@ -120,6 +120,9 @@ export interface BurnPlan {
 
 export interface NavigationOrder extends Component {
   type: 'NavigationOrder';
+  /** Final goal (km); never changed by avoidance. */
+  destinationX: number;
+  destinationY: number;
   targetX: number;
   targetY: number;
   phase: NavPhase;

@@ -46,7 +46,7 @@ export class NavigationSystem {
       }
     }
     if (needCorrection) {
-      const safe = getSafeWaypoint(pos.x, pos.y, nav.targetX, nav.targetY, bodies);
+      const safe = getSafeWaypoint(pos.x, pos.y, nav.destinationX, nav.destinationY, bodies);
       if (safe != null) {
         nav.targetX = safe.x;
         nav.targetY = safe.y;
@@ -66,7 +66,16 @@ export class NavigationSystem {
     const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
 
     if (distToTarget < nav.arrivalThreshold && speed < ARRIVAL_SPEED_THRESHOLD) {
-      this.arrive(world, entityId, thruster);
+      const atDestination =
+        Math.abs(nav.targetX - nav.destinationX) < 1 &&
+        Math.abs(nav.targetY - nav.destinationY) < 1;
+      if (atDestination) {
+        this.arrive(world, entityId, thruster);
+        return;
+      }
+      // Arrived at a waypoint — advance target to destination; next tick may set new waypoint
+      nav.targetX = nav.destinationX;
+      nav.targetY = nav.destinationY;
       return;
     }
 
