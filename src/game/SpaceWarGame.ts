@@ -30,10 +30,12 @@ import { e2eScenario } from '../engine/data/scenarios/e2e';
 import { showShipConfigScreen } from '../ui/ShipConfigScreen';
 import { TimeControls } from '../ui/TimeControls';
 import { FleetPanel } from '../ui/FleetPanel';
+import { ContactsPanel } from '../ui/ContactsPanel';
 import { ShipDetailPanel } from '../ui/ShipDetailPanel';
 import { OrderBar } from '../ui/OrderBar';
 import { CombatLog } from '../ui/CombatLog';
 import type { PendingOrderType } from '../ui/OrderBar';
+import type { EntityId } from '../engine/types';
 import {
   Position,
   Ship,
@@ -75,6 +77,7 @@ export class SpaceWarGame {
   private selectionManager!: SelectionManager;
   private timeControls!: TimeControls;
   private fleetPanel!: FleetPanel;
+  private contactsPanel!: ContactsPanel;
   private shipDetailPanel!: ShipDetailPanel;
   private orderBar!: OrderBar;
   private combatLog!: CombatLog;
@@ -238,6 +241,17 @@ export class SpaceWarGame {
       leftPanel,
       this.world,
       () => this.selectionManager.getSelectedPlayerIds(),
+      (entityId) => {
+        this.selectionManager.setSelectionToEntity(entityId);
+        this.focusCameraOnShip(entityId);
+      },
+    );
+    this.contactsPanel = new ContactsPanel(
+      leftPanel,
+      this.world,
+      () => this.getPlayerContacts() ?? undefined,
+      () => this.gameTime.elapsed,
+      (entityId) => this.focusCameraOnContact(entityId),
     );
     this.shipDetailPanel = new ShipDetailPanel(
       leftPanel,
@@ -266,7 +280,7 @@ export class SpaceWarGame {
 
     const infoOverlay = document.createElement('div');
     infoOverlay.id = 'info-overlay';
-    infoOverlay.textContent = 'WASD/Arrows: Pan | Scroll: Zoom | Space: Pause | +/-: Speed';
+    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/-: Speed | E: Focus nearest enemy';
     uiRoot.appendChild(infoOverlay);
 
     this.updatePauseUI();
@@ -311,6 +325,9 @@ export class SpaceWarGame {
           break;
         case 'rightClick':
           this.handleRightClick(event.screenX, event.screenY);
+          break;
+        case 'focusNearestEnemy':
+          this.focusNearestEnemy();
           break;
       }
     });
@@ -517,6 +534,7 @@ export class SpaceWarGame {
 
     this.timeControls.update();
     this.fleetPanel.update();
+    this.contactsPanel.update();
     this.shipDetailPanel.update();
     this.combatLog.update();
 
@@ -551,6 +569,50 @@ export class SpaceWarGame {
         return;
       }
     }
+  }
+
+  /** Center camera on a ship and zoom in (e.g. when clicking ship name in fleet panel). */
+  private focusCameraOnShip(entityId: EntityId): void {
+    const pos = this.world.getComponent<Position>(entityId, COMPONENT.Position);
+    if (!pos) return;
+    this.camera.setPosition(pos.x, pos.y);
+    this.camera.setZoom(8000); // ~16,000 km visible height for a tight focus
+  }
+
+  /** Center camera on a detected enemy contact (last-known position extrapolated by velocity). */
+  private focusCameraOnContact(entityId: EntityId): void {
+    const tracker = this.getPlayerContacts();
+    const contact = tracker?.contacts.get(entityId);
+    if (!contact) return;
+    const age = this.gameTime.elapsed - contact.receivedTime;
+    const x = contact.lastKnownX + contact.lastKnownVx * age;
+    const y = contact.lastKnownY + contact.lastKnownVy * age;
+    this.camera.setPosition(x, y);
+    this.camera.setZoom(8000);
+  }
+
+  /** Focus camera on nearest detected enemy (keyboard shortcut E). */
+  private focusNearestEnemy(): void {
+    const tracker = this.getPlayerContacts();
+    if (!tracker || tracker.contacts.size === 0) return;
+    const cam = this.camera.getPosition();
+    const gameTime = this.gameTime.elapsed;
+    let nearestId: EntityId | null = null;
+    let nearestDistSq = Infinity;
+    for (const [id, contact] of tracker.contacts) {
+      if (contact.lost) continue;
+      const age = gameTime - contact.receivedTime;
+      const x = contact.lastKnownX + contact.lastKnownVx * age;
+      const y = contact.lastKnownY + contact.lastKnownVy * age;
+      const dx = x - cam.x;
+      const dy = y - cam.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < nearestDistSq) {
+        nearestDistSq = d2;
+        nearestId = id;
+      }
+    }
+    if (nearestId) this.focusCameraOnContact(nearestId);
   }
 
   loadE2eScenario(): void {

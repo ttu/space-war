@@ -13,6 +13,7 @@ function pct(current: number, max: number): number {
 
 /**
  * Ship roster with status bars (hull, optional systems). Highlights selected ships.
+ * Optional onShipNameClick: when provided, clicking a ship name focuses the camera on that ship.
  */
 export class FleetPanel {
   private root: HTMLElement;
@@ -23,6 +24,7 @@ export class FleetPanel {
     container: HTMLElement,
     private world: World,
     private getSelectedIds: () => EntityId[],
+    private onShipNameClick?: (entityId: EntityId) => void,
   ) {
     this.root = document.createElement('div');
     this.root.id = 'fleet-panel';
@@ -71,6 +73,13 @@ export class FleetPanel {
         row.appendChild(barWrap);
         this.list.appendChild(row);
         this.shipRows.set(id, row);
+        if (this.onShipNameClick) {
+          const nameEl = row.querySelector('.fleet-panel-name')!;
+          nameEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.onShipNameClick?.(id);
+          });
+        }
       }
 
       const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;

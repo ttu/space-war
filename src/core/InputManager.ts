@@ -7,7 +7,8 @@ export type InputEvent =
   | { type: 'cameraPanDrag'; deltaX: number; deltaY: number; canvasWidth: number; canvasHeight: number }
   | { type: 'togglePause' }
   | { type: 'changeSpeed'; delta: number }
-  | { type: 'escape' };
+  | { type: 'escape' }
+  | { type: 'focusNearestEnemy' };
 
 type InputEventCallback = (event: InputEvent) => void;
 
@@ -69,6 +70,10 @@ export class InputManager {
         this.emit({ type: 'togglePause' });
       }
       if (e.code === 'Escape') this.emit({ type: 'escape' });
+      if (e.code === 'KeyE') {
+        e.preventDefault();
+        this.emit({ type: 'focusNearestEnemy' });
+      }
       if (e.code === 'Minus' || e.code === 'NumpadSubtract') this.emit({ type: 'changeSpeed', delta: -1 });
       if (e.code === 'Equal' || e.code === 'NumpadAdd') this.emit({ type: 'changeSpeed', delta: 1 });
       if (e.code === 'BracketRight') {

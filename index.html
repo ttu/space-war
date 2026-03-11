@@ -145,7 +145,8 @@
       }
 
       .fleet-panel,
-      .ship-detail-panel {
+      .ship-detail-panel,
+      .contacts-panel {
         background: rgba(10, 14, 24, 0.9);
         border: 1px solid var(--border-subtle);
         border-radius: 4px;
@@ -156,8 +157,39 @@
         flex-direction: column;
       }
 
+      .contacts-panel-list {
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .contacts-panel-row {
+        padding: 4px 6px;
+        border-radius: 3px;
+        margin-bottom: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .contacts-panel-name {
+        font-weight: bold;
+        cursor: pointer;
+        color: var(--text-primary);
+      }
+
+      .contacts-panel-meta {
+        font-size: 10px;
+        color: var(--text-secondary);
+      }
+
+      .contacts-panel-lost {
+        color: var(--status-red);
+      }
+
       .fleet-panel-header,
       .ship-detail-header,
+      .contacts-panel-header,
       .order-bar-header,
       .combat-log-header {
         color: var(--accent-cyan);
@@ -189,6 +221,7 @@
 
       .fleet-panel-name {
         font-weight: bold;
+        cursor: pointer;
       }
 
       .fleet-panel-bar-wrap {

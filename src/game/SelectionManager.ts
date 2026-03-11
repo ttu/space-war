@@ -109,6 +109,24 @@ export class SelectionManager {
   }
 
   /**
+   * Set selection to a single entity (same effect as clicking that entity on the map without shift).
+   * Clears all other selection. No-op if entityId does not have Selectable.
+   */
+  setSelectionToEntity(entityId: EntityId): void {
+    const ships = this.world.query(COMPONENT.Ship, COMPONENT.Selectable);
+    const missiles = this.world.query(COMPONENT.Missile, COMPONENT.Selectable);
+    for (const id of ships) {
+      const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
+      sel.selected = id === entityId;
+    }
+    for (const id of missiles) {
+      const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
+      sel.selected = id === entityId;
+    }
+    this.notifySelectionChange();
+  }
+
+  /**
    * Update selection from a box in world coordinates.
    * Selects all ships (player and enemy) whose display position is inside the rect. If shiftKey is true, adds to selection.
    */

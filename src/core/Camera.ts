@@ -113,6 +113,13 @@ export class CameraController {
     return this.zoom;
   }
 
+  /** Set zoom level (visible half-height in km). Clamped to min/max. */
+  setZoom(zoom: number): void {
+    this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, zoom));
+    this.updateProjection();
+    this.updateCameraPosition();
+  }
+
   setPosition(x: number, y: number): void {
     this.position.set(x, y);
     this.updateCameraPosition();
