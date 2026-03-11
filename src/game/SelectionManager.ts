@@ -17,11 +17,14 @@ export class SelectionManager {
     private getEnemyPickPosition?: GetEnemyPickPosition,
   ) {}
 
-  /** Get all currently selected ship entity IDs (player and enemy). */
+  /** Get all currently selected entity IDs (ships and missiles). */
   getSelectedIds(): EntityId[] {
-    const ships = this.world.query(COMPONENT.Ship, COMPONENT.Selectable);
     const out: EntityId[] = [];
-    for (const id of ships) {
+    for (const id of this.world.query(COMPONENT.Ship, COMPONENT.Selectable)) {
+      const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
+      if (sel.selected) out.push(id);
+    }
+    for (const id of this.world.query(COMPONENT.Missile, COMPONENT.Selectable)) {
       const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
       if (sel.selected) out.push(id);
     }
@@ -52,9 +55,14 @@ export class SelectionManager {
     shiftKey: boolean,
   ): void {
     const ships = this.world.query(COMPONENT.Position, COMPONENT.Ship, COMPONENT.Selectable);
+    const missiles = this.world.query(COMPONENT.Position, COMPONENT.Missile, COMPONENT.Selectable);
 
     if (!shiftKey) {
       for (const id of ships) {
+        const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
+        sel.selected = false;
+      }
+      for (const id of missiles) {
         const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
         sel.selected = false;
       }
@@ -62,6 +70,8 @@ export class SelectionManager {
 
     let closestId: EntityId | null = null;
     let closestDist = pickRadiusKm;
+
+    // Check ships
     for (const id of ships) {
       const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
       const pos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
@@ -71,6 +81,18 @@ export class SelectionManager {
           : this.getEnemyPickPosition?.(id) ?? { x: pos.x, y: pos.y };
       const dx = displayPos.x - worldX;
       const dy = displayPos.y - worldY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestId = id;
+      }
+    }
+
+    // Check missiles
+    for (const id of missiles) {
+      const pos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
+      const dx = pos.x - worldX;
+      const dy = pos.y - worldY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < closestDist) {
         closestDist = dist;

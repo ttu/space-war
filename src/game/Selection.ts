@@ -19,16 +19,21 @@ export function applyBoxSelection(
   shiftKey: boolean,
   getEnemyPosition?: GetEnemyPosition,
 ): void {
-  const entities = world.query(COMPONENT.Position, COMPONENT.Ship, COMPONENT.Selectable);
+  const ships = world.query(COMPONENT.Position, COMPONENT.Ship, COMPONENT.Selectable);
+  const missiles = world.query(COMPONENT.Position, COMPONENT.Missile, COMPONENT.Selectable);
 
   if (!shiftKey) {
-    for (const id of entities) {
+    for (const id of ships) {
+      const sel = world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
+      sel.selected = false;
+    }
+    for (const id of missiles) {
       const sel = world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
       sel.selected = false;
     }
   }
 
-  for (const id of entities) {
+  for (const id of ships) {
     const ship = world.getComponent<Ship>(id, COMPONENT.Ship)!;
     const pos = world.getComponent<Position>(id, COMPONENT.Position)!;
     const displayPos =
@@ -40,6 +45,19 @@ export function applyBoxSelection(
       displayPos.x <= worldMaxX &&
       displayPos.y >= worldMinY &&
       displayPos.y <= worldMaxY
+    ) {
+      const sel = world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
+      sel.selected = true;
+    }
+  }
+
+  for (const id of missiles) {
+    const pos = world.getComponent<Position>(id, COMPONENT.Position)!;
+    if (
+      pos.x >= worldMinX &&
+      pos.x <= worldMaxX &&
+      pos.y >= worldMinY &&
+      pos.y <= worldMaxY
     ) {
       const sel = world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
       sel.selected = true;

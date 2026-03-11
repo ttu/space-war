@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { World, EntityId } from '../engine/types';
 import {
-  Position, Missile, ContactTracker,
+  Position, Missile, Selectable, ContactTracker,
   COMPONENT,
 } from '../engine/components';
 
 interface MissileVisual {
   group: THREE.Group;
   dots: THREE.Mesh[];
+  selectionRing: THREE.LineLoop;
   trail: THREE.Line;
   targetLine: THREE.Line;
 }
@@ -17,6 +18,7 @@ const MISSILE_COLOR_ENEMY = 0xff6644;
 const TRAIL_OPACITY = 0.4;
 const MAX_TRAIL_POINTS = 50;
 const BALLISTIC_OPACITY = 0.3;
+const SELECTION_COLOR = 0x44cccc;
 const TARGET_LINE_OPACITY = 0.25;
 const TARGET_LINE_COLOR_PLAYER = 0x88bbff;
 const TARGET_LINE_COLOR_ENEMY = 0xff6644;
@@ -101,6 +103,13 @@ export class MissileRenderer {
         (dot.material as THREE.MeshBasicMaterial).opacity = opacity;
       }
 
+      // Selection ring
+      const selectable = world.getComponent<Selectable>(entityId, COMPONENT.Selectable);
+      visual.selectionRing.visible = selectable?.selected ?? false;
+      if (visual.selectionRing.visible) {
+        visual.selectionRing.scale.set(dotScale * 2, dotScale * 2, 1);
+      }
+
       // Update trail
       this.updateTrail(entityId, visual.trail);
 
@@ -155,7 +164,21 @@ export class MissileRenderer {
     });
     const targetLine = new THREE.Line(tlGeo, tlMat);
 
-    return { group, dots, trail, targetLine };
+    // Selection ring (smaller than ship selection ring)
+    const ringGeo = new THREE.BufferGeometry();
+    const ringPoints: number[] = [];
+    const segments = 16;
+    for (let i = 0; i <= segments; i++) {
+      const a = (i / segments) * Math.PI * 2;
+      ringPoints.push(Math.cos(a), Math.sin(a), 0);
+    }
+    ringGeo.setAttribute('position', new THREE.Float32BufferAttribute(ringPoints, 3));
+    const ringMat = new THREE.LineBasicMaterial({ color: SELECTION_COLOR, transparent: true, opacity: 0.8 });
+    const selectionRing = new THREE.LineLoop(ringGeo, ringMat);
+    selectionRing.visible = false;
+    group.add(selectionRing);
+
+    return { group, dots, selectionRing, trail, targetLine };
   }
 
   private updateTargetLine(

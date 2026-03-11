@@ -176,6 +176,9 @@ export class CommandHandler {
       armed: false,
       armingDistance: 5,
     });
+    this.world.addComponent<Selectable>(missileId, {
+      type: 'Selectable', selected: false,
+    });
 
     launcher.ammo -= salvoSize;
     launcher.lastFiredTime = gameTime;
@@ -315,6 +318,9 @@ export class CommandHandler {
         guidanceMode: 'sensor',
         armed: false,
         armingDistance: 5,
+      });
+      this.world.addComponent<Selectable>(missileId, {
+        type: 'Selectable', selected: false,
       });
 
       // Decrement ammo, update fire time

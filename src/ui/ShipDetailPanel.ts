@@ -3,6 +3,8 @@ import type { EntityId } from '../engine/types';
 import type { DetectedContact } from '../engine/components';
 import type { Missile } from '../engine/components';
 import {
+  Position,
+  Velocity,
   Ship,
   Hull,
   ShipSystems,
@@ -63,11 +65,17 @@ export class ShipDetailPanel {
       return;
     }
 
-    // Build missile target map: launcherId → { targetId, targetName, count }[]
+    // Build missile target map: targetId → { targetId, targetName, count }[]
     const missileTargets = this.buildMissileTargetMap();
 
     for (const id of ids) {
-      this.renderShipDetail(id, missileTargets);
+      // Check if entity is a missile (no Ship component)
+      const missile = this.world.getComponent<Missile>(id, COMPONENT.Missile);
+      if (missile) {
+        this.renderMissileDetail(id, missile);
+      } else {
+        this.renderShipDetail(id, missileTargets);
+      }
     }
   }
 
@@ -180,6 +188,42 @@ export class ShipDetailPanel {
     if (rg) {
       const int = (rg.integrity ?? 100) > 0 ? 'OK' : 'OFF';
       this.addRow(`Railgun: ${int}`);
+    }
+
+    this.addSeparator();
+  }
+
+  private renderMissileDetail(id: EntityId, missile: Missile): void {
+    const factionLabel = missile.launcherFaction === 'player' ? 'Friendly' : 'Enemy';
+    const nameLine = document.createElement('div');
+    nameLine.className = 'ship-detail-name';
+    nameLine.textContent = `${factionLabel} Missile Salvo`;
+    this.content.appendChild(nameLine);
+
+    // Target info
+    const targetShip = this.world.getComponent<Ship>(missile.targetId, COMPONENT.Ship);
+    const targetName = targetShip ? targetShip.name : 'Unknown';
+    this.addRow(`Target: ${targetName}`, 'ship-detail-row ship-detail-target');
+
+    // Salvo status
+    this.addRow(`Count: ${missile.count}`);
+    this.addRow(`Guidance: ${missile.guidanceMode}`);
+    this.addRow(`Fuel: ${missile.fuel.toFixed(1)}s`);
+    if (missile.armed) {
+      this.addRow('Armed', 'ship-detail-row ship-detail-warning');
+    } else {
+      this.addRow('Unarmed (safe distance)');
+    }
+
+    // Position and velocity
+    const pos = this.world.getComponent<Position>(id, COMPONENT.Position);
+    const vel = this.world.getComponent<Velocity>(id, COMPONENT.Velocity);
+    if (pos) {
+      this.addRow(`Pos: (${Math.round(pos.x)}, ${Math.round(pos.y)})`);
+    }
+    if (vel) {
+      const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
+      this.addRow(`Speed: ${speed.toFixed(2)} km/s`);
     }
 
     this.addSeparator();
