@@ -175,9 +175,9 @@ describe('SensorSystem', () => {
     expect(tracker.contacts.get(enemyId)!.lostTime).toBe(20.0);
   });
 
-  it('should remove lost contacts after timeout', () => {
+  it('should persist lost contacts indefinitely for estimation', () => {
     const world = new WorldImpl();
-    const system = new SensorSystem(30); // 30s timeout
+    const system = new SensorSystem();
 
     createShip(world, {
       x: 0, y: 0, faction: 'player',
@@ -198,10 +198,11 @@ describe('SensorSystem', () => {
 
     const tracker = world.getComponent<ContactTracker>(trackerId, COMPONENT.ContactTracker)!;
     expect(tracker.contacts.has(enemyId)).toBe(true);
+    expect(tracker.contacts.get(enemyId)!.lost).toBe(true);
 
-    // After timeout
-    system.update(world, 0.1, 51.0); // 51 - 20 = 31 > 30s timeout
-    expect(tracker.contacts.has(enemyId)).toBe(false);
+    // Long after loss — contact should still persist
+    system.update(world, 0.1, 500.0);
+    expect(tracker.contacts.has(enemyId)).toBe(true);
   });
 
   it('should detect thrusting ship but not dark ship at same range', () => {
@@ -287,7 +288,7 @@ describe('SensorSystem', () => {
   it('should emit ShipDetected event when new contact appears', () => {
     const world = new WorldImpl();
     const eventBus = new EventBusImpl();
-    const system = new SensorSystem(30, eventBus);
+    const system = new SensorSystem(eventBus);
     const events: GameEvent[] = [];
     eventBus.subscribe('ShipDetected', (e) => events.push(e));
 
@@ -310,7 +311,7 @@ describe('SensorSystem', () => {
   it('should emit ShipLostContact event when contact is lost', () => {
     const world = new WorldImpl();
     const eventBus = new EventBusImpl();
-    const system = new SensorSystem(30, eventBus);
+    const system = new SensorSystem(eventBus);
     const events: GameEvent[] = [];
     eventBus.subscribe('ShipLostContact', (e) => events.push(e));
 

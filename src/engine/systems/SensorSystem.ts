@@ -10,7 +10,6 @@ export const LIGHT_SPEED = 299_792; // km/s
 
 export class SensorSystem {
   constructor(
-    private lostContactTimeout: number = 30,
     private eventBus?: EventBus,
   ) {}
 
@@ -66,7 +65,7 @@ export class SensorSystem {
       }
     }
 
-    // Mark undetected contacts as lost, remove expired ones
+    // Mark undetected contacts as lost (persist indefinitely for estimation)
     for (const [entityId, contact] of tracker.contacts) {
       if (!detectedThisTick.has(entityId)) {
         if (!contact.lost) {
@@ -80,8 +79,6 @@ export class SensorSystem {
               data: { faction: tracker.faction },
             });
           }
-        } else if (gameTime - contact.lostTime > this.lostContactTimeout) {
-          tracker.contacts.delete(entityId);
         }
       }
     }

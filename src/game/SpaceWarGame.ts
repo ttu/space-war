@@ -54,7 +54,7 @@ export class SpaceWarGame {
 
   private physicsSystem = new PhysicsSystem();
   private navigationSystem = new NavigationSystem();
-  private sensorSystem = new SensorSystem(30, this.eventBus);
+  private sensorSystem = new SensorSystem(this.eventBus);
   private missileSystem = new MissileSystem(this.eventBus);
   private pdcSystem = new PDCSystem(this.eventBus);
   private railgunSystem = new RailgunSystem(this.eventBus);

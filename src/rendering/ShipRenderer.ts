@@ -86,9 +86,12 @@ export class ShipRenderer {
       }
       visual.group.visible = true;
 
-      // Position: use detected (light-delayed) position for enemy contacts
-      if (contact) {
-        visual.group.position.set(contact.lastKnownX, contact.lastKnownY, 1);
+      // Position: use velocity-extrapolated position for enemy contacts
+      if (contact && gameTime !== undefined) {
+        const age = gameTime - contact.receivedTime;
+        const estX = contact.lastKnownX + contact.lastKnownVx * age;
+        const estY = contact.lastKnownY + contact.lastKnownVy * age;
+        visual.group.position.set(estX, estY, 1);
       } else {
         visual.group.position.set(pos.x, pos.y, 1);
       }
