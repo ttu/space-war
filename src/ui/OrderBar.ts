@@ -27,7 +27,7 @@ export class OrderBar {
 
     const btnMove = this.createOrderButton('Move', 'move', 'Right-click map to set destination');
     const btnMissile = this.createOrderButton('Fire missile', 'fireMissile', 'Right-click enemy to launch');
-    const btnRailgun = this.createOrderButton('Fire railgun', 'fireRailgun', 'Right-click enemy to fire');
+    const btnRailgun = this.createOrderButton('Fire railgun', 'fireRailgun', 'Right-click enemy or missile to fire');
 
     this.buttons.set('move', btnMove);
     this.buttons.set('fireMissile', btnMissile);

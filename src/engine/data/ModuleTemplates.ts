@@ -36,6 +36,7 @@ export interface RailgunModule {
   maxRange: number;
   reloadTime: number;
   damage: number;
+  maxAmmo: number;
 }
 
 // --- Sensor array (stats for SensorArray component) ---
@@ -114,10 +115,10 @@ const pdcs: PDCModule[] = [
 ];
 
 const railguns: RailgunModule[] = [
-  { id: 'rg_light', name: 'RG Light', kind: 'railgun', projectileSpeed: 90, maxRange: 6_000, reloadTime: 1.8, damage: 35 },
-  { id: 'rg_medium', name: 'RG Medium', kind: 'railgun', projectileSpeed: 100, maxRange: 8_000, reloadTime: 1.5, damage: 40 },
-  { id: 'rg_heavy', name: 'RG Heavy', kind: 'railgun', projectileSpeed: 100, maxRange: 10_000, reloadTime: 2, damage: 50 },
-  { id: 'rg_battleship', name: 'RG Battleship', kind: 'railgun', projectileSpeed: 110, maxRange: 12_000, reloadTime: 2.5, damage: 60 },
+  { id: 'rg_light', name: 'RG Light', kind: 'railgun', projectileSpeed: 90, maxRange: 12_000, reloadTime: 60, damage: 35, maxAmmo: 50 },
+  { id: 'rg_medium', name: 'RG Medium', kind: 'railgun', projectileSpeed: 100, maxRange: 16_000, reloadTime: 60, damage: 40, maxAmmo: 60 },
+  { id: 'rg_heavy', name: 'RG Heavy', kind: 'railgun', projectileSpeed: 100, maxRange: 20_000, reloadTime: 60, damage: 50, maxAmmo: 80 },
+  { id: 'rg_battleship', name: 'RG Battleship', kind: 'railgun', projectileSpeed: 110, maxRange: 24_000, reloadTime: 60, damage: 60, maxAmmo: 100 },
 ];
 
 const sensors: SensorModule[] = [

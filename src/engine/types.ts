@@ -40,7 +40,8 @@ export type GameEventType =
   | 'SpeedChanged'
   | 'VictoryAchieved'
   | 'DefeatSuffered'
-  | 'CelestialCollision';
+  | 'CelestialCollision'
+  | 'OrderFeedback';
 
 export interface GameEvent {
   type: GameEventType;

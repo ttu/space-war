@@ -235,7 +235,7 @@ export class ShipDetailPanel {
     const rg = this.world.getComponent<Railgun>(id, COMPONENT.Railgun);
     if (rg) {
       const int = (rg.integrity ?? 100) > 0 ? 'OK' : 'OFF';
-      this.addRow(`Railgun: ${int}`, 'ship-detail-row ship-detail-weapon-railgun');
+      this.addRow(`Railgun: ${int} (${rg.ammo}/${rg.maxAmmo})`, 'ship-detail-row ship-detail-weapon-railgun');
     }
 
     if (showLockCameraButton && this.onLockCamera) {

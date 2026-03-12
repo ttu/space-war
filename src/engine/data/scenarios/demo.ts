@@ -154,15 +154,15 @@ export const demoScenario: Scenario = {
       x: TERRA_X + 42500, y: TERRA_Y + 1000,
       vx: 0, vy: terraOrbitalSpeed + shipOrbitalSpeedTerra * 0.99,
     },
-    // --- Enemy fleet near Terra ---
+    // --- Enemy fleet near Terra (lower left of Earth) ---
     {
       templateId: 'cruiser', name: 'UES Aggressor', faction: 'enemy', flagship: true,
-      x: TERRA_X - 80000, y: TERRA_Y + 60000,
+      x: TERRA_X - 80000, y: TERRA_Y - 60000,
       vx: 2.0, vy: terraOrbitalSpeed - 1.5,
     },
     {
       templateId: 'frigate', name: 'UES Raider', faction: 'enemy',
-      x: TERRA_X - 75000, y: TERRA_Y + 65000,
+      x: TERRA_X - 75000, y: TERRA_Y - 65000,
       vx: 2.2, vy: terraOrbitalSpeed - 1.3,
     },
     // --- Enemy fleet near Venus ---

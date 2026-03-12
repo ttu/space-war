@@ -74,6 +74,8 @@ function createEnemyShipWithWeapons(
     reloadTime: 2,
     lastFiredTime: 0,
     damage: 20,
+    ammo: 50,
+    maxAmmo: 50,
   });
   return id;
 }

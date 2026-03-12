@@ -45,9 +45,13 @@ export interface Railgun extends Component {
   type: 'Railgun';
   projectileSpeed: number;    // km/s
   maxRange: number;           // km
-  reloadTime: number;         // seconds between shots
-  lastFiredTime: number;      // game time of last shot
+  reloadTime: number;         // seconds between bursts
+  lastFiredTime: number;      // game time of last shot/burst start
   damage: number;             // hull damage on hit
+  /** Current rounds remaining. Cannot fire when 0. */
+  ammo: number;
+  /** Max rounds (from module template). */
+  maxAmmo: number;
   /** 0 = destroyed (weapon cannot fire). Omit or 100 = full. */
   integrity?: number;
 }

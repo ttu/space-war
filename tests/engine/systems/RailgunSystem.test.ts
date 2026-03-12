@@ -37,6 +37,8 @@ function createShipWithRailgun(
     reloadTime: 2,
     lastFiredTime: 0,
     damage: 50,
+    ammo: 50,
+    maxAmmo: 50,
   });
   return id;
 }

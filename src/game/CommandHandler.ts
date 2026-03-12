@@ -9,8 +9,77 @@ import { computeBurnPlan, angleBetweenPoints } from './TrajectoryCalculator';
 import { computeLeadSolution, hitProbability } from './FiringComputer';
 import { getBodiesFromWorld, getSafeWaypoint } from './PlanetAvoidance';
 
+/** Rounds per player "Fire railgun" + right-click (one leaves the ship each interval). */
+const RAILGUN_BURST_SIZE = 5;
+/** Rounds per AI railgun burst (same multi-shot stream as player). */
+const AI_RAILGUN_BURST_SIZE = 4;
+/** Seconds between each round in a burst (rounds leave the ship one by one). */
+const RAILGUN_BURST_INTERVAL_SEC = 0.12;
+
+interface PendingRailgunBurst {
+  shipId: EntityId;
+  targetId: EntityId;
+  startTime: number;
+  roundsTotal: number;
+  roundsSpawned: number;
+  dirX: number;
+  dirY: number;
+  projectileSpeed: number;
+  damage: number;
+  faction: string;
+}
+
 export class CommandHandler {
+  private pendingRailgunBursts: PendingRailgunBurst[] = [];
+
   constructor(private world: World, private eventBus?: EventBus) {}
+
+  /**
+   * Call each fixed update to spawn the next round of any in-progress railgun bursts.
+   * Rounds leave the ship one by one at the burst interval.
+   */
+  processPendingRailgunBursts(world: World, gameTime: number): void {
+    const interval = RAILGUN_BURST_INTERVAL_SEC;
+    for (let i = this.pendingRailgunBursts.length - 1; i >= 0; i--) {
+      const b = this.pendingRailgunBursts[i];
+      const nextSpawnTime = b.startTime + b.roundsSpawned * interval;
+      if (b.roundsSpawned >= b.roundsTotal) {
+        this.pendingRailgunBursts.splice(i, 1);
+        continue;
+      }
+      const pos = world.getComponent<Position>(b.shipId, COMPONENT.Position);
+      const railgun = world.getComponent<Railgun>(b.shipId, COMPONENT.Railgun);
+      if (!pos || !railgun || railgun.ammo <= 0) {
+        this.pendingRailgunBursts.splice(i, 1);
+        continue;
+      }
+      if (gameTime < nextSpawnTime) continue;
+
+      railgun.ammo -= 1;
+      const projId = world.createEntity();
+      world.addComponent<Position>(projId, {
+        type: 'Position',
+        x: pos.x, y: pos.y, prevX: pos.x, prevY: pos.y,
+      });
+      world.addComponent<Velocity>(projId, {
+        type: 'Velocity',
+        vx: b.dirX * b.projectileSpeed,
+        vy: b.dirY * b.projectileSpeed,
+      });
+      world.addComponent<Projectile>(projId, {
+        type: 'Projectile',
+        shooterId: b.shipId,
+        targetId: b.targetId,
+        faction: b.faction as 'player' | 'enemy' | 'neutral',
+        damage: b.damage,
+        hitRadius: 0.5,
+      });
+      b.roundsSpawned += 1;
+      if (b.roundsSpawned >= b.roundsTotal) {
+        this.pendingRailgunBursts.splice(i, 1);
+      }
+    }
+  }
 
   /** Issue a move-to order to all selected player ships. If none selected, issues to flagship or sole player ship. */
   issueMoveTo(targetX: number, targetY: number): void {
@@ -217,6 +286,7 @@ export class CommandHandler {
     const targetVel = this.world.getComponent<Velocity>(targetId, COMPONENT.Velocity);
     if (!ship || !railgun || !targetPos) return false;
     if ((railgun.integrity ?? 100) <= 0) return false;
+    if (railgun.ammo <= 0) return false;
     if (gameTime - railgun.lastFiredTime < railgun.reloadTime) return false;
 
     const targetVx = targetVel?.vx ?? 0;
@@ -228,34 +298,31 @@ export class CommandHandler {
       pos.x, pos.y, vel.vx, vel.vy,
       targetPos.x, targetPos.y, targetVx, targetVy,
       railgun.projectileSpeed,
-      railgun.maxRange,
+      undefined, // no max range limit
     );
     if (!solution) return false;
 
     const range = Math.sqrt((targetPos.x - pos.x) ** 2 + (targetPos.y - pos.y) ** 2);
     const targetSpeed = Math.sqrt(targetVx * targetVx + targetVy * targetVy);
-    const prob = hitProbability(range, targetSpeed, railgun.projectileSpeed, railgun.maxRange);
+    const prob = hitProbability(range, targetSpeed, railgun.projectileSpeed, Infinity);
 
     const dirX = Math.cos(solution.fireAngle);
     const dirY = Math.sin(solution.fireAngle);
-    const projId = this.world.createEntity();
-    this.world.addComponent<Position>(projId, {
-      type: 'Position', x: pos.x, y: pos.y, prevX: pos.x, prevY: pos.y,
-    });
-    this.world.addComponent<Velocity>(projId, {
-      type: 'Velocity',
-      vx: dirX * railgun.projectileSpeed,
-      vy: dirY * railgun.projectileSpeed,
-    });
-    this.world.addComponent<Projectile>(projId, {
-      type: 'Projectile',
-      shooterId: shipId,
-      targetId,
-      faction: ship.faction,
-      damage: railgun.damage,
-      hitRadius: 0.5,
-    });
+    const roundsTotal = Math.min(AI_RAILGUN_BURST_SIZE, railgun.ammo);
+    if (roundsTotal <= 0) return false;
 
+    this.pendingRailgunBursts.push({
+      shipId,
+      targetId,
+      startTime: gameTime,
+      roundsTotal,
+      roundsSpawned: 0,
+      dirX,
+      dirY,
+      projectileSpeed: railgun.projectileSpeed,
+      damage: railgun.damage,
+      faction: ship.faction,
+    });
     railgun.lastFiredTime = gameTime;
     this.eventBus?.emit({
       type: 'RailgunFired',
@@ -267,22 +334,37 @@ export class CommandHandler {
     return true;
   }
 
-  /** Launch missile salvos from selected player ships at the target entity. */
+  /** Launch missile salvos from selected player ships at the target entity.
+   * If none selected, uses flagship or all player ships with launcher (same fallback as move). */
   launchMissile(targetId: EntityId, gameTime: number): void {
-    const selected = this.world.query(
+    const candidates = this.world.query(
       COMPONENT.Position, COMPONENT.Velocity, COMPONENT.Ship,
       COMPONENT.Selectable, COMPONENT.MissileLauncher,
     );
 
+    const toLaunch: EntityId[] = [];
+    let flagshipId: EntityId | null = null;
+    const playerWithMl: EntityId[] = [];
+
+    for (const shipId of candidates) {
+      const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship)!;
+      if (ship.faction !== 'player') continue;
+      playerWithMl.push(shipId);
+      if (ship.flagship) flagshipId = shipId;
+      const sel = this.world.getComponent<Selectable>(shipId, COMPONENT.Selectable)!;
+      if (sel.selected) toLaunch.push(shipId);
+    }
+
+    if (toLaunch.length === 0) {
+      if (flagshipId !== null) toLaunch.push(flagshipId);
+      else if (playerWithMl.length > 0) toLaunch.push(...playerWithMl);
+    }
+
     const targetPos = this.world.getComponent<Position>(targetId, COMPONENT.Position);
     if (!targetPos) return;
 
-    for (const shipId of selected) {
-      const sel = this.world.getComponent<Selectable>(shipId, COMPONENT.Selectable)!;
-      if (!sel.selected) continue;
-
+    for (const shipId of toLaunch) {
       const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship)!;
-      if (ship.faction !== 'player') continue;
 
       const launcher = this.world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher)!;
 
@@ -352,12 +434,32 @@ export class CommandHandler {
     }
   }
 
-  /** Fire railguns from selected player ships at the target entity (lead targeting). */
+  /** Fire railguns from selected player ships at the target entity (lead targeting).
+   * If none selected, uses flagship or all player ships with railgun (same fallback as move).
+   * Emits OrderFeedback when no shots fired (no ships or out of range). */
   fireRailgun(targetId: EntityId, gameTime: number): void {
-    const selected = this.world.query(
+    const candidates = this.world.query(
       COMPONENT.Position, COMPONENT.Velocity, COMPONENT.Ship,
       COMPONENT.Selectable, COMPONENT.Railgun,
     );
+
+    const toFire: EntityId[] = [];
+    let flagshipId: EntityId | null = null;
+    const playerWithRg: EntityId[] = [];
+
+    for (const shipId of candidates) {
+      const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship)!;
+      if (ship.faction !== 'player') continue;
+      playerWithRg.push(shipId);
+      if (ship.flagship) flagshipId = shipId;
+      const sel = this.world.getComponent<Selectable>(shipId, COMPONENT.Selectable)!;
+      if (sel.selected) toFire.push(shipId);
+    }
+
+    if (toFire.length === 0) {
+      if (flagshipId !== null) toFire.push(flagshipId);
+      else if (playerWithRg.length > 0) toFire.push(...playerWithRg);
+    }
 
     const targetPos = this.world.getComponent<Position>(targetId, COMPONENT.Position);
     const targetVel = this.world.getComponent<Velocity>(targetId, COMPONENT.Velocity);
@@ -366,15 +468,13 @@ export class CommandHandler {
     const targetVx = targetVel?.vx ?? 0;
     const targetVy = targetVel?.vy ?? 0;
 
-    for (const shipId of selected) {
-      const sel = this.world.getComponent<Selectable>(shipId, COMPONENT.Selectable)!;
-      if (!sel.selected) continue;
-
+    let fired = 0;
+    for (const shipId of toFire) {
       const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship)!;
-      if (ship.faction !== 'player') continue;
 
       const railgun = this.world.getComponent<Railgun>(shipId, COMPONENT.Railgun)!;
       if ((railgun.integrity ?? 100) <= 0) continue;
+      if (railgun.ammo <= 0) continue;
       if (gameTime - railgun.lastFiredTime < railgun.reloadTime) continue;
 
       const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position)!;
@@ -384,7 +484,7 @@ export class CommandHandler {
         pos.x, pos.y, vel.vx, vel.vy,
         targetPos.x, targetPos.y, targetVx, targetVy,
         railgun.projectileSpeed,
-        railgun.maxRange,
+        undefined, // no max range limit — fire at any distance
       );
       if (!solution) continue;
 
@@ -396,31 +496,27 @@ export class CommandHandler {
         range,
         targetSpeed,
         railgun.projectileSpeed,
-        railgun.maxRange,
+        Infinity, // no range cap for probability
       );
 
       const dirX = Math.cos(solution.fireAngle);
       const dirY = Math.sin(solution.fireAngle);
-      const projId = this.world.createEntity();
-      this.world.addComponent<Position>(projId, {
-        type: 'Position',
-        x: pos.x, y: pos.y, prevX: pos.x, prevY: pos.y,
-      });
-      this.world.addComponent<Velocity>(projId, {
-        type: 'Velocity',
-        vx: dirX * railgun.projectileSpeed,
-        vy: dirY * railgun.projectileSpeed,
-      });
-      this.world.addComponent<Projectile>(projId, {
-        type: 'Projectile',
-        shooterId: shipId,
+
+      this.pendingRailgunBursts.push({
+        shipId,
         targetId,
-        faction: ship.faction,
+        startTime: gameTime,
+        roundsTotal: RAILGUN_BURST_SIZE,
+        roundsSpawned: 0,
+        dirX,
+        dirY,
+        projectileSpeed: railgun.projectileSpeed,
         damage: railgun.damage,
-        hitRadius: 0.5,
+        faction: ship.faction,
       });
 
       railgun.lastFiredTime = gameTime;
+      fired += 1;
 
       this.eventBus?.emit({
         type: 'RailgunFired',
@@ -428,6 +524,18 @@ export class CommandHandler {
         entityId: shipId,
         targetId,
         data: { timeToImpact: solution.timeToImpact, hitProbability: prob },
+      });
+    }
+
+    if (fired === 0 && this.eventBus) {
+      const reason =
+        toFire.length === 0
+          ? 'No ships with railgun.'
+          : 'No firing solution (target unreachable).';
+      this.eventBus.emit({
+        type: 'OrderFeedback',
+        time: gameTime,
+        data: { message: `Railgun: ${reason}` },
       });
     }
   }

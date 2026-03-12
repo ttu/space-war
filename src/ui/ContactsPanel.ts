@@ -89,13 +89,16 @@ function getContactsByBody(
 /**
  * Lists detected enemy contacts (sensor contacts). Clicking a name focuses the camera on that contact.
  */
+const SUMMARY_PLACEHOLDER = '—';
+
 export class ContactsPanel {
   private root: HTMLElement;
-  private summaryEl: HTMLElement;
+  private summaryLocEl: HTMLElement;
+  private summaryAgeEl: HTMLElement;
   private list: HTMLElement;
   private contactRows = new Map<EntityId, HTMLElement>();
-  private lastSummaryText = '';
-  private summaryVisible = true; // avoid setting display every frame
+  private lastSummaryLoc = '';
+  private lastSummaryAge = '';
   /** Cache last displayed values per contact to avoid DOM writes when unchanged. */
   private lastRowState = new Map<EntityId, { name: string; meta: string; metaClass: string; location: string }>();
   private lastUpdateTime = 0;
@@ -117,9 +120,17 @@ export class ContactsPanel {
     header.textContent = 'Contacts';
     this.root.appendChild(header);
 
-    this.summaryEl = document.createElement('div');
-    this.summaryEl.className = 'contacts-panel-summary';
-    this.root.appendChild(this.summaryEl);
+    const summaryWrap = document.createElement('div');
+    summaryWrap.className = 'contacts-panel-summary';
+    this.summaryLocEl = document.createElement('div');
+    this.summaryLocEl.className = 'contacts-panel-summary-row';
+    this.summaryLocEl.textContent = SUMMARY_PLACEHOLDER;
+    this.summaryAgeEl = document.createElement('div');
+    this.summaryAgeEl.className = 'contacts-panel-summary-row';
+    this.summaryAgeEl.textContent = SUMMARY_PLACEHOLDER;
+    summaryWrap.appendChild(this.summaryLocEl);
+    summaryWrap.appendChild(this.summaryAgeEl);
+    this.root.appendChild(summaryWrap);
 
     this.list = document.createElement('div');
     this.list.className = 'contacts-panel-list';
@@ -134,7 +145,9 @@ export class ContactsPanel {
     const contactIds = tracker ? Array.from(tracker.contacts.keys()) : [];
     const gameTime = this.getGameTime();
 
-    // Summary: "Enemies at Mars (2), Venus (3). Data 1–5 min old (light delay)."
+    // Summary: row 1 "Enemies at: Terra (2), Mars (1)."  row 2 "Data 0–5 s old." (placeholder when empty)
+    let summaryLoc = SUMMARY_PLACEHOLDER;
+    let summaryAge = SUMMARY_PLACEHOLDER;
     if (tracker && contactIds.length > 0) {
       const byBody = getContactsByBody(this.world, tracker, gameTime);
       const parts: string[] = [];
@@ -145,27 +158,21 @@ export class ContactsPanel {
         minAge = Math.min(minAge, info.minAgeSec);
         maxAge = Math.max(maxAge, info.maxAgeSec);
       }
-      const ageStr =
+      summaryLoc = `Enemies at: ${parts.join(', ')}.`;
+      summaryAge =
         maxAge >= 60
-          ? ` Data ${Math.floor(minAge / 60)}–${Math.ceil(maxAge / 60)} min old (light delay).`
+          ? `Data ${Math.floor(minAge / 60)}–${Math.ceil(maxAge / 60)} min old (light delay).`
           : maxAge > 0
-            ? ` Data ${minAge.toFixed(0)}–${maxAge.toFixed(0)} s old.`
-            : '';
-      const summaryText = `Enemies at: ${parts.join(', ')}.${ageStr}`;
-      if (this.lastSummaryText !== summaryText) {
-        this.lastSummaryText = summaryText;
-        this.summaryEl.textContent = summaryText;
-      }
-      if (!this.summaryVisible) {
-        this.summaryVisible = true;
-        this.summaryEl.style.display = 'block';
-      }
-    } else {
-      this.lastSummaryText = '';
-      if (this.summaryVisible) {
-        this.summaryVisible = false;
-        this.summaryEl.style.display = 'none';
-      }
+            ? `Data ${minAge.toFixed(0)}–${maxAge.toFixed(0)} s old.`
+            : `Data 0–0 s old.`;
+    }
+    if (this.lastSummaryLoc !== summaryLoc) {
+      this.lastSummaryLoc = summaryLoc;
+      this.summaryLocEl.textContent = summaryLoc;
+    }
+    if (this.lastSummaryAge !== summaryAge) {
+      this.lastSummaryAge = summaryAge;
+      this.summaryAgeEl.textContent = summaryAge;
     }
 
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();

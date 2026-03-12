@@ -212,6 +212,8 @@ export function loadScenario(world: World, scenario: Scenario): void {
         reloadTime: mod.reloadTime,
         lastFiredTime: 0,
         damage: mod.damage,
+        ammo: mod.maxAmmo,
+        maxAmmo: mod.maxAmmo,
       } as Railgun);
     }
 

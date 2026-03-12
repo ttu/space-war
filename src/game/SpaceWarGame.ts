@@ -41,6 +41,7 @@ import type { EntityId } from '../engine/types';
 import {
   Position,
   Ship,
+  Missile,
   ContactTracker,
   NavigationOrder,
   CelestialBody,
@@ -515,7 +516,7 @@ export class SpaceWarGame {
     const ships = this.world.query(COMPONENT.Position, COMPONENT.Ship);
     const playerContacts = this.getPlayerContacts();
     let clickedEnemy: string | null = null;
-    let closestDist = pickRadius;
+    let enemyDist = pickRadius;
 
     for (const id of ships) {
       const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
@@ -536,34 +537,53 @@ export class SpaceWarGame {
       const dx = checkX - worldPos.x;
       const dy = checkY - worldPos.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < closestDist) {
-        closestDist = dist;
+      if (dist < enemyDist) {
+        enemyDist = dist;
         clickedEnemy = id;
       }
     }
 
-    const order = this.pendingOrder;
-
-    if (clickedEnemy) {
-      if (order === 'fireMissile') {
-        this.commandHandler.launchMissile(clickedEnemy, this.gameTime.elapsed);
-        this.orderBar.setPendingOrder('none');
-        this.pendingOrder = 'none';
-      } else if (order === 'fireRailgun') {
-        this.commandHandler.fireRailgun(clickedEnemy, this.gameTime.elapsed);
-        this.orderBar.setPendingOrder('none');
-        this.pendingOrder = 'none';
-      } else {
-        this.commandHandler.launchMissile(clickedEnemy, this.gameTime.elapsed);
-        this.commandHandler.fireRailgun(clickedEnemy, this.gameTime.elapsed);
+    let clickedMissile: string | null = null;
+    let missileDist = pickRadius;
+    const missiles = this.world.query(COMPONENT.Position, COMPONENT.Missile);
+    for (const id of missiles) {
+      const missile = this.world.getComponent<Missile>(id, COMPONENT.Missile)!;
+      if (missile.launcherFaction === 'player') continue;
+      const pos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
+      const dx = pos.x - worldPos.x;
+      const dy = pos.y - worldPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < missileDist) {
+        missileDist = dist;
+        clickedMissile = id;
       }
-    } else {
-      if (order === 'move' || order === 'none') {
-        this.commandHandler.issueMoveTo(worldPos.x, worldPos.y);
-        if (order === 'move') {
-          this.orderBar.setPendingOrder('none');
-          this.pendingOrder = 'none';
-        }
+    }
+
+    const order = this.pendingOrder;
+    const railgunTarget =
+      order === 'fireRailgun' && (clickedEnemy !== null || clickedMissile !== null)
+        ? clickedEnemy === null
+          ? clickedMissile
+          : clickedMissile === null
+            ? clickedEnemy
+            : enemyDist <= missileDist
+              ? clickedEnemy
+              : clickedMissile
+        : null;
+
+    if (order === 'fireMissile' && clickedEnemy) {
+      this.commandHandler.launchMissile(clickedEnemy, this.gameTime.elapsed);
+      this.orderBar.setPendingOrder('none');
+      this.pendingOrder = 'none';
+    } else if (order === 'fireRailgun' && railgunTarget) {
+      this.commandHandler.fireRailgun(railgunTarget, this.gameTime.elapsed);
+      this.orderBar.setPendingOrder('none');
+      this.pendingOrder = 'none';
+    } else if (order === 'move' || order === 'none') {
+      this.commandHandler.issueMoveTo(worldPos.x, worldPos.y);
+      if (order === 'move') {
+        this.orderBar.setPendingOrder('none');
+        this.pendingOrder = 'none';
       }
     }
   }
@@ -571,6 +591,7 @@ export class SpaceWarGame {
   // --- Simulation ---
 
   private fixedUpdate(dt: number): void {
+    this.commandHandler.processPendingRailgunBursts(this.world, this.gameTime.elapsed);
     this.sensorSystem.update(this.world, dt, this.gameTime.elapsed);
     this.pdcSystem.update(this.world, dt, this.gameTime.elapsed);
     this.railgunSystem.update(this.world, dt, this.gameTime.elapsed);

@@ -80,6 +80,8 @@ describe('Weapon Components', () => {
       reloadTime: 2,
       lastFiredTime: 0,
       damage: 50,
+      ammo: 50,
+      maxAmmo: 50,
     };
     world.addComponent(id, railgun);
     const retrieved = world.getComponent<Railgun>(id, COMPONENT.Railgun);

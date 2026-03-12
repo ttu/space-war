@@ -1,7 +1,7 @@
 import { World, EntityId } from '../types';
 import { EventBus } from '../core/EventBus';
 import {
-  Hull, ShipSystems, PDC, Railgun, MissileLauncher,
+  Hull, ShipSystems, PDC, Railgun, MissileLauncher, Missile,
   COMPONENT,
 } from '../components';
 
@@ -21,7 +21,7 @@ export class DamageSystem {
     for (let i = this.lastProcessedIndex; i < history.length; i++) {
       const e = history[i];
       if (e.type === 'RailgunHit' && e.targetId) {
-        this.applyRailgunHit(world, e.targetId, (e.data?.damage as number) ?? 0);
+        this.applyRailgunHit(world, e.targetId, (e.data?.damage as number) ?? 0, e.time);
       } else if (e.type === 'MissileImpact' && e.targetId) {
         const count = (e.data?.missileCount as number) ?? 1;
         this.applyMissileImpact(world, e.targetId, count);
@@ -30,7 +30,19 @@ export class DamageSystem {
     this.lastProcessedIndex = history.length;
   }
 
-  private applyRailgunHit(world: World, targetId: EntityId, damage: number): void {
+  private applyRailgunHit(world: World, targetId: EntityId, damage: number, gameTime: number): void {
+    const missile = world.getComponent<Missile>(targetId, COMPONENT.Missile);
+    if (missile) {
+      world.removeEntity(targetId);
+      this.eventBus.emit({
+        type: 'MissileIntercepted',
+        time: gameTime,
+        targetId,
+        data: {},
+      });
+      return;
+    }
+
     const hull = world.getComponent<Hull>(targetId, COMPONENT.Hull);
     if (!hull) return;
 

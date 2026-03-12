@@ -8,6 +8,7 @@ import {
   AIStrategicIntent,
   ContactTracker,
   MissileLauncher,
+  Missile,
   Railgun,
   COMPONENT,
 } from '../components';
@@ -15,7 +16,10 @@ import { CommandHandler } from '../../game/CommandHandler';
 import { hitProbability } from '../../game/FiringComputer';
 
 const MISSILE_RANGE_FRACTION = 0.85; // fire when within this fraction of maxRange
-const MIN_RAILGUN_HIT_PROB = 0.2;
+/** AI only fires railgun when estimated hit probability is at least this (realistic chance to hit). */
+const MIN_RAILGUN_HIT_PROB = 0.45;
+/** AI only fires railguns when player is within this range (km) or player has missiles inbound at us. */
+const RAILGUN_ENGAGE_NEAR_KM = 50_000;
 
 /**
  * Per-ship AI: executes strategic intent — issues move orders, launches missiles,
@@ -72,19 +76,24 @@ export class AITacticalSystem {
             }
 
             const railgun = world.getComponent<Railgun>(shipId, COMPONENT.Railgun);
-            if (railgun && (railgun.integrity ?? 100) > 0) {
-              const targetVel = world.getComponent<Velocity>(intent.targetId, COMPONENT.Velocity);
-              const targetVx = targetVel?.vx ?? 0;
-              const targetVy = targetVel?.vy ?? 0;
-              const targetSpeed = Math.sqrt(targetVx * targetVx + targetVy * targetVy);
-              const prob = hitProbability(
-                distToTarget,
-                targetSpeed,
-                railgun.projectileSpeed,
-                railgun.maxRange,
-              );
-              if (distToTarget <= railgun.maxRange && prob >= MIN_RAILGUN_HIT_PROB) {
-                this.commandHandler.fireRailgunFromShip(shipId, intent.targetId, gameTime);
+            if (railgun && (railgun.integrity ?? 100) > 0 && railgun.ammo > 0) {
+              const mayFireRailgun =
+                this.hasIncomingPlayerMissiles(world, shipId) ||
+                (distToTarget <= RAILGUN_ENGAGE_NEAR_KM);
+              if (mayFireRailgun) {
+                const targetVel = world.getComponent<Velocity>(intent.targetId, COMPONENT.Velocity);
+                const targetVx = targetVel?.vx ?? 0;
+                const targetVy = targetVel?.vy ?? 0;
+                const targetSpeed = Math.sqrt(targetVx * targetVx + targetVy * targetVy);
+                const prob = hitProbability(
+                  distToTarget,
+                  targetSpeed,
+                  railgun.projectileSpeed,
+                  Infinity, // no max range — fire at any distance
+                );
+                if (prob >= MIN_RAILGUN_HIT_PROB && gameTime - railgun.lastFiredTime >= railgun.reloadTime) {
+                  this.commandHandler.fireRailgunFromShip(shipId, intent.targetId, gameTime);
+                }
               }
             }
           }
@@ -95,6 +104,17 @@ export class AITacticalSystem {
         thruster.throttle = nav ? thruster.throttle : 0;
       }
     }
+  }
+
+  /** True if any player-launched missile is targeting this ship. */
+  private hasIncomingPlayerMissiles(world: World, shipId: EntityId): boolean {
+    const missiles = world.query(COMPONENT.Missile);
+    for (const mid of missiles) {
+      const missile = world.getComponent<Missile>(mid, COMPONENT.Missile)!;
+      if (missile.launcherFaction !== 'player') continue;
+      if (missile.targetId === shipId) return true;
+    }
+    return false;
   }
 
   private getEnemyContactTracker(world: World): ContactTracker | undefined {
