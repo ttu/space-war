@@ -290,6 +290,7 @@ export class SpaceWarGame {
       (id) => this.getPlayerContacts()?.contacts.get(id),
       () => Array.from(this.getPlayerContacts()?.contacts.keys() ?? []),
       () => this.gameTime.elapsed,
+      () => this.selectionManager.getSelectedCelestialId(),
     );
 
     const orderBarWrap = document.createElement('div');

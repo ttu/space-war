@@ -1,16 +1,18 @@
 import type { World, EntityId } from '../engine/types';
-import { Position, Ship, Selectable, COMPONENT } from '../engine/components';
+import { Position, Ship, Selectable, CelestialBody, COMPONENT } from '../engine/components';
 import { applyBoxSelection } from './Selection';
 
 /** Optional: return display position for enemy ships (e.g. last-known from sensors). */
 export type GetEnemyPickPosition = (entityId: EntityId) => { x: number; y: number } | undefined;
 
 /**
- * Manages ship selection: click, shift-click, and box select.
+ * Manages ship and celestial selection: click, shift-click, and box select.
  * Player and enemy ships with Selectable can be selected (enemies use last-known position when provided).
+ * Clicking a planet or station sets the selected celestial and clears ship selection.
  */
 export class SelectionManager {
   private selectionChangeCallbacks: Array<(ids: EntityId[]) => void> = [];
+  private selectedCelestialId: EntityId | null = null;
 
   constructor(
     private world: World,
@@ -44,9 +46,15 @@ export class SelectionManager {
     return out;
   }
 
+  /** Get the currently selected celestial body (planet/station) or null. */
+  getSelectedCelestialId(): EntityId | null {
+    return this.selectedCelestialId;
+  }
+
   /**
    * Update selection from a single click in world coordinates.
-   * Considers both player and enemy ships. Enemy position uses getEnemyPickPosition when available.
+   * Celestials are checked first; if the click hits a planet/station, it is selected and ship selection is cleared.
+   * Otherwise considers ships and missiles. Enemy position uses getEnemyPickPosition when available.
    */
   setSelectionFromClick(
     worldX: number,
@@ -54,6 +62,43 @@ export class SelectionManager {
     pickRadiusKm: number,
     shiftKey: boolean,
   ): void {
+    const celestials = this.world.query(COMPONENT.Position, COMPONENT.CelestialBody);
+    let closestCelestialId: EntityId | null = null;
+    let closestCelestialDist = Infinity;
+
+    for (const id of celestials) {
+      const pos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
+      const body = this.world.getComponent<CelestialBody>(id, COMPONENT.CelestialBody)!;
+      const dx = pos.x - worldX;
+      const dy = pos.y - worldY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const threshold = Math.max(body.radius, pickRadiusKm);
+      if (dist <= threshold && dist < closestCelestialDist) {
+        closestCelestialDist = dist;
+        closestCelestialId = id;
+      }
+    }
+
+    if (closestCelestialId !== null) {
+      this.selectedCelestialId = closestCelestialId;
+      if (!shiftKey) {
+        const ships = this.world.query(COMPONENT.Ship, COMPONENT.Selectable);
+        const missiles = this.world.query(COMPONENT.Missile, COMPONENT.Selectable);
+        for (const id of ships) {
+          const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
+          sel.selected = false;
+        }
+        for (const id of missiles) {
+          const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
+          sel.selected = false;
+        }
+      }
+      this.notifySelectionChange();
+      return;
+    }
+
+    this.selectedCelestialId = null;
+
     const ships = this.world.query(COMPONENT.Position, COMPONENT.Ship, COMPONENT.Selectable);
     const missiles = this.world.query(COMPONENT.Position, COMPONENT.Missile, COMPONENT.Selectable);
 
@@ -113,6 +158,7 @@ export class SelectionManager {
    * Clears all other selection. No-op if entityId does not have Selectable.
    */
   setSelectionToEntity(entityId: EntityId): void {
+    this.selectedCelestialId = null;
     const ships = this.world.query(COMPONENT.Ship, COMPONENT.Selectable);
     const missiles = this.world.query(COMPONENT.Missile, COMPONENT.Selectable);
     for (const id of ships) {
@@ -137,6 +183,7 @@ export class SelectionManager {
     worldMaxY: number,
     shiftKey: boolean,
   ): void {
+    this.selectedCelestialId = null;
     applyBoxSelection(
       this.world,
       worldMinX,

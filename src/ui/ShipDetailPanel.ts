@@ -1,6 +1,8 @@
 import type { World } from '../engine/types';
 import type { EntityId } from '../engine/types';
 import type { DetectedContact } from '../engine/components';
+import type { CelestialBody } from '../engine/components';
+import type { OrbitalPrimary } from '../engine/components';
 import type { Missile } from '../engine/components';
 import {
   Position,
@@ -23,13 +25,14 @@ function pct(current: number, max: number): string {
 }
 
 /**
- * Selected ship systems, weapons, and current order.
- * Shows detail for all selected ships (player and enemy).
+ * Selected ship systems, weapons, and current order; or selected planet/station info.
+ * Shows detail for all selected ships (player and enemy), or one selected celestial body.
  * For enemy ships shows contact intel when getContact is provided.
  */
 export class ShipDetailPanel {
   private root: HTMLElement;
   private content: HTMLElement;
+  private header: HTMLElement;
 
   constructor(
     container: HTMLElement,
@@ -38,6 +41,7 @@ export class ShipDetailPanel {
     private getContact?: (entityId: EntityId) => DetectedContact | undefined,
     private getDetectedEnemyIds?: () => EntityId[],
     private getGameTime?: () => number,
+    private getSelectedCelestialId?: () => EntityId | null,
   ) {
     this.root = document.createElement('div');
     this.root.id = 'ship-detail-panel';
@@ -46,6 +50,7 @@ export class ShipDetailPanel {
     const header = document.createElement('div');
     header.className = 'ship-detail-header';
     header.textContent = 'Ship';
+    this.header = header;
     this.root.appendChild(header);
 
     this.content = document.createElement('div');
@@ -57,7 +62,14 @@ export class ShipDetailPanel {
 
   /** Call each frame or when selection changes. */
   update(): void {
+    const celestialId = this.getSelectedCelestialId?.() ?? null;
+    if (celestialId !== null) {
+      this.renderCelestialDetail(celestialId);
+      return;
+    }
+
     const ids = this.getSelectedIds();
+    this.header.textContent = 'Ship';
     this.content.textContent = '';
 
     if (ids.length === 0) {
@@ -356,5 +368,39 @@ export class ShipDetailPanel {
     const sep = document.createElement('hr');
     sep.className = 'ship-detail-separator';
     this.content.appendChild(sep);
+  }
+
+  private renderCelestialDetail(entityId: EntityId): void {
+    const body = this.world.getComponent<CelestialBody>(entityId, COMPONENT.CelestialBody);
+    if (!body) return;
+
+    const headerLabel =
+      body.bodyType === 'station'
+        ? 'Station'
+        : body.bodyType.charAt(0).toUpperCase() + body.bodyType.slice(1);
+    this.header.textContent = headerLabel;
+    this.content.textContent = '';
+
+    const nameLine = document.createElement('div');
+    nameLine.className = 'ship-detail-name';
+    nameLine.textContent = body.name;
+    this.content.appendChild(nameLine);
+
+    this.addRow(`Type: ${body.bodyType}`);
+    this.addRow(`Radius: ${body.radius.toLocaleString()} km`);
+    const massStr =
+      body.mass >= 1e21
+        ? `${(body.mass / 1e24).toFixed(2)}×10²⁴ kg`
+        : body.mass >= 1e12
+          ? `${(body.mass / 1e12).toFixed(0)}×10¹² kg`
+          : `${body.mass.toLocaleString()} kg`;
+    this.addRow(`Mass: ${massStr}`);
+
+    const orbital = this.world.getComponent<OrbitalPrimary>(entityId, COMPONENT.OrbitalPrimary);
+    if (orbital) {
+      const primaryBody = this.world.getComponent<CelestialBody>(orbital.primaryId, COMPONENT.CelestialBody);
+      const primaryName = primaryBody?.name ?? 'Unknown';
+      this.addRow(`Orbits: ${primaryName}`);
+    }
   }
 }
