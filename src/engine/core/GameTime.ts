@@ -26,11 +26,15 @@ export class GameTime {
     this.timeScale = scale;
   }
 
-  /** Format elapsed time as T+MM:SS */
+  /** Format elapsed time as T+[Dd ]HH:MM:SS (days only when ≥1) */
   formatElapsed(): string {
     const totalSeconds = Math.floor(this.elapsed);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `T+${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    const days = Math.floor(totalSeconds / 86400);
+    const remainder = totalSeconds % 86400;
+    const hours = Math.floor(remainder / 3600);
+    const minutes = Math.floor((remainder % 3600) / 60);
+    const seconds = remainder % 60;
+    const timePart = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    return days > 0 ? `T+${days}d ${timePart}` : `T+${timePart}`;
   }
 }

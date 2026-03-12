@@ -61,7 +61,7 @@ export class TimeControls {
     this.gameTimeLabel = document.createElement('span');
     this.gameTimeLabel.className = 'game-time';
     this.gameTimeLabel.id = 'game-time';
-    this.gameTimeLabel.textContent = 'T+00:00';
+    this.gameTimeLabel.textContent = 'T+00:00:00';
     this.root.appendChild(this.gameTimeLabel);
 
     const targetingReadout = document.createElement('span');
