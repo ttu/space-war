@@ -43,6 +43,7 @@ import {
   Ship,
   ContactTracker,
   NavigationOrder,
+  CelestialBody,
   COMPONENT,
 } from '../engine/components';
 
@@ -87,6 +88,8 @@ export class SpaceWarGame {
   private combatLog!: CombatLog;
   private pendingOrder: PendingOrderType = 'none';
 
+  private cameraLockIndicator: HTMLElement | null = null;
+
   private targetingReadoutTimeout: ReturnType<typeof setTimeout> | null = null;
 
   private lastContactsPanelUpdate = 0;
@@ -113,6 +116,9 @@ export class SpaceWarGame {
   // Box-drag selection state (screen coords while dragging)
   private selectionBoxState: { startScreenX: number; startScreenY: number; endScreenX: number; endScreenY: number } | null = null;
   private selectionBoxLine!: THREE.LineSegments;
+
+  /** When set, camera stays centered on this entity each frame (ship or celestial). */
+  private referenceEntityId: EntityId | null = null;
 
   constructor(private canvas: HTMLCanvasElement, private container: HTMLElement) {
     this.setupRenderer();
@@ -160,6 +166,27 @@ export class SpaceWarGame {
     this.gameLoop.start();
   }
 
+  /** Set or clear camera lock. When set, camera follows that entity each frame. */
+  setCameraLock(entityId: EntityId | null): void {
+    this.referenceEntityId = entityId;
+  }
+
+  /** Current lock info for UI; null if no lock or entity missing. Clears referenceEntityId when entity is gone. */
+  getCameraLock(): { entityId: EntityId; displayName: string } | null {
+    if (this.referenceEntityId == null) return null;
+    const pos = this.world.getComponent<Position>(this.referenceEntityId, COMPONENT.Position);
+    if (!pos) {
+      this.referenceEntityId = null;
+      return null;
+    }
+    const ship = this.world.getComponent<Ship>(this.referenceEntityId, COMPONENT.Ship);
+    if (ship) return { entityId: this.referenceEntityId, displayName: ship.name };
+    const body = this.world.getComponent<CelestialBody>(this.referenceEntityId, COMPONENT.CelestialBody);
+    if (body) return { entityId: this.referenceEntityId, displayName: body.name };
+    this.referenceEntityId = null;
+    return null;
+  }
+
   /**
    * State for e2e tests. Returns counts so tests can assert selection and move orders.
    * Only populated when app is loaded with ?e2e=1 (see main.ts).
@@ -170,6 +197,8 @@ export class SpaceWarGame {
     playerShipsWithMoveOrder: number;
     visibleDestinationMarkerCount: number;
     firstEnemyScreenPosition: { x: number; y: number } | null;
+    cameraLockDisplayName: string | null;
+    firstSelectedId: EntityId | null;
   } {
     const selectedCount = this.selectionManager.getSelectedPlayerIds().length;
     const selectedEnemyCount = this.selectionManager.getSelectedIds().filter((id) => {
@@ -210,6 +239,11 @@ export class SpaceWarGame {
       playerShipsWithMoveOrder,
       visibleDestinationMarkerCount,
       firstEnemyScreenPosition,
+      cameraLockDisplayName: this.getCameraLock()?.displayName ?? null,
+      firstSelectedId: (() => {
+        const ids = this.selectionManager.getSelectedIds();
+        return ids.length === 1 ? ids[0] : null;
+      })(),
     };
   }
 
@@ -257,6 +291,8 @@ export class SpaceWarGame {
       onPauseToggle: () => this.togglePause(),
       onSpeedChange: (scale) => this.setSpeed(scale),
       onLoadoutClick: () => this.openLoadoutScreen(),
+      getCameraLock: () => this.getCameraLock(),
+      onClearCameraLock: () => this.setCameraLock(null),
     });
 
     const leftPanel = document.createElement('div');
@@ -291,6 +327,7 @@ export class SpaceWarGame {
       () => Array.from(this.getPlayerContacts()?.contacts.keys() ?? []),
       () => this.gameTime.elapsed,
       () => this.selectionManager.getSelectedCelestialId(),
+      (entityId) => this.setCameraLock(entityId),
     );
 
     const orderBarWrap = document.createElement('div');
@@ -311,8 +348,15 @@ export class SpaceWarGame {
 
     const infoOverlay = document.createElement('div');
     infoOverlay.id = 'info-overlay';
-    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/-: Speed | E: Focus nearest enemy';
+    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/-: Speed | E: Focus enemy | Lock: select ship/planet → Lock camera here; Free in time bar';
     uiRoot.appendChild(infoOverlay);
+
+    const cameraLockIndicator = document.createElement('div');
+    cameraLockIndicator.id = 'camera-lock-indicator';
+    cameraLockIndicator.className = 'camera-lock-indicator';
+    cameraLockIndicator.style.display = 'none';
+    this.cameraLockIndicator = cameraLockIndicator;
+    uiRoot.appendChild(cameraLockIndicator);
 
     this.updatePauseUI();
     this.updateSpeedUI();
@@ -333,12 +377,14 @@ export class SpaceWarGame {
           this.camera.zoomBy(event.delta);
           break;
         case 'cameraPanDrag':
-          this.camera.panByScreenDelta(
-            event.deltaX,
-            event.deltaY,
-            event.canvasWidth,
-            event.canvasHeight,
-          );
+          if (this.referenceEntityId == null) {
+            this.camera.panByScreenDelta(
+              event.deltaX,
+              event.deltaY,
+              event.canvasWidth,
+              event.canvasHeight,
+            );
+          }
           break;
         case 'click':
           this.handleClick(event.screenX, event.screenY, event.shiftKey);
@@ -543,8 +589,8 @@ export class SpaceWarGame {
   // --- Rendering ---
 
   private render(alpha: number): void {
-    // Camera keyboard panning (skip during focus animation so we don't fight it)
-    if (!this.cameraFocusAnimation) {
+    // Camera keyboard panning (skip during focus animation so we don't fight it; skip when camera locked)
+    if (!this.cameraFocusAnimation && this.referenceEntityId == null) {
       const camMove = this.input.getCameraMovement();
       if (camMove.x !== 0 || camMove.y !== 0) {
         this.camera.pan(camMove.x, camMove.y, 1 / 60);
@@ -552,6 +598,16 @@ export class SpaceWarGame {
     }
 
     this.updateCameraFocusAnimation();
+
+    // When locked to an entity, keep camera centered on it
+    if (this.referenceEntityId != null) {
+      const pos = this.world.getComponent<Position>(this.referenceEntityId, COMPONENT.Position);
+      if (!pos) {
+        this.referenceEntityId = null;
+      } else {
+        this.camera.setPosition(pos.x, pos.y);
+      }
+    }
 
     const camPos = this.camera.getPosition();
     const zoom = this.camera.getZoom();
@@ -583,6 +639,15 @@ export class SpaceWarGame {
     this.updateSelectionBoxVisual();
 
     this.timeControls.update();
+    const lock = this.getCameraLock();
+    if (this.cameraLockIndicator) {
+      if (lock) {
+        this.cameraLockIndicator.textContent = `🔒 Camera locked: ${lock.displayName}`;
+        this.cameraLockIndicator.style.display = 'block';
+      } else {
+        this.cameraLockIndicator.style.display = 'none';
+      }
+    }
     this.fleetPanel.update();
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     if (now - this.lastContactsPanelUpdate >= this.contactsPanelIntervalMs) {
@@ -644,6 +709,7 @@ export class SpaceWarGame {
   }
 
   private startCameraFocusAnimation(targetX: number, targetY: number): void {
+    this.referenceEntityId = null;
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     const pos = this.camera.getPosition();
     const fromZoom = this.camera.getZoom();

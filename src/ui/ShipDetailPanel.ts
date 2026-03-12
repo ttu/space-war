@@ -42,6 +42,7 @@ export class ShipDetailPanel {
     private getDetectedEnemyIds?: () => EntityId[],
     private getGameTime?: () => number,
     private getSelectedCelestialId?: () => EntityId | null,
+    private onLockCamera?: (entityId: EntityId) => void,
   ) {
     this.root = document.createElement('div');
     this.root.id = 'ship-detail-panel';
@@ -56,6 +57,20 @@ export class ShipDetailPanel {
     this.content = document.createElement('div');
     this.content.className = 'ship-detail-content';
     this.root.appendChild(this.content);
+
+    this.content.addEventListener('click', (e: Event) => {
+      const target = (e.target as Element).closest?.('button[data-lock-entity-id]');
+      if (target instanceof HTMLButtonElement && target.dataset.lockEntityId && this.onLockCamera) {
+        this.onLockCamera(target.dataset.lockEntityId as EntityId);
+      }
+    });
+    this.content.addEventListener('mousedown', (e: Event) => {
+      const target = (e.target as Element).closest?.('button[data-lock-entity-id]');
+      if (target instanceof HTMLButtonElement && target.dataset.lockEntityId && this.onLockCamera) {
+        e.preventDefault();
+        this.onLockCamera(target.dataset.lockEntityId as EntityId);
+      }
+    });
 
     container.appendChild(this.root);
   }
@@ -89,7 +104,7 @@ export class ShipDetailPanel {
       if (missile) {
         this.renderMissileDetail(id, missile, ids);
       } else {
-        this.renderShipDetail(id, missileTargets, ids);
+        this.renderShipDetail(id, missileTargets, ids, ids.length === 1);
       }
     }
   }
@@ -128,6 +143,7 @@ export class ShipDetailPanel {
     id: EntityId,
     missileTargets: Map<EntityId, { targetId: EntityId; targetName: string; count: number }[]>,
     selectedIds: EntityId[],
+    showLockCameraButton = false,
   ): void {
     const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship);
     if (!ship) return;
@@ -220,6 +236,15 @@ export class ShipDetailPanel {
     if (rg) {
       const int = (rg.integrity ?? 100) > 0 ? 'OK' : 'OFF';
       this.addRow(`Railgun: ${int}`, 'ship-detail-row ship-detail-weapon-railgun');
+    }
+
+    if (showLockCameraButton && this.onLockCamera) {
+      const lockBtn = document.createElement('button');
+      lockBtn.type = 'button';
+      lockBtn.className = 'ship-detail-lock-camera';
+      lockBtn.textContent = 'Lock camera here';
+      lockBtn.dataset.lockEntityId = id;
+      this.content.appendChild(lockBtn);
     }
 
     this.addSeparator();
@@ -401,6 +426,15 @@ export class ShipDetailPanel {
       const primaryBody = this.world.getComponent<CelestialBody>(orbital.primaryId, COMPONENT.CelestialBody);
       const primaryName = primaryBody?.name ?? 'Unknown';
       this.addRow(`Orbits: ${primaryName}`);
+    }
+
+    if (this.onLockCamera) {
+      const lockBtn = document.createElement('button');
+      lockBtn.type = 'button';
+      lockBtn.className = 'ship-detail-lock-camera';
+      lockBtn.textContent = 'Lock camera here';
+      lockBtn.dataset.lockEntityId = entityId;
+      this.content.appendChild(lockBtn);
     }
   }
 }

@@ -165,6 +165,7 @@ All rendering uses Three.js with an orthographic camera looking down the Z axis.
 - Zoom range: 100 km to 5,000,000 km
 - Pan via mouse drag or WASD/arrow keys
 - Coordinate conversion: `screenToWorld()`, `worldToScreen()`
+- **Camera lock:** Optional reference entity (ship or celestial); when set, SpaceWarGame sets camera position to that entity each frame and disables pan until "Free" is used.
 
 ## Game Coordination
 

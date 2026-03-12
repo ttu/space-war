@@ -76,6 +76,7 @@ export class CameraController {
   private updateCameraPosition(): void {
     this.camera.position.x = this.position.x;
     this.camera.position.y = this.position.y;
+    this.camera.lookAt(this.position.x, this.position.y, 0);
   }
 
   resize(aspect: number): void {

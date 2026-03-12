@@ -80,6 +80,7 @@
       .time-controls-panel button,
       .time-controls-panel .game-time,
       .time-controls-panel .paused-label,
+      .time-controls-panel .camera-lock-wrap,
       .time-controls-panel #btn-loadout {
         pointer-events: auto;
       }
@@ -130,6 +131,28 @@
 
       .time-controls-panel .targeting-readout.visible {
         display: inline;
+      }
+
+      .time-controls-panel .camera-lock-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 8px;
+        padding: 2px 8px;
+        background: rgba(68, 204, 204, 0.15);
+        border: 1px solid var(--accent-cyan);
+        border-radius: 3px;
+        color: var(--accent-cyan);
+        font-size: 11px;
+      }
+
+      .time-controls-panel .camera-lock-label {
+        font-weight: bold;
+      }
+
+      .time-controls-panel .camera-lock-free {
+        padding: 2px 6px;
+        font-size: 11px;
       }
 
       /* Left sidebar: fleet + ship detail */
@@ -307,6 +330,23 @@
         margin: 6px 0;
       }
 
+      .ship-detail-lock-camera {
+        margin-top: 8px;
+        padding: 6px 10px;
+        background: rgba(68, 204, 204, 0.15);
+        border: 1px solid var(--accent-cyan);
+        color: var(--accent-cyan);
+        cursor: pointer;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        border-radius: 3px;
+        width: 100%;
+      }
+
+      .ship-detail-lock-camera:hover {
+        background: rgba(68, 204, 204, 0.25);
+      }
+
       /* Order bar */
       .order-bar-wrap {
         position: absolute;
@@ -398,6 +438,24 @@
         z-index: 10;
         line-height: 1.6;
         pointer-events: none;
+      }
+
+      /* Camera lock on-screen indicator */
+      .camera-lock-indicator {
+        position: absolute;
+        top: 56px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 6px 14px;
+        background: rgba(68, 204, 204, 0.25);
+        border: 1px solid var(--accent-cyan);
+        border-radius: 4px;
+        color: var(--accent-cyan);
+        font-size: 13px;
+        font-weight: bold;
+        z-index: 10;
+        pointer-events: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
       }
     </style>
   </head>

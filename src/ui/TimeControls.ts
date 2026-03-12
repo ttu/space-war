@@ -1,10 +1,13 @@
 import type { TimeScale } from '../engine/core/GameTime';
 import { GameTime } from '../engine/core/GameTime';
+import type { EntityId } from '../engine/types';
 
 export interface TimeControlsCallbacks {
   onPauseToggle: () => void;
   onSpeedChange: (scale: TimeScale) => void;
   onLoadoutClick?: () => void;
+  getCameraLock?: () => { entityId: EntityId; displayName: string } | null;
+  onClearCameraLock?: () => void;
 }
 
 const SPEED_SCALES: TimeScale[] = [1, 2, 4, 10, 20, 50, 100, 1000, 10000];
@@ -23,11 +26,13 @@ export class TimeControls {
   private pausedLabel: HTMLElement;
   private gameTimeLabel: HTMLElement;
   private speedButtons: HTMLButtonElement[] = [];
+  private lockWrap: HTMLElement | null = null;
+  private lockLabel: HTMLElement | null = null;
 
   constructor(
     container: HTMLElement,
     private gameTime: GameTime,
-    callbacks: TimeControlsCallbacks,
+    private callbacks: TimeControlsCallbacks,
   ) {
     this.root = document.createElement('div');
     this.root.id = 'time-controls';
@@ -69,6 +74,23 @@ export class TimeControls {
     targetingReadout.id = 'targeting-readout';
     this.root.appendChild(targetingReadout);
 
+    const lockWrap = document.createElement('span');
+    lockWrap.className = 'camera-lock-wrap';
+    lockWrap.style.display = 'none';
+    this.lockWrap = lockWrap;
+    const lockLabel = document.createElement('span');
+    lockLabel.className = 'camera-lock-label';
+    this.lockLabel = lockLabel;
+    lockWrap.appendChild(lockLabel);
+    const lockFreeBtn = document.createElement('button');
+    lockFreeBtn.type = 'button';
+    lockFreeBtn.className = 'camera-lock-free';
+    lockFreeBtn.textContent = 'Free';
+    lockFreeBtn.title = 'Free camera';
+    lockFreeBtn.addEventListener('click', () => callbacks.onClearCameraLock?.());
+    lockWrap.appendChild(lockFreeBtn);
+    this.root.appendChild(lockWrap);
+
     const btnLoadout = document.createElement('button');
     btnLoadout.type = 'button';
     btnLoadout.id = 'btn-loadout';
@@ -89,6 +111,15 @@ export class TimeControls {
     this.speedButtons.forEach((btn, i) => {
       btn.classList.toggle('active', SPEED_SCALES[i] === this.gameTime.timeScale);
     });
+    const lock = this.callbacks.getCameraLock?.() ?? null;
+    if (this.lockWrap && this.lockLabel) {
+      if (lock) {
+        this.lockLabel.textContent = `🔒 ${lock.displayName}`;
+        this.lockWrap.style.display = 'inline-flex';
+      } else {
+        this.lockWrap.style.display = 'none';
+      }
+    }
   }
 
   getTargetingReadoutElement(): HTMLElement {

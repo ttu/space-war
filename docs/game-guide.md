@@ -19,6 +19,8 @@ The game simulates realistic space combat: there is no friction, sensors are lim
 | Right-click drag | Pan camera |
 | WASD / Arrow keys | Pan camera |
 
+**Camera lock:** You can lock the camera to a ship or celestial (e.g. a planet) so the view stays centered on it. Select the ship or click a planet to select it, then click **Lock camera here** in the detail panel. The camera will follow that object each frame. Use **Free** in the time bar to clear the lock and pan again.
+
 ### Selection
 
 | Input | Action |

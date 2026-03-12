@@ -119,4 +119,69 @@ test.describe('Ship selection and move command', () => {
       )
       .toBeGreaterThanOrEqual(1);
   });
+
+  test('Lock camera here locks camera to selected ship and shows indicator', async ({ page }) => {
+    await page.goto('/?e2e=1');
+
+    const canvas = page.locator('#game-canvas');
+    await expect(canvas).toBeVisible();
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            () => (window as unknown as { __spaceWarGame?: unknown }).__spaceWarGame != null,
+          ),
+        { timeout: 5000 },
+      )
+      .toBe(true);
+
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('Canvas has no bounding box');
+    const centerX = box.width / 2;
+    const centerY = box.height / 2;
+
+    await canvas.click({ position: { x: centerX, y: centerY } });
+
+    let entityId: string | null = null;
+    await expect
+      .poll(
+        async () => {
+          const state = await page.evaluate(() => {
+            const g = (window as unknown as {
+              __spaceWarGame?: { getTestState(): { selectedCount: number; firstSelectedId: string | null } };
+            }).__spaceWarGame;
+            return g?.getTestState() ?? { selectedCount: 0, firstSelectedId: null };
+          });
+          if (state.selectedCount >= 1 && state.firstSelectedId) entityId = state.firstSelectedId;
+          return state.selectedCount >= 1 ? state.firstSelectedId : null;
+        },
+        { timeout: 2000 },
+      )
+      .toBeTruthy();
+
+    await page.evaluate(
+      (id) => {
+        const g = (window as unknown as { __spaceWarGame?: { setCameraLock(id: string | null): void } }).__spaceWarGame;
+        g?.setCameraLock(id);
+      },
+      entityId!,
+    );
+
+    await expect
+      .poll(
+        async () => {
+          const state = await page.evaluate(() => {
+            const g = (window as unknown as { __spaceWarGame?: { getTestState(): { cameraLockDisplayName: string | null } } }).__spaceWarGame;
+            return g?.getTestState()?.cameraLockDisplayName ?? null;
+          });
+          return state;
+        },
+        { timeout: 2000 },
+      )
+      .toBeTruthy();
+
+    await expect(page.locator('#camera-lock-indicator')).toBeVisible();
+    await expect(page.locator('.camera-lock-wrap')).toBeVisible();
+  });
 });
