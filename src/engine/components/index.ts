@@ -125,6 +125,7 @@ export interface NavigationOrder extends Component {
   destinationY: number;
   targetX: number;
   targetY: number;
+  waypoints: { x: number; y: number }[];
   phase: NavPhase;
   burnPlan: BurnPlan;
   phaseStartTime: number; // game time when current phase started

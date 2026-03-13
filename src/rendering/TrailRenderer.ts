@@ -62,6 +62,8 @@ export class TrailRenderer {
   private trailLines: Map<EntityId, THREE.Line> = new Map();
   private projectionLines: Map<EntityId, THREE.Line> = new Map();
   private destinationMarkers: Map<EntityId, THREE.Group> = new Map();
+  private waypointMarkers: Map<string, THREE.Group> = new Map(); // key: `${entityId}-${index}`
+  private waypointRouteLines: Map<EntityId, THREE.Line> = new Map();
   private tickCounter = 0;
   private recordInterval = 5; // Record every N ticks
 
@@ -82,7 +84,7 @@ export class TrailRenderer {
   }
 
   /** Called each render frame to update trail and projection visuals. */
-  update(world: World, zoom: number): void {
+  update(world: World, zoom: number, selectedPlayerIds: Set<EntityId>): void {
     const ships = world.query(COMPONENT.Position, COMPONENT.Ship);
     const activeIds = new Set(ships);
 
@@ -106,12 +108,28 @@ export class TrailRenderer {
         this.destinationMarkers.delete(id);
       }
     }
+    for (const [key, marker] of this.waypointMarkers) {
+      const entityId = key.split('-')[0] as EntityId;
+      if (!activeIds.has(entityId)) {
+        this.group.remove(marker);
+        this.waypointMarkers.delete(key);
+      }
+    }
+    for (const [id, line] of this.waypointRouteLines) {
+      if (!activeIds.has(id)) {
+        this.group.remove(line);
+        this.waypointRouteLines.delete(id);
+      }
+    }
 
     for (const entityId of ships) {
       const ship = world.getComponent<Ship>(entityId, COMPONENT.Ship)!;
+      const isSelected = selectedPlayerIds.has(entityId);
       this.updateTrailLine(entityId, ship.faction === 'player' ? TRAIL_COLOR_PLAYER : TRAIL_COLOR_ENEMY);
       this.updateProjectionLine(world, entityId, zoom);
       this.updateDestinationMarker(world, entityId, zoom);
+      this.updateWaypointMarkers(world, entityId, zoom, isSelected);
+      this.updateWaypointRouteLine(world, entityId, zoom, isSelected);
     }
   }
 
@@ -280,6 +298,128 @@ export class TrailRenderer {
     return group;
   }
 
+  private updateWaypointMarkers(
+    world: World, entityId: EntityId, zoom: number, isSelected: boolean,
+  ): void {
+    const nav = world.getComponent<NavigationOrder>(entityId, COMPONENT.NavigationOrder);
+    const ship = world.getComponent<Ship>(entityId, COMPONENT.Ship);
+    if (!nav || nav.phase === 'arrived' || !ship || ship.faction !== 'player') {
+      this.cleanupWaypointMarkers(entityId);
+      return;
+    }
+
+    const waypoints = nav.waypoints;
+
+    // Remove excess markers
+    for (const [key, marker] of this.waypointMarkers) {
+      if (key.startsWith(`${entityId}-`)) {
+        const idx = parseInt(key.split('-').pop()!, 10);
+        if (idx >= waypoints.length) {
+          this.group.remove(marker);
+          this.waypointMarkers.delete(key);
+        }
+      }
+    }
+
+    if (!isSelected) {
+      for (const [key, marker] of this.waypointMarkers) {
+        if (key.startsWith(`${entityId}-`)) marker.visible = false;
+      }
+      return;
+    }
+
+    for (let i = 0; i < waypoints.length; i++) {
+      const key = `${entityId}-${i}`;
+      let marker = this.waypointMarkers.get(key);
+      if (!marker) {
+        marker = this.createWaypointMarker(i + 1);
+        this.waypointMarkers.set(key, marker);
+        this.group.add(marker);
+      }
+      marker.visible = true;
+      marker.position.set(waypoints[i].x, waypoints[i].y, 0.4);
+      const s = zoom * DESTINATION_MARKER_SIZE;
+      marker.scale.set(s, s, 1);
+    }
+  }
+
+  private cleanupWaypointMarkers(entityId: EntityId): void {
+    for (const [key, marker] of this.waypointMarkers) {
+      if (key.startsWith(`${entityId}-`)) {
+        this.group.remove(marker);
+        this.waypointMarkers.delete(key);
+      }
+    }
+  }
+
+  private createWaypointMarker(number: number): THREE.Group {
+    const group = this.createDestinationMarker();
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#44ddff';
+    ctx.font = 'bold 48px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(number), 32, 32);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0.9 });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.position.set(1.2, 1.2, 0);
+    sprite.scale.set(1.5, 1.5, 1);
+    group.add(sprite);
+
+    return group;
+  }
+
+  private updateWaypointRouteLine(
+    world: World, entityId: EntityId, _zoom: number, isSelected: boolean,
+  ): void {
+    const nav = world.getComponent<NavigationOrder>(entityId, COMPONENT.NavigationOrder);
+    const ship = world.getComponent<Ship>(entityId, COMPONENT.Ship);
+    if (!nav || nav.phase === 'arrived' || !ship || ship.faction !== 'player' || nav.waypoints.length === 0 || isSelected) {
+      const existing = this.waypointRouteLines.get(entityId);
+      if (existing) existing.visible = false;
+      return;
+    }
+
+    const allPoints = [
+      { x: nav.destinationX, y: nav.destinationY },
+      ...nav.waypoints,
+    ];
+
+    let line = this.waypointRouteLines.get(entityId);
+    if (!line) {
+      const positions = new Float32Array(20 * 3);
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setDrawRange(0, 0);
+      const mat = new THREE.LineDashedMaterial({
+        color: DESTINATION_COLOR,
+        transparent: true,
+        opacity: 0.3,
+        dashSize: 300,
+        gapSize: 200,
+      });
+      line = new THREE.Line(geo, mat);
+      this.waypointRouteLines.set(entityId, line);
+      this.group.add(line);
+    }
+
+    const posAttr = line.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const count = Math.min(allPoints.length, 20);
+    for (let i = 0; i < count; i++) {
+      posAttr.setXYZ(i, allPoints[i].x, allPoints[i].y, 0.35);
+    }
+    posAttr.needsUpdate = true;
+    line.geometry.setDrawRange(0, count);
+    line.computeLineDistances();
+    line.visible = true;
+  }
+
   private projectPath(
     pos: Position, vel: Velocity,
     thruster: Thruster | undefined,
@@ -289,45 +429,48 @@ export class TrailRenderer {
     let px = pos.x, py = pos.y;
     let vx = vel.vx, vy = vel.vy;
 
-    // If navigating, simulate the PN guidance forward
     if (nav && thruster && nav.phase !== 'arrived') {
+      const targets = [
+        { x: nav.targetX, y: nav.targetY },
+        ...nav.waypoints,
+      ];
       const a = thruster.maxThrust;
       const rotSpeed = thruster.rotationSpeed;
 
-      for (let i = 0; i < MAX_NAV_PROJECTION_STEPS; i++) {
-        const dx = nav.targetX - px;
-        const dy = nav.targetY - py;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+      for (const target of targets) {
+        for (let i = 0; i < MAX_NAV_PROJECTION_STEPS; i++) {
+          const dx = target.x - px;
+          const dy = target.y - py;
+          const dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist < nav.arrivalThreshold) break;
+          if (dist < nav.arrivalThreshold) break;
 
-        const dirX = dx / dist;
-        const dirY = dy / dist;
-        const speed = Math.sqrt(vx * vx + vy * vy);
+          const dirX = dx / dist;
+          const dirY = dy / dist;
+          const speed = Math.sqrt(vx * vx + vy * vy);
 
-        // Same PN logic as NavigationSystem
-        const rotTime = Math.PI / rotSpeed;
-        const rotBuffer = speed * rotTime * 0.5;
-        const effectiveDist = Math.max(0, dist - rotBuffer);
-        const maxApproachSpeed = Math.sqrt(2 * a * effectiveDist);
+          const rotTime = Math.PI / rotSpeed;
+          const rotBuffer = speed * rotTime * 0.5;
+          const effectiveDist = Math.max(0, dist - rotBuffer);
+          const maxApproachSpeed = Math.sqrt(2 * a * effectiveDist);
 
-        const desiredVx = dirX * maxApproachSpeed;
-        const desiredVy = dirY * maxApproachSpeed;
-        const dvx = desiredVx - vx;
-        const dvy = desiredVy - vy;
-        const dvMag = Math.sqrt(dvx * dvx + dvy * dvy);
+          const desiredVx = dirX * maxApproachSpeed;
+          const desiredVy = dirY * maxApproachSpeed;
+          const dvx = desiredVx - vx;
+          const dvy = desiredVy - vy;
+          const dvMag = Math.sqrt(dvx * dvx + dvy * dvy);
 
-        if (dvMag > 0.01) {
-          vx += (dvx / dvMag) * a * PROJECTION_DT;
-          vy += (dvy / dvMag) * a * PROJECTION_DT;
+          if (dvMag > 0.01) {
+            vx += (dvx / dvMag) * a * PROJECTION_DT;
+            vy += (dvy / dvMag) * a * PROJECTION_DT;
+          }
+
+          px += vx * PROJECTION_DT;
+          py += vy * PROJECTION_DT;
+          points.push({ x: px, y: py });
         }
-
-        px += vx * PROJECTION_DT;
-        py += vy * PROJECTION_DT;
-        points.push({ x: px, y: py });
       }
     } else {
-      // No navigation — simple velocity extrapolation
       for (let i = 0; i < PROJECTION_STEPS; i++) {
         if (thruster && thruster.throttle > 0) {
           const accel = thruster.maxThrust * thruster.throttle;
@@ -355,9 +498,18 @@ export class TrailRenderer {
     for (const [, marker] of this.destinationMarkers) {
       this.group.remove(marker);
     }
+    for (const [, marker] of this.waypointMarkers) {
+      this.group.remove(marker);
+    }
+    for (const [, line] of this.waypointRouteLines) {
+      line.geometry.dispose();
+      this.group.remove(line);
+    }
     this.trailLines.clear();
     this.projectionLines.clear();
     this.destinationMarkers.clear();
+    this.waypointMarkers.clear();
+    this.waypointRouteLines.clear();
     this.scene.remove(this.group);
   }
 }

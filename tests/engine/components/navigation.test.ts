@@ -9,6 +9,7 @@ describe('Navigation Components', () => {
       destinationY: 200,
       targetX: 100,
       targetY: 200,
+      waypoints: [],
       phase: 'rotating',
       burnPlan: {
         accelTime: 50,

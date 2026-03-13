@@ -70,10 +70,24 @@ export class NavigationSystem {
         Math.abs(nav.targetX - nav.destinationX) < 1 &&
         Math.abs(nav.targetY - nav.destinationY) < 1;
       if (atDestination) {
+        if (nav.waypoints.length > 0) {
+          // Advance to next waypoint
+          const next = nav.waypoints.shift()!;
+          nav.destinationX = next.x;
+          nav.destinationY = next.y;
+          nav.targetX = next.x;
+          nav.targetY = next.y;
+          nav.burnPlan = computeBurnPlan(
+            pos.x, pos.y, vel.vx, vel.vy,
+            nav.targetX, nav.targetY, thruster.maxThrust,
+          );
+          nav.phase = 'rotating';
+          return;
+        }
         this.arrive(world, entityId, thruster);
         return;
       }
-      // Arrived at a waypoint — advance target to destination; next tick may set new waypoint
+      // Arrived at an avoidance waypoint — advance target to destination
       nav.targetX = nav.destinationX;
       nav.targetY = nav.destinationY;
       return;

@@ -1,6 +1,6 @@
 export type InputEvent =
   | { type: 'click'; screenX: number; screenY: number; shiftKey: boolean }
-  | { type: 'rightClick'; screenX: number; screenY: number }
+  | { type: 'rightClick'; screenX: number; screenY: number; shiftKey: boolean }
   | { type: 'boxSelect'; startScreenX: number; startScreenY: number; endScreenX: number; endScreenY: number; shiftKey: boolean }
   | { type: 'boxSelectUpdate'; startScreenX: number; startScreenY: number; endScreenX: number; endScreenY: number }
   | { type: 'zoom'; delta: number }
@@ -9,13 +9,15 @@ export type InputEvent =
   | { type: 'changeSpeed'; delta: number }
   | { type: 'escape' }
   | { type: 'focusNearestEnemy' }
-  | { type: 'toggleShadows' };
+  | { type: 'toggleShadows' }
+  | { type: 'deleteKey'; screenX: number; screenY: number };
 
 type InputEventCallback = (event: InputEvent) => void;
 
 export class InputManager {
   private keys: Set<string> = new Set();
   private listeners: InputEventCallback[] = [];
+  private currentMouseScreen = { x: 0, y: 0 };
   private isRightMouseDown = false;
   private lastMouseScreen = { x: 0, y: 0 };
   private hasRightDragged = false;
@@ -89,6 +91,9 @@ export class InputManager {
         e.preventDefault();
         this.emit({ type: 'zoom', delta: 100 });
       }
+      if (e.code === 'Delete' || e.code === 'Backspace') {
+        this.emit({ type: 'deleteKey', screenX: this.currentMouseScreen.x, screenY: this.currentMouseScreen.y });
+      }
     }) as EventListener);
 
     this.addListener(window, 'keyup', ((e: KeyboardEvent) => {
@@ -128,13 +133,14 @@ export class InputManager {
         this.isRightMouseDown = false;
         if (!this.hasRightDragged && !this.rightClickEmitted) {
           this.rightClickEmitted = true;
-          this.emit({ type: 'rightClick', screenX: e.clientX, screenY: e.clientY });
+          this.emit({ type: 'rightClick', screenX: e.clientX, screenY: e.clientY, shiftKey: e.shiftKey });
         }
         // Leave rightMouseButtonDown true so contextmenu (fires after mouseup) can skip emitting; contextmenu clears it.
       }
     }) as EventListener);
 
     this.addListener(this.canvas, 'mousemove', ((e: MouseEvent) => {
+      this.currentMouseScreen = { x: e.clientX, y: e.clientY };
       if (this.isRightMouseDown) {
         const deltaX = e.clientX - this.lastMouseScreen.x;
         const deltaY = e.clientY - this.lastMouseScreen.y;
@@ -187,10 +193,10 @@ export class InputManager {
       const overCanvas = this.isPointOverCanvas(me.clientX, me.clientY);
       if (overCanvas) {
         if (!this.rightMouseButtonDown) {
-          this.emit({ type: 'rightClick', screenX: me.clientX, screenY: me.clientY });
+          this.emit({ type: 'rightClick', screenX: me.clientX, screenY: me.clientY, shiftKey: me.shiftKey });
         }
       } else if (!el.closest?.('button')) {
-        this.emit({ type: 'rightClick', screenX: me.clientX, screenY: me.clientY });
+        this.emit({ type: 'rightClick', screenX: me.clientX, screenY: me.clientY, shiftKey: me.shiftKey });
       }
       this.rightMouseButtonDown = false;
     }) as EventListener);

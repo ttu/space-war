@@ -81,8 +81,9 @@ export class CommandHandler {
     }
   }
 
-  /** Issue a move-to order to all selected player ships. If none selected, issues to flagship or sole player ship. */
-  issueMoveTo(targetX: number, targetY: number): void {
+  /** Issue a move-to order to all selected player ships. If none selected, issues to flagship or sole player ship.
+   *  When append is true and ship already has a NavigationOrder, appends as a waypoint instead. */
+  issueMoveTo(targetX: number, targetY: number, append = false): void {
     const ships = this.world.query(
       COMPONENT.Position, COMPONENT.Velocity, COMPONENT.Ship,
       COMPONENT.Thruster, COMPONENT.Selectable,
@@ -107,6 +108,13 @@ export class CommandHandler {
     }
 
     for (const id of toCommand) {
+      // Append mode: if ship already has a nav order, add as waypoint
+      if (append && this.world.hasComponent(id, COMPONENT.NavigationOrder)) {
+        const nav = this.world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder)!;
+        nav.waypoints.push({ x: targetX, y: targetY });
+        continue;
+      }
+
       const pos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
       const vel = this.world.getComponent<Velocity>(id, COMPONENT.Velocity)!;
       const thruster = this.world.getComponent<Thruster>(id, COMPONENT.Thruster)!;
@@ -134,6 +142,7 @@ export class CommandHandler {
         destinationY: targetY,
         targetX: effectiveX,
         targetY: effectiveY,
+        waypoints: [],
         phase: 'rotating',
         burnPlan,
         phaseStartTime: 0,
@@ -189,6 +198,7 @@ export class CommandHandler {
       destinationY: targetY,
       targetX: effectiveX,
       targetY: effectiveY,
+      waypoints: [],
       phase: 'rotating',
       burnPlan,
       phaseStartTime: 0,

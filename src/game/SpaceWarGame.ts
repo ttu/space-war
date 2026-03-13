@@ -41,13 +41,17 @@ import type { PendingOrderType } from '../ui/OrderBar';
 import type { EntityId } from '../engine/types';
 import {
   Position,
+  Velocity,
   Ship,
+  Thruster,
   Missile,
   ContactTracker,
   NavigationOrder,
   CelestialBody,
   COMPONENT,
 } from '../engine/components';
+import { computeBurnPlan } from './TrajectoryCalculator';
+import { getBodiesFromWorld, getSafeWaypoint } from './PlanetAvoidance';
 
 export class SpaceWarGame {
   readonly world = new WorldImpl();
@@ -120,6 +124,11 @@ export class SpaceWarGame {
   // Box-drag selection state (screen coords while dragging)
   private selectionBoxState: { startScreenX: number; startScreenY: number; endScreenX: number; endScreenY: number } | null = null;
   private selectionBoxLine!: THREE.LineSegments;
+
+  private waypointDrag: {
+    shipId: EntityId;
+    waypointIndex: number; // -1 = destination, 0+ = waypoints[i]
+  } | null = null;
 
   /** When set, camera stays centered on this entity each frame (ship or celestial). */
   private referenceEntityId: EntityId | null = null;
@@ -356,7 +365,7 @@ export class SpaceWarGame {
 
     const infoOverlay = document.createElement('div');
     infoOverlay.id = 'info-overlay';
-    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/-: Speed | E: Focus enemy | V: Shadows | Lock: select ship/planet → Lock camera here; Free in time bar';
+    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/-: Speed | E: Focus enemy | V: Shadows | Shift+RClick: Add waypoint | Del: Remove waypoint';
     uiRoot.appendChild(infoOverlay);
 
     const cameraLockIndicator = document.createElement('div');
@@ -398,18 +407,29 @@ export class SpaceWarGame {
           this.handleClick(event.screenX, event.screenY, event.shiftKey);
           break;
         case 'boxSelect':
-          this.handleBoxSelect(event.startScreenX, event.startScreenY, event.endScreenX, event.endScreenY, event.shiftKey);
+          if (this.waypointDrag) {
+            this.handleWaypointDragEnd(event.endScreenX, event.endScreenY);
+          } else {
+            this.handleBoxSelect(event.startScreenX, event.startScreenY, event.endScreenX, event.endScreenY, event.shiftKey);
+          }
           break;
         case 'boxSelectUpdate':
-          this.selectionBoxState = {
-            startScreenX: event.startScreenX,
-            startScreenY: event.startScreenY,
-            endScreenX: event.endScreenX,
-            endScreenY: event.endScreenY,
-          };
+          if (this.waypointDrag) {
+            this.handleWaypointDragMove(event.endScreenX, event.endScreenY);
+          } else {
+            this.selectionBoxState = {
+              startScreenX: event.startScreenX,
+              startScreenY: event.startScreenY,
+              endScreenX: event.endScreenX,
+              endScreenY: event.endScreenY,
+            };
+          }
           break;
         case 'rightClick':
-          this.handleRightClick(event.screenX, event.screenY);
+          this.handleRightClick(event.screenX, event.screenY, event.shiftKey);
+          break;
+        case 'deleteKey':
+          this.handleDeleteWaypoint(event.screenX, event.screenY);
           break;
         case 'focusNearestEnemy':
           this.focusNearestEnemy();
@@ -450,6 +470,9 @@ export class SpaceWarGame {
     const worldPos = this.camera.screenToWorld(screenX, screenY, this.canvas);
     const zoom = this.camera.getZoom();
     const pickRadius = zoom * 0.04;
+
+    if (this.tryStartWaypointDrag(worldPos.x, worldPos.y, pickRadius)) return;
+
     this.selectionManager.setSelectionFromClick(worldPos.x, worldPos.y, pickRadius, shiftKey);
   }
 
@@ -518,7 +541,7 @@ export class SpaceWarGame {
     this.selectionBoxLine.visible = true;
   }
 
-  private handleRightClick(screenX: number, screenY: number): void {
+  private handleRightClick(screenX: number, screenY: number, shiftKey = false): void {
     const worldPos = this.camera.screenToWorld(screenX, screenY, this.canvas);
     const zoom = this.camera.getZoom();
     const pickRadius = zoom * 0.04;
@@ -590,12 +613,121 @@ export class SpaceWarGame {
       this.orderBar.setPendingOrder('none');
       this.pendingOrder = 'none';
     } else if (order === 'move' || order === 'none') {
-      this.commandHandler.issueMoveTo(worldPos.x, worldPos.y);
+      this.commandHandler.issueMoveTo(worldPos.x, worldPos.y, shiftKey);
       if (order === 'move') {
         this.orderBar.setPendingOrder('none');
         this.pendingOrder = 'none';
       }
     }
+  }
+
+  private handleDeleteWaypoint(screenX: number, screenY: number): void {
+    const worldPos = this.camera.screenToWorld(screenX, screenY, this.canvas);
+    const zoom = this.camera.getZoom();
+    const pickRadius = zoom * 0.04;
+
+    const selectedIds = this.selectionManager.getSelectedPlayerIds();
+    if (selectedIds.length === 0) return;
+
+    for (const shipId of selectedIds) {
+      const nav = this.world.getComponent<NavigationOrder>(shipId, COMPONENT.NavigationOrder);
+      if (!nav || nav.phase === 'arrived') continue;
+
+      // Check destination marker
+      const ddx = nav.destinationX - worldPos.x;
+      const ddy = nav.destinationY - worldPos.y;
+      const destDist = Math.sqrt(ddx * ddx + ddy * ddy);
+      if (destDist < pickRadius) {
+        if (nav.waypoints.length > 0) {
+          const next = nav.waypoints.shift()!;
+          nav.destinationX = next.x;
+          nav.destinationY = next.y;
+          nav.targetX = next.x;
+          nav.targetY = next.y;
+        } else {
+          this.world.removeComponent(shipId, COMPONENT.NavigationOrder);
+        }
+        return;
+      }
+
+      // Check waypoint markers
+      for (let i = 0; i < nav.waypoints.length; i++) {
+        const wp = nav.waypoints[i];
+        const dx = wp.x - worldPos.x;
+        const dy = wp.y - worldPos.y;
+        if (Math.sqrt(dx * dx + dy * dy) < pickRadius) {
+          nav.waypoints.splice(i, 1);
+          return;
+        }
+      }
+    }
+  }
+
+  private tryStartWaypointDrag(worldX: number, worldY: number, pickRadius: number): boolean {
+    const selectedIds = this.selectionManager.getSelectedPlayerIds();
+    for (const shipId of selectedIds) {
+      const nav = this.world.getComponent<NavigationOrder>(shipId, COMPONENT.NavigationOrder);
+      if (!nav || nav.phase === 'arrived') continue;
+
+      // Check destination
+      const ddx = nav.destinationX - worldX;
+      const ddy = nav.destinationY - worldY;
+      if (Math.sqrt(ddx * ddx + ddy * ddy) < pickRadius) {
+        this.waypointDrag = { shipId, waypointIndex: -1 };
+        return true;
+      }
+
+      // Check waypoints
+      for (let i = 0; i < nav.waypoints.length; i++) {
+        const wp = nav.waypoints[i];
+        const dx = wp.x - worldX;
+        const dy = wp.y - worldY;
+        if (Math.sqrt(dx * dx + dy * dy) < pickRadius) {
+          this.waypointDrag = { shipId, waypointIndex: i };
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private handleWaypointDragMove(screenX: number, screenY: number): void {
+    if (!this.waypointDrag) return;
+    const worldPos = this.camera.screenToWorld(screenX, screenY, this.canvas);
+    const nav = this.world.getComponent<NavigationOrder>(this.waypointDrag.shipId, COMPONENT.NavigationOrder);
+    if (!nav) { this.waypointDrag = null; return; }
+
+    if (this.waypointDrag.waypointIndex === -1) {
+      nav.destinationX = worldPos.x;
+      nav.destinationY = worldPos.y;
+      nav.targetX = worldPos.x;
+      nav.targetY = worldPos.y;
+    } else {
+      const wp = nav.waypoints[this.waypointDrag.waypointIndex];
+      if (wp) { wp.x = worldPos.x; wp.y = worldPos.y; }
+    }
+  }
+
+  private handleWaypointDragEnd(screenX: number, screenY: number): void {
+    if (!this.waypointDrag) return;
+    this.handleWaypointDragMove(screenX, screenY);
+
+    // Recompute burn plan if destination was dragged
+    if (this.waypointDrag.waypointIndex === -1) {
+      const nav = this.world.getComponent<NavigationOrder>(this.waypointDrag.shipId, COMPONENT.NavigationOrder);
+      if (nav) {
+        const pos = this.world.getComponent<Position>(this.waypointDrag.shipId, COMPONENT.Position)!;
+        const vel = this.world.getComponent<Velocity>(this.waypointDrag.shipId, COMPONENT.Velocity)!;
+        const thruster = this.world.getComponent<Thruster>(this.waypointDrag.shipId, COMPONENT.Thruster)!;
+        const bodies = getBodiesFromWorld(this.world);
+        const safe = getSafeWaypoint(pos.x, pos.y, nav.destinationX, nav.destinationY, bodies);
+        nav.targetX = safe ? safe.x : nav.destinationX;
+        nav.targetY = safe ? safe.y : nav.destinationY;
+        nav.burnPlan = computeBurnPlan(pos.x, pos.y, vel.vx, vel.vy, nav.targetX, nav.targetY, thruster.maxThrust);
+      }
+    }
+
+    this.waypointDrag = null;
   }
 
   // --- Simulation ---
@@ -648,7 +780,8 @@ export class SpaceWarGame {
     this.celestialRenderer.update(this.world, zoom);
     const playerContacts = this.getPlayerContacts();
     this.shipRenderer.update(this.world, alpha, zoom, playerContacts, this.gameTime.elapsed);
-    this.trailRenderer.update(this.world, zoom);
+    const selectedPlayerIds = new Set(this.selectionManager.getSelectedPlayerIds());
+    this.trailRenderer.update(this.world, zoom, selectedPlayerIds);
     this.missileRenderer.update(this.world, zoom, playerContacts);
     this.projectileRenderer.update(this.world, zoom);
     this.offScreenContactRenderer.update(

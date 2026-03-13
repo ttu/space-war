@@ -10,6 +10,7 @@ function createShipWithNav(world: WorldImpl, opts: {
   maxThrust?: number; rotationSpeed?: number;
   targetX?: number; targetY?: number;
   destinationX?: number; destinationY?: number;
+  waypoints?: { x: number; y: number }[];
   phase?: NavigationOrder['phase'];
   burnDirection?: number; flipAngle?: number;
   accelTime?: number; decelTime?: number;
@@ -39,6 +40,7 @@ function createShipWithNav(world: WorldImpl, opts: {
     destinationY,
     targetX,
     targetY,
+    waypoints: opts.waypoints ?? [],
     phase: opts.phase ?? 'rotating',
     burnPlan: {
       accelTime: opts.accelTime ?? 100,
@@ -204,5 +206,77 @@ describe('NavigationSystem', () => {
     expect(nav!.targetY).toBe(0);
     expect(nav!.destinationX).toBe(10000);
     expect(nav!.destinationY).toBe(0);
+  });
+
+  it('removes NavigationOrder on arrival with no waypoints', () => {
+    const world = new WorldImpl();
+    const system = new NavigationSystem();
+    // Ship at destination, slow, no waypoints
+    const id = createShipWithNav(world, {
+      px: 9990, py: 0,
+      vx: 0.01, vy: 0,
+      targetX: 10000, targetY: 0,
+      destinationX: 10000, destinationY: 0,
+      waypoints: [],
+      phase: 'decelerating',
+    });
+
+    system.update(world, 1, 10);
+
+    const nav = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder);
+    expect(nav).toBeUndefined();
+    const thruster = world.getComponent<Thruster>(id, COMPONENT.Thruster)!;
+    expect(thruster.throttle).toBe(0);
+  });
+
+  it('advances to next waypoint when waypoints exist', () => {
+    const world = new WorldImpl();
+    const system = new NavigationSystem();
+    // Ship at destination (10000, 0), with one waypoint queued
+    const id = createShipWithNav(world, {
+      px: 9990, py: 0,
+      vx: 0.01, vy: 0,
+      targetX: 10000, targetY: 0,
+      destinationX: 10000, destinationY: 0,
+      waypoints: [{ x: 20000, y: 5000 }],
+      phase: 'decelerating',
+    });
+
+    system.update(world, 1, 10);
+
+    const nav = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder);
+    expect(nav).toBeDefined();
+    // Should have shifted the waypoint to become the new destination
+    expect(nav!.destinationX).toBe(20000);
+    expect(nav!.destinationY).toBe(5000);
+    expect(nav!.targetX).toBe(20000);
+    expect(nav!.targetY).toBe(5000);
+    expect(nav!.waypoints).toHaveLength(0);
+    expect(nav!.phase).toBe('rotating');
+  });
+
+  it('advances through multiple waypoints sequentially', () => {
+    const world = new WorldImpl();
+    const system = new NavigationSystem();
+    // Ship at destination with two waypoints queued
+    const id = createShipWithNav(world, {
+      px: 9990, py: 0,
+      vx: 0.01, vy: 0,
+      targetX: 10000, targetY: 0,
+      destinationX: 10000, destinationY: 0,
+      waypoints: [{ x: 20000, y: 5000 }, { x: 30000, y: 10000 }],
+      phase: 'decelerating',
+    });
+
+    system.update(world, 1, 10);
+
+    const nav = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder);
+    expect(nav).toBeDefined();
+    // First waypoint becomes destination
+    expect(nav!.destinationX).toBe(20000);
+    expect(nav!.destinationY).toBe(5000);
+    // Second waypoint still queued
+    expect(nav!.waypoints).toHaveLength(1);
+    expect(nav!.waypoints[0]).toEqual({ x: 30000, y: 10000 });
   });
 });
