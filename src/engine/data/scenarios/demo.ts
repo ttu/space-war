@@ -1,217 +1,277 @@
 /**
- * Default demo scenario: Inner solar system — Mercury, Venus, Terra, Mars.
- * Player fleet near Terra, enemy fleets at Venus, Terra, and Mars, plus enemies in transit Venus → Terra.
+ * Compact demo scenario: A small red dwarf system with rocky planets, moons,
+ * asteroids, and a station — all within ~500k km of each other.
+ * Player patrol fleet near Petra vs 4 enemy fleets converging from different directions.
  */
 
 import type { Scenario } from '../ScenarioLoader';
 import { circularOrbitSpeed } from '../../../utils/OrbitalMechanics';
 
-const SOL_MASS = 1.989e30;
-const MERCURY_MASS = 3.301e23;
-const VENUS_MASS = 4.867e24;
-const TERRA_MASS = 5.972e24;
-const MARS_MASS = 6.417e23;
+// --- Central body: a dim red dwarf ---
+const STAR_MASS = 2.0e29; // ~0.1 solar mass
+const STAR_RADIUS = 30_000; // km (visual radius, compact for gameplay)
 
-// Orbital radii from Sol (km)
-const MERCURY_ORBITAL_RADIUS = 57_900_000;
-const VENUS_ORBITAL_RADIUS = 108_200_000;
-const TERRA_ORBITAL_RADIUS = 150_000_000;
-const MARS_ORBITAL_RADIUS = 228_000_000;
+// --- Planets (small rocky worlds) ---
+const PETRA_MASS = 3.0e23;
+const PETRA_RADIUS = 2200;
+const PETRA_ORBITAL_RADIUS = 180_000; // km from star
 
-// Moon orbital radii from primary center (km) — mean/semi-major axis
-// Luna: 384,400 (Earth); reduced for gameplay so the moon is closer to the action
-const LUNA_ORBITAL_RADIUS = 150_000;
-// Phobos: 9,378 (Mars); Deimos: 23,460 (Mars)
-const PHOBOS_ORBITAL_RADIUS = 9_378;
-const DEIMOS_ORBITAL_RADIUS = 23_460;
+const FORGE_MASS = 5.0e23;
+const FORGE_RADIUS = 2800;
+const FORGE_ORBITAL_RADIUS = 250_000; // km from star
 
-// Planet orbital speeds around Sol
-const mercuryOrbitalSpeed = circularOrbitSpeed(SOL_MASS, MERCURY_ORBITAL_RADIUS);
-const venusOrbitalSpeed = circularOrbitSpeed(SOL_MASS, VENUS_ORBITAL_RADIUS);
-const terraOrbitalSpeed = circularOrbitSpeed(SOL_MASS, TERRA_ORBITAL_RADIUS);
-const marsOrbitalSpeed = circularOrbitSpeed(SOL_MASS, MARS_ORBITAL_RADIUS);
+const CALYX_MASS = 8.0e23;
+const CALYX_RADIUS = 3100;
+const CALYX_ORBITAL_RADIUS = 350_000; // km from star
 
-// Moon orbital speeds
-const lunaOrbitalSpeed = circularOrbitSpeed(TERRA_MASS, LUNA_ORBITAL_RADIUS);
-const phobosOrbitalSpeed = circularOrbitSpeed(MARS_MASS, PHOBOS_ORBITAL_RADIUS);
-const deimosOrbitalSpeed = circularOrbitSpeed(MARS_MASS, DEIMOS_ORBITAL_RADIUS);
+const WRAITH_MASS = 2.0e23;
+const WRAITH_RADIUS = 1800;
+const WRAITH_ORBITAL_RADIUS = 420_000; // km from star
 
-// Station orbital radii (from primary center)
-const STATION_TERRA_ORBITAL_RADIUS = 45_000; // km from Terra
-const STATION_LUNA_ORBITAL_RADIUS = 2_500;  // km from Luna
-const LUNA_MASS = 7.342e22;
-const stationTerraOrbitalSpeed = circularOrbitSpeed(TERRA_MASS, STATION_TERRA_ORBITAL_RADIUS);
-const stationLunaOrbitalSpeed = circularOrbitSpeed(LUNA_MASS, STATION_LUNA_ORBITAL_RADIUS);
+const HAVEN_MASS = 6.0e23;
+const HAVEN_RADIUS = 2600;
+const HAVEN_ORBITAL_RADIUS = 480_000; // km from star
 
-// Ship orbital speeds
-const shipOrbitalSpeedTerra = circularOrbitSpeed(TERRA_MASS, 42000);
-const shipOrbitalSpeedVenus = circularOrbitSpeed(VENUS_MASS, 18000);
-const shipOrbitalSpeedMars = circularOrbitSpeed(MARS_MASS, 20000);
+// --- Moons ---
+const PETRA_MOON_MASS = 1.5e20;
+const PETRA_MOON_RADIUS = 400;
+const PETRA_MOON_ORBITAL_RADIUS = 8_000; // km from Petra
 
-// Planet positions — spread around orbit for visual variety
-// Mercury at 210° (lower-left), Venus at 315° (lower-right), Terra at 0° (+X), Mars at 90° (+Y)
+const CALYX_MOON_MASS = 5.0e21;
+const CALYX_MOON_RADIUS = 900;
+const CALYX_MOON_ORBITAL_RADIUS = 12_000; // km from Calyx
+
+const HAVEN_MOON_MASS = 3.0e20;
+const HAVEN_MOON_RADIUS = 500;
+const HAVEN_MOON_ORBITAL_RADIUS = 7_000; // km from Haven
+
+// --- Asteroids (negligible mass, small radius) ---
+const ASTEROID_MASS = 1e15;
+const ASTEROID_RADIUS = 5;
+
 const DEG_TO_RAD = Math.PI / 180;
 
-const MERCURY_ANGLE = 210 * DEG_TO_RAD;
-const MERCURY_X = Math.cos(MERCURY_ANGLE) * MERCURY_ORBITAL_RADIUS;
-const MERCURY_Y = Math.sin(MERCURY_ANGLE) * MERCURY_ORBITAL_RADIUS;
-// Velocity perpendicular to radius (90° ahead of position angle)
-const MERCURY_VX = -Math.sin(MERCURY_ANGLE) * mercuryOrbitalSpeed;
-const MERCURY_VY = Math.cos(MERCURY_ANGLE) * mercuryOrbitalSpeed;
+// Helper: compute position and velocity for a body at a given angle on a circular orbit
+function orbitState(centralMass: number, radius: number, angleDeg: number) {
+  const rad = angleDeg * DEG_TO_RAD;
+  const speed = circularOrbitSpeed(centralMass, radius);
+  return {
+    x: Math.cos(rad) * radius,
+    y: Math.sin(rad) * radius,
+    vx: -Math.sin(rad) * speed,
+    vy: Math.cos(rad) * speed,
+  };
+}
 
-const VENUS_ANGLE = 315 * DEG_TO_RAD;
-const VENUS_X = Math.cos(VENUS_ANGLE) * VENUS_ORBITAL_RADIUS;
-const VENUS_Y = Math.sin(VENUS_ANGLE) * VENUS_ORBITAL_RADIUS;
-const VENUS_VX = -Math.sin(VENUS_ANGLE) * venusOrbitalSpeed;
-const VENUS_VY = Math.cos(VENUS_ANGLE) * venusOrbitalSpeed;
+// Planet orbital states (spread around the star)
+const petra = orbitState(STAR_MASS, PETRA_ORBITAL_RADIUS, 0);     // right
+const forge = orbitState(STAR_MASS, FORGE_ORBITAL_RADIUS, 60);    // upper-right
+const calyx = orbitState(STAR_MASS, CALYX_ORBITAL_RADIUS, 150);   // upper-left
+const wraith = orbitState(STAR_MASS, WRAITH_ORBITAL_RADIUS, 220); // lower-left
+const haven = orbitState(STAR_MASS, HAVEN_ORBITAL_RADIUS, 310);   // lower-right
 
-const TERRA_X = TERRA_ORBITAL_RADIUS; // 0° = +X axis
-const TERRA_Y = 0;
+// Moon orbital speeds
+const petraMoonOrbitalSpeed = circularOrbitSpeed(PETRA_MASS, PETRA_MOON_ORBITAL_RADIUS);
+const calyxMoonOrbitalSpeed = circularOrbitSpeed(CALYX_MASS, CALYX_MOON_ORBITAL_RADIUS);
+const havenMoonOrbitalSpeed = circularOrbitSpeed(HAVEN_MASS, HAVEN_MOON_ORBITAL_RADIUS);
 
-const MARS_X = 0; // 90° = +Y axis
-const MARS_Y = MARS_ORBITAL_RADIUS;
+// Station orbiting Calyx
+const STATION_ORBITAL_RADIUS = 6_000;
+const stationOrbitalSpeed = circularOrbitSpeed(CALYX_MASS, STATION_ORBITAL_RADIUS);
 
-// Venus → Terra transfer: direction and speed (km/s) for ships in transit
-const VENUS_TO_TERRA_DX = TERRA_X - VENUS_X;
-const VENUS_TO_TERRA_DY = TERRA_Y - VENUS_Y;
-const VENUS_TO_TERRA_DIST = Math.sqrt(VENUS_TO_TERRA_DX ** 2 + VENUS_TO_TERRA_DY ** 2);
-const TRANSFER_SPEED_KMS = 12;
-const transferVx = VENUS_VX + (VENUS_TO_TERRA_DX / VENUS_TO_TERRA_DIST) * TRANSFER_SPEED_KMS;
-const transferVy = VENUS_VY + (VENUS_TO_TERRA_DY / VENUS_TO_TERRA_DIST) * TRANSFER_SPEED_KMS;
+// Ship orbital speeds
+const shipOrbitalSpeedPetra = circularOrbitSpeed(PETRA_MASS, 10_000);
+const shipOrbitalSpeedCalyx = circularOrbitSpeed(CALYX_MASS, 15_000);
+
+// Asteroid belt positions — scattered between Forge and Calyx (~270k-330k km from star)
+const asteroidPositions = [
+  { angle: 30, dist: 280_000 },
+  { angle: 75, dist: 310_000 },
+  { angle: 110, dist: 290_000 },
+  { angle: 180, dist: 300_000 },
+  { angle: 240, dist: 320_000 },
+  { angle: 330, dist: 285_000 },
+];
+
+// Asteroid belt fleet orbital states (reuse orbitState for ships in the belt)
+const gammaA = orbitState(STAR_MASS, 295_000, 75);
+const gammaB = orbitState(STAR_MASS, 300_000, 78);
+const gammaC = orbitState(STAR_MASS, 305_000, 72);
 
 export const demoScenario: Scenario = {
   celestials: [
     // --- Star ---
     {
-      name: 'Sol', mass: SOL_MASS, radius: 696_000, bodyType: 'star',
+      name: 'Ember', mass: STAR_MASS, radius: STAR_RADIUS, bodyType: 'star',
       x: 0, y: 0,
     },
-    // --- Mercury (no moons) ---
+    // --- Petra (inner planet, 0°) + moon Shard ---
     {
-      name: 'Mercury', mass: MERCURY_MASS, radius: 2440, bodyType: 'planet',
-      x: MERCURY_X, y: MERCURY_Y,
-      vx: MERCURY_VX, vy: MERCURY_VY,
-    },
-    // --- Venus (no moons) ---
-    {
-      name: 'Venus', mass: VENUS_MASS, radius: 6052, bodyType: 'planet',
-      x: VENUS_X, y: VENUS_Y,
-      vx: VENUS_VX, vy: VENUS_VY,
-    },
-    // --- Terra + Luna ---
-    {
-      name: 'Terra', mass: TERRA_MASS, radius: 6371, bodyType: 'planet',
-      x: TERRA_X, y: TERRA_Y,
-      vx: 0, vy: terraOrbitalSpeed,
+      name: 'Petra', mass: PETRA_MASS, radius: PETRA_RADIUS, bodyType: 'planet',
+      x: petra.x, y: petra.y,
+      vx: petra.vx, vy: petra.vy,
+      primaryName: 'Ember',
     },
     {
-      name: 'Luna', mass: 7.342e22, radius: 1737, bodyType: 'moon',
-      x: TERRA_X, y: TERRA_Y + LUNA_ORBITAL_RADIUS,
-      vx: -lunaOrbitalSpeed, vy: terraOrbitalSpeed,
-      primaryName: 'Terra',
+      name: 'Shard', mass: PETRA_MOON_MASS, radius: PETRA_MOON_RADIUS, bodyType: 'moon',
+      x: petra.x + PETRA_MOON_ORBITAL_RADIUS, y: petra.y,
+      vx: petra.vx, vy: petra.vy + petraMoonOrbitalSpeed,
+      primaryName: 'Petra',
     },
-    // --- Space stations ---
+    // --- Forge (60°, no moons) ---
     {
-      name: 'Terra Station', mass: 1e12, radius: 50, bodyType: 'station',
-      x: TERRA_X + STATION_TERRA_ORBITAL_RADIUS, y: TERRA_Y,
-      vx: 0, vy: terraOrbitalSpeed + stationTerraOrbitalSpeed,
-      primaryName: 'Terra',
+      name: 'Forge', mass: FORGE_MASS, radius: FORGE_RADIUS, bodyType: 'planet',
+      x: forge.x, y: forge.y,
+      vx: forge.vx, vy: forge.vy,
+      primaryName: 'Ember',
     },
+    // --- Calyx (150°) + moon Dusk + station ---
     {
-      name: 'Luna Station', mass: 1e12, radius: 50, bodyType: 'station',
-      x: TERRA_X + STATION_LUNA_ORBITAL_RADIUS, y: TERRA_Y + LUNA_ORBITAL_RADIUS,
-      vx: -lunaOrbitalSpeed, vy: terraOrbitalSpeed + stationLunaOrbitalSpeed,
-      primaryName: 'Luna',
-    },
-    // --- Mars + Phobos + Deimos ---
-    {
-      name: 'Mars', mass: MARS_MASS, radius: 3390, bodyType: 'planet',
-      x: MARS_X, y: MARS_Y,
-      vx: -marsOrbitalSpeed, vy: 0,
+      name: 'Calyx', mass: CALYX_MASS, radius: CALYX_RADIUS, bodyType: 'planet',
+      x: calyx.x, y: calyx.y,
+      vx: calyx.vx, vy: calyx.vy,
+      primaryName: 'Ember',
     },
     {
-      name: 'Phobos', mass: 1.0659e16, radius: 11, bodyType: 'moon',
-      x: MARS_X + PHOBOS_ORBITAL_RADIUS, y: MARS_Y,
-      vx: -marsOrbitalSpeed, vy: phobosOrbitalSpeed,
-      primaryName: 'Mars',
+      name: 'Dusk', mass: CALYX_MOON_MASS, radius: CALYX_MOON_RADIUS, bodyType: 'moon',
+      x: calyx.x, y: calyx.y + CALYX_MOON_ORBITAL_RADIUS,
+      vx: calyx.vx - calyxMoonOrbitalSpeed, vy: calyx.vy,
+      primaryName: 'Calyx',
     },
     {
-      name: 'Deimos', mass: 1.4762e15, radius: 6, bodyType: 'moon',
-      x: MARS_X - DEIMOS_ORBITAL_RADIUS, y: MARS_Y,
-      vx: -marsOrbitalSpeed, vy: -deimosOrbitalSpeed,
-      primaryName: 'Mars',
+      name: 'Calyx Station', mass: 1e12, radius: 50, bodyType: 'station',
+      x: calyx.x - STATION_ORBITAL_RADIUS, y: calyx.y,
+      vx: calyx.vx, vy: calyx.vy - stationOrbitalSpeed,
+      primaryName: 'Calyx',
     },
+    // --- Wraith (220°, barren dwarf) ---
+    {
+      name: 'Wraith', mass: WRAITH_MASS, radius: WRAITH_RADIUS, bodyType: 'planet',
+      x: wraith.x, y: wraith.y,
+      vx: wraith.vx, vy: wraith.vy,
+      primaryName: 'Ember',
+    },
+    // --- Haven (310°) + moon Glint ---
+    {
+      name: 'Haven', mass: HAVEN_MASS, radius: HAVEN_RADIUS, bodyType: 'planet',
+      x: haven.x, y: haven.y,
+      vx: haven.vx, vy: haven.vy,
+      primaryName: 'Ember',
+    },
+    {
+      name: 'Glint', mass: HAVEN_MOON_MASS, radius: HAVEN_MOON_RADIUS, bodyType: 'moon',
+      x: haven.x + HAVEN_MOON_ORBITAL_RADIUS, y: haven.y,
+      vx: haven.vx, vy: haven.vy + havenMoonOrbitalSpeed,
+      primaryName: 'Haven',
+    },
+    // --- Asteroid belt (between Forge and Calyx) ---
+    ...asteroidPositions.map((a, i) => {
+      const s = orbitState(STAR_MASS, a.dist, a.angle);
+      return {
+        name: `Asteroid ${i + 1}`,
+        mass: ASTEROID_MASS,
+        radius: ASTEROID_RADIUS,
+        bodyType: 'asteroid' as const,
+        x: s.x, y: s.y,
+        vx: s.vx, vy: s.vy,
+        primaryName: 'Ember',
+      };
+    }),
   ],
   ships: [
-    // --- Player fleet near Terra ---
+    // ============================
+    // Player patrol fleet near Petra
+    // ============================
     {
       templateId: 'cruiser', name: 'TCS Resolute', faction: 'player', flagship: true,
-      x: TERRA_X + 42000, y: TERRA_Y,
-      vx: 0, vy: terraOrbitalSpeed + shipOrbitalSpeedTerra,
+      x: petra.x + 10_000, y: petra.y,
+      vx: petra.vx, vy: petra.vy + shipOrbitalSpeedPetra,
     },
     {
       templateId: 'destroyer', name: 'TCS Vigilant', faction: 'player',
-      x: TERRA_X + 42500, y: TERRA_Y + 1000,
-      vx: 0, vy: terraOrbitalSpeed + shipOrbitalSpeedTerra * 0.99,
+      x: petra.x + 10_500, y: petra.y + 800,
+      vx: petra.vx, vy: petra.vy + shipOrbitalSpeedPetra * 0.99,
     },
-    // --- Enemy fleet near Terra (lower left of Earth) ---
+
+    // ============================
+    // Enemy Fleet Alpha — approaching from deep space (below-right)
+    // ============================
     {
-      templateId: 'cruiser', name: 'UES Aggressor', faction: 'enemy', flagship: true,
-      x: TERRA_X - 80000, y: TERRA_Y - 60000,
-      vx: 2.0, vy: terraOrbitalSpeed - 1.5,
+      templateId: 'cruiser', name: 'UES Warhammer', faction: 'enemy', flagship: true,
+      x: 400_000, y: -200_000,
+      vx: -3.0, vy: 2.0,
     },
     {
-      templateId: 'frigate', name: 'UES Raider', faction: 'enemy',
-      x: TERRA_X - 75000, y: TERRA_Y - 65000,
-      vx: 2.2, vy: terraOrbitalSpeed - 1.3,
+      templateId: 'destroyer', name: 'UES Fang', faction: 'enemy',
+      x: 401_000, y: -201_500,
+      vx: -3.0, vy: 2.0,
     },
-    // --- Enemy fleet near Venus ---
     {
-      templateId: 'cruiser', name: 'UES Vanguard', faction: 'enemy',
-      x: VENUS_X + 18000, y: VENUS_Y,
-      vx: VENUS_VX, vy: VENUS_VY + shipOrbitalSpeedVenus,
+      templateId: 'frigate', name: 'UES Razor', faction: 'enemy',
+      x: 399_000, y: -199_000,
+      vx: -2.9, vy: 2.1,
+    },
+
+    // ============================
+    // Enemy Fleet Beta — near Calyx
+    // ============================
+    {
+      templateId: 'cruiser', name: 'UES Vanguard', faction: 'enemy', flagship: true,
+      x: calyx.x + 15_000, y: calyx.y,
+      vx: calyx.vx, vy: calyx.vy + shipOrbitalSpeedCalyx,
     },
     {
       templateId: 'destroyer', name: 'UES Serpent', faction: 'enemy',
-      x: VENUS_X + 18500, y: VENUS_Y + 800,
-      vx: VENUS_VX, vy: VENUS_VY + shipOrbitalSpeedVenus * 0.98,
+      x: calyx.x + 15_500, y: calyx.y + 600,
+      vx: calyx.vx, vy: calyx.vy + shipOrbitalSpeedCalyx * 0.98,
     },
     {
       templateId: 'frigate', name: 'UES Viper', faction: 'enemy',
-      x: VENUS_X + 17500, y: VENUS_Y - 600,
-      vx: VENUS_VX, vy: VENUS_VY + shipOrbitalSpeedVenus * 1.02,
-    },
-    // --- Enemy ships in transit Venus → Terra ---
-    {
-      templateId: 'cruiser', name: 'UES Invader', faction: 'enemy',
-      x: VENUS_X + VENUS_TO_TERRA_DX * 0.25, y: VENUS_Y + VENUS_TO_TERRA_DY * 0.25,
-      vx: transferVx, vy: transferVy,
+      x: calyx.x + 14_500, y: calyx.y - 500,
+      vx: calyx.vx, vy: calyx.vy + shipOrbitalSpeedCalyx * 1.02,
     },
     {
-      templateId: 'destroyer', name: 'UES Marauder', faction: 'enemy',
-      x: VENUS_X + VENUS_TO_TERRA_DX * 0.5, y: VENUS_Y + VENUS_TO_TERRA_DY * 0.5,
-      vx: transferVx * 0.98, vy: transferVy * 1.02,
+      templateId: 'corvette', name: 'UES Dart', faction: 'enemy',
+      x: calyx.x + 16_000, y: calyx.y + 1_200,
+      vx: calyx.vx, vy: calyx.vy + shipOrbitalSpeedCalyx * 0.97,
+    },
+
+    // ============================
+    // Enemy Fleet Gamma — hiding in asteroid belt
+    // ============================
+    {
+      templateId: 'destroyer', name: 'UES Ambush', faction: 'enemy', flagship: true,
+      x: gammaA.x, y: gammaA.y,
+      vx: gammaA.vx, vy: gammaA.vy,
     },
     {
-      templateId: 'frigate', name: 'UES Scout', faction: 'enemy',
-      x: VENUS_X + VENUS_TO_TERRA_DX * 0.75, y: VENUS_Y + VENUS_TO_TERRA_DY * 0.75,
-      vx: transferVx * 1.01, vy: transferVy * 0.99,
+      templateId: 'frigate', name: 'UES Shadow', faction: 'enemy',
+      x: gammaB.x, y: gammaB.y,
+      vx: gammaB.vx, vy: gammaB.vy,
     },
-    // --- Enemy fleet near Mars ---
     {
-      templateId: 'cruiser', name: 'UES Warhammer', faction: 'enemy',
-      x: MARS_X, y: MARS_Y + 20000,
-      vx: -marsOrbitalSpeed - shipOrbitalSpeedMars, vy: 0,
+      templateId: 'corvette', name: 'UES Whisper', faction: 'enemy',
+      x: gammaC.x, y: gammaC.y,
+      vx: gammaC.vx, vy: gammaC.vy,
+    },
+
+    // ============================
+    // Enemy Fleet Delta — inbound from upper-left
+    // ============================
+    {
+      templateId: 'battleship', name: 'UES Colossus', faction: 'enemy', flagship: true,
+      x: -300_000, y: 400_000,
+      vx: 2.5, vy: -1.8,
     },
     {
       templateId: 'destroyer', name: 'UES Stalker', faction: 'enemy',
-      x: MARS_X, y: MARS_Y + 21000,
-      vx: -marsOrbitalSpeed - shipOrbitalSpeedMars * 0.98, vy: 0,
+      x: -298_000, y: 401_000,
+      vx: 2.5, vy: -1.8,
     },
     {
-      templateId: 'frigate', name: 'UES Fang', faction: 'enemy',
-      x: MARS_X - 1000, y: MARS_Y + 19500,
-      vx: -marsOrbitalSpeed - shipOrbitalSpeedMars * 1.01, vy: 0,
+      templateId: 'frigate', name: 'UES Prowler', faction: 'enemy',
+      x: -301_000, y: 399_000,
+      vx: 2.4, vy: -1.9,
     },
   ],
 };

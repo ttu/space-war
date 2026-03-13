@@ -3,7 +3,7 @@ import { WorldImpl } from '../../../src/engine/ecs/World';
 import { loadScenario, parseScenarioJson } from '../../../src/engine/data/ScenarioLoader';
 import { COMPONENT } from '../../../src/engine/components';
 import type { CelestialBody, OrbitalPrimary, Position } from '../../../src/engine/components';
-import { demoScenario } from '../../../src/engine/data/scenarios/demo';
+import { solarSystemScenario } from '../../../src/engine/data/scenarios/solarSystem';
 import { PhysicsSystem } from '../../../src/engine/systems/PhysicsSystem';
 
 describe('ScenarioLoader', () => {
@@ -105,7 +105,7 @@ describe('ScenarioLoader', () => {
 
   it('loadScenario assigns OrbitalPrimary to moons with primaryName', () => {
     const world = new WorldImpl();
-    loadScenario(world, demoScenario);
+    loadScenario(world, solarSystemScenario);
 
     const celestials = world.query(COMPONENT.CelestialBody);
     let terraId: string | null = null;
@@ -125,7 +125,7 @@ describe('ScenarioLoader', () => {
 
   it('moon orbits primary when physics runs (demo scenario)', () => {
     const world = new WorldImpl();
-    loadScenario(world, demoScenario);
+    loadScenario(world, solarSystemScenario);
 
     const celestials = world.query(COMPONENT.CelestialBody);
     let lunaId: string | null = null;
