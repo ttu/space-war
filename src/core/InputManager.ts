@@ -8,7 +8,8 @@ export type InputEvent =
   | { type: 'togglePause' }
   | { type: 'changeSpeed'; delta: number }
   | { type: 'escape' }
-  | { type: 'focusNearestEnemy' };
+  | { type: 'focusNearestEnemy' }
+  | { type: 'toggleShadows' };
 
 type InputEventCallback = (event: InputEvent) => void;
 
@@ -73,6 +74,10 @@ export class InputManager {
       if (e.code === 'KeyE') {
         e.preventDefault();
         this.emit({ type: 'focusNearestEnemy' });
+      }
+      if (e.code === 'KeyV') {
+        e.preventDefault();
+        this.emit({ type: 'toggleShadows' });
       }
       if (e.code === 'Minus' || e.code === 'NumpadSubtract') this.emit({ type: 'changeSpeed', delta: -1 });
       if (e.code === 'Equal' || e.code === 'NumpadAdd') this.emit({ type: 'changeSpeed', delta: 1 });

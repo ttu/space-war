@@ -4,7 +4,7 @@ import { SensorSystem, LIGHT_SPEED } from '../../../src/engine/systems/SensorSys
 import { EventBusImpl } from '../../../src/engine/core/EventBus';
 import {
   Position, Velocity, Ship, Thruster, ThermalSignature,
-  SensorArray, ContactTracker,
+  SensorArray, ContactTracker, CelestialBody,
   COMPONENT,
 } from '../../../src/engine/components';
 import { EntityId, GameEvent } from '../../../src/engine/types';
@@ -52,6 +52,25 @@ function createShip(world: WorldImpl, opts: {
       sensitivity: opts.sensorSensitivity ?? 1e-12,
     });
   }
+  return id;
+}
+
+function createCelestialBody(world: WorldImpl, opts: {
+  x: number; y: number; radius: number;
+  bodyType: 'star' | 'planet' | 'moon' | 'station' | 'asteroid';
+  name?: string;
+}): EntityId {
+  const id = world.createEntity();
+  world.addComponent<Position>(id, {
+    type: 'Position', x: opts.x, y: opts.y, prevX: opts.x, prevY: opts.y,
+  });
+  world.addComponent<CelestialBody>(id, {
+    type: 'CelestialBody',
+    name: opts.name ?? 'TestBody',
+    mass: 5.972e24,
+    radius: opts.radius,
+    bodyType: opts.bodyType,
+  });
   return id;
 }
 
@@ -334,5 +353,103 @@ describe('SensorSystem', () => {
 
     expect(events.length).toBe(1);
     expect(events[0].type).toBe('ShipLostContact');
+  });
+
+  // --- Sensor occlusion tests ---
+
+  it('should NOT detect enemy when planet blocks line of sight', () => {
+    const world = new WorldImpl();
+    const system = new SensorSystem();
+
+    createShip(world, {
+      x: 0, y: 0, faction: 'player',
+      sensorMaxRange: 500_000, sensorSensitivity: 1e-12,
+    });
+    createShip(world, {
+      x: 200_000, y: 0, faction: 'enemy',
+      throttle: 1.0, baseSignature: 50, thrustMultiplier: 200,
+    });
+    createCelestialBody(world, {
+      x: 100_000, y: 0, radius: 10_000, bodyType: 'planet',
+    });
+
+    const trackerId = createContactTracker(world, 'player');
+    system.update(world, 0.1, 10.0);
+
+    const tracker = world.getComponent<ContactTracker>(trackerId, COMPONENT.ContactTracker)!;
+    expect(tracker.contacts.size).toBe(0);
+  });
+
+  it('should still detect enemy when station is between them (stations do not occlude)', () => {
+    const world = new WorldImpl();
+    const system = new SensorSystem();
+
+    createShip(world, {
+      x: 0, y: 0, faction: 'player',
+      sensorMaxRange: 500_000, sensorSensitivity: 1e-12,
+    });
+    createShip(world, {
+      x: 200_000, y: 0, faction: 'enemy',
+      throttle: 1.0, baseSignature: 50, thrustMultiplier: 200,
+    });
+    createCelestialBody(world, {
+      x: 100_000, y: 0, radius: 50, bodyType: 'station',
+    });
+
+    const trackerId = createContactTracker(world, 'player');
+    system.update(world, 0.1, 10.0);
+
+    const tracker = world.getComponent<ContactTracker>(trackerId, COMPONENT.ContactTracker)!;
+    expect(tracker.contacts.size).toBe(1);
+  });
+
+  it('should detect enemy beside planet (not in shadow)', () => {
+    const world = new WorldImpl();
+    const system = new SensorSystem();
+
+    createShip(world, {
+      x: 0, y: 0, faction: 'player',
+      sensorMaxRange: 500_000, sensorSensitivity: 1e-12,
+    });
+    createShip(world, {
+      x: 200_000, y: 30_000, faction: 'enemy',
+      throttle: 1.0, baseSignature: 50, thrustMultiplier: 200,
+    });
+    createCelestialBody(world, {
+      x: 100_000, y: 0, radius: 10_000, bodyType: 'planet',
+    });
+
+    const trackerId = createContactTracker(world, 'player');
+    system.update(world, 0.1, 10.0);
+
+    const tracker = world.getComponent<ContactTracker>(trackerId, COMPONENT.ContactTracker)!;
+    expect(tracker.contacts.size).toBe(1);
+  });
+
+  it('should detect via second sensor ship when first is occluded', () => {
+    const world = new WorldImpl();
+    const system = new SensorSystem();
+
+    createShip(world, {
+      x: 0, y: 0, faction: 'player',
+      sensorMaxRange: 500_000, sensorSensitivity: 1e-12,
+    });
+    createShip(world, {
+      x: 0, y: 50_000, faction: 'player',
+      sensorMaxRange: 500_000, sensorSensitivity: 1e-12,
+    });
+    createShip(world, {
+      x: 200_000, y: 0, faction: 'enemy',
+      throttle: 1.0, baseSignature: 50, thrustMultiplier: 200,
+    });
+    createCelestialBody(world, {
+      x: 100_000, y: 0, radius: 10_000, bodyType: 'planet',
+    });
+
+    const trackerId = createContactTracker(world, 'player');
+    system.update(world, 0.1, 10.0);
+
+    const tracker = world.getComponent<ContactTracker>(trackerId, COMPONENT.ContactTracker)!;
+    expect(tracker.contacts.size).toBe(1);
   });
 });

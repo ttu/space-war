@@ -3,6 +3,7 @@ import { EventBus } from '../core/EventBus';
 import {
   Position, Velocity, Ship, Thruster, ThermalSignature,
   SensorArray, ContactTracker, DetectedContact, ShipSystems,
+  CelestialBody,
   COMPONENT, Faction,
 } from '../components';
 
@@ -14,21 +15,22 @@ export class SensorSystem {
   ) {}
 
   update(world: World, _dt: number, gameTime: number): void {
+    const occludingBodies = this.getOccludingBodies(world);
     const trackerEntities = world.query(COMPONENT.ContactTracker);
 
     for (const trackerEntityId of trackerEntities) {
       const tracker = world.getComponent<ContactTracker>(trackerEntityId, COMPONENT.ContactTracker)!;
-      this.updateFaction(world, tracker, gameTime);
+      this.updateFaction(world, tracker, gameTime, occludingBodies);
     }
   }
 
-  private updateFaction(world: World, tracker: ContactTracker, gameTime: number): void {
+  private updateFaction(world: World, tracker: ContactTracker, gameTime: number, occludingBodies: OccludingBody[]): void {
     const sensorShips = this.getSensorShips(world, tracker.faction);
     const targets = this.getTargetShips(world, tracker.faction);
     const detectedThisTick = new Set<EntityId>();
 
     for (const target of targets) {
-      const bestDetection = this.getBestDetection(sensorShips, target);
+      const bestDetection = this.getBestDetection(sensorShips, target, occludingBodies);
 
       if (bestDetection) {
         detectedThisTick.add(target.entityId);
@@ -131,6 +133,7 @@ export class SensorSystem {
   private getBestDetection(
     sensorShips: SensorShipData[],
     target: TargetShipData,
+    occludingBodies: OccludingBody[],
   ): { signalStrength: number; distance: number } | null {
     const effectiveSignature = target.thermal.baseSignature +
       target.throttle * target.thermal.thrustMultiplier;
@@ -145,6 +148,21 @@ export class SensorSystem {
       if (distance > sensor.effectiveMaxRange) continue;
       if (distance < 1) continue; // avoid division by zero
 
+      // Check line-of-sight occlusion
+      let blocked = false;
+      for (const body of occludingBodies) {
+        if (SensorSystem.isLineBlockedByCircle(
+          sensor.pos.x, sensor.pos.y,
+          target.pos.x, target.pos.y,
+          body.x, body.y,
+          body.radius,
+        )) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) continue;
+
       const signalStrength = effectiveSignature / (distance * distance);
 
       if (signalStrength > sensor.effectiveSensitivity) {
@@ -155,6 +173,49 @@ export class SensorSystem {
     }
 
     return bestSignal;
+  }
+
+  private getOccludingBodies(world: World): OccludingBody[] {
+    const entities = world.query(COMPONENT.Position, COMPONENT.CelestialBody);
+    const result: OccludingBody[] = [];
+    for (const id of entities) {
+      const body = world.getComponent<CelestialBody>(id, COMPONENT.CelestialBody)!;
+      if (body.bodyType !== 'star' && body.bodyType !== 'planet' && body.bodyType !== 'moon') continue;
+      const pos = world.getComponent<Position>(id, COMPONENT.Position)!;
+      result.push({ x: pos.x, y: pos.y, radius: body.radius });
+    }
+    return result;
+  }
+
+  /** Returns true if the line segment from A to B is blocked by the circle (center, radius). */
+  private static isLineBlockedByCircle(
+    ax: number, ay: number,
+    bx: number, by: number,
+    cx: number, cy: number,
+    radius: number,
+  ): boolean {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const fx = ax - cx;
+    const fy = ay - cy;
+
+    const segLenSq = dx * dx + dy * dy;
+    if (segLenSq < 1) return false; // degenerate segment
+
+    // Skip if either endpoint is inside the body (e.g. ship orbiting close to moon)
+    if (fx * fx + fy * fy < radius * radius) return false;
+    const gx = bx - cx;
+    const gy = by - cy;
+    if (gx * gx + gy * gy < radius * radius) return false;
+
+    // Parameter t for closest point on line to circle center, clamped to [0,1]
+    const t = Math.max(0, Math.min(1, -(fx * dx + fy * dy) / segLenSq));
+
+    const closestX = ax + t * dx;
+    const closestY = ay + t * dy;
+    const distSq = (closestX - cx) * (closestX - cx) + (closestY - cy) * (closestY - cy);
+
+    return distSq < radius * radius;
   }
 }
 
@@ -172,4 +233,10 @@ interface TargetShipData {
   vel: Velocity;
   thermal: ThermalSignature;
   throttle: number;
+}
+
+interface OccludingBody {
+  x: number;
+  y: number;
+  radius: number;
 }

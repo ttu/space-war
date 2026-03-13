@@ -2,6 +2,7 @@ export type PendingOrderType = 'none' | 'move' | 'fireMissile' | 'fireRailgun';
 
 export interface OrderBarCallbacks {
   onPendingOrderChange: (order: PendingOrderType) => void;
+  onShadowToggle?: (enabled: boolean) => void;
 }
 
 /**
@@ -11,6 +12,8 @@ export class OrderBar {
   private root: HTMLElement;
   private pendingOrder: PendingOrderType = 'none';
   private buttons: Map<PendingOrderType, HTMLButtonElement> = new Map();
+  private shadowBtn!: HTMLButtonElement;
+  private shadowsEnabled = false;
 
   constructor(
     container: HTMLElement,
@@ -36,6 +39,20 @@ export class OrderBar {
     this.root.appendChild(btnMove);
     this.root.appendChild(btnMissile);
     this.root.appendChild(btnRailgun);
+
+    const separator = document.createElement('div');
+    separator.className = 'order-bar-separator';
+    this.root.appendChild(separator);
+
+    this.shadowBtn = document.createElement('button');
+    this.shadowBtn.type = 'button';
+    this.shadowBtn.className = 'order-bar-btn order-bar-toggle';
+    this.shadowBtn.textContent = 'Shadows (V)';
+    this.shadowBtn.title = 'Toggle sensor shadow zones for selected ships';
+    this.shadowBtn.addEventListener('click', () => {
+      this.toggleShadows();
+    });
+    this.root.appendChild(this.shadowBtn);
 
     container.appendChild(this.root);
   }
@@ -67,5 +84,15 @@ export class OrderBar {
 
   getPendingOrder(): PendingOrderType {
     return this.pendingOrder;
+  }
+
+  toggleShadows(): void {
+    this.shadowsEnabled = !this.shadowsEnabled;
+    this.shadowBtn.classList.toggle('active', this.shadowsEnabled);
+    this.callbacks.onShadowToggle?.(this.shadowsEnabled);
+  }
+
+  getShadowsEnabled(): boolean {
+    return this.shadowsEnabled;
   }
 }

@@ -22,6 +22,7 @@ import { CelestialRenderer } from '../rendering/CelestialRenderer';
 import { TrailRenderer } from '../rendering/TrailRenderer';
 import { MissileRenderer } from '../rendering/MissileRenderer';
 import { ProjectileRenderer } from '../rendering/ProjectileRenderer';
+import { SensorOcclusionRenderer } from '../rendering/SensorOcclusionRenderer';
 import { OffScreenContactRenderer } from '../rendering/OffScreenContactRenderer';
 import { PlanetContactIndicatorsRenderer } from '../rendering/PlanetContactIndicatorsRenderer';
 import { CommandHandler } from './CommandHandler';
@@ -79,6 +80,8 @@ export class SpaceWarGame {
   private projectileRenderer!: ProjectileRenderer;
   private offScreenContactRenderer!: OffScreenContactRenderer;
   private planetContactIndicatorsRenderer!: PlanetContactIndicatorsRenderer;
+  private sensorOcclusionRenderer!: SensorOcclusionRenderer;
+  private shadowsEnabled = false;
 
   private selectionManager!: SelectionManager;
   private timeControls!: TimeControls;
@@ -270,6 +273,7 @@ export class SpaceWarGame {
     this.projectileRenderer = new ProjectileRenderer(this.scene);
     this.offScreenContactRenderer = new OffScreenContactRenderer(this.scene);
     this.planetContactIndicatorsRenderer = new PlanetContactIndicatorsRenderer(this.scene);
+    this.sensorOcclusionRenderer = new SensorOcclusionRenderer(this.scene);
 
     this.selectionBoxLine = this.createSelectionBoxLine();
     this.scene.add(this.selectionBoxLine);
@@ -339,6 +343,9 @@ export class SpaceWarGame {
       onPendingOrderChange: (order) => {
         this.pendingOrder = order;
       },
+      onShadowToggle: (enabled) => {
+        this.shadowsEnabled = enabled;
+      },
     });
 
     const combatLogWrap = document.createElement('div');
@@ -349,7 +356,7 @@ export class SpaceWarGame {
 
     const infoOverlay = document.createElement('div');
     infoOverlay.id = 'info-overlay';
-    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/-: Speed | E: Focus enemy | Lock: select ship/planet → Lock camera here; Free in time bar';
+    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/-: Speed | E: Focus enemy | V: Shadows | Lock: select ship/planet → Lock camera here; Free in time bar';
     uiRoot.appendChild(infoOverlay);
 
     const cameraLockIndicator = document.createElement('div');
@@ -406,6 +413,9 @@ export class SpaceWarGame {
           break;
         case 'focusNearestEnemy':
           this.focusNearestEnemy();
+          break;
+        case 'toggleShadows':
+          this.orderBar.toggleShadows();
           break;
       }
     });
@@ -656,6 +666,7 @@ export class SpaceWarGame {
       playerContacts,
       this.gameTime.elapsed,
     );
+    this.sensorOcclusionRenderer.update(this.world, this.shadowsEnabled);
 
     this.updateSelectionBoxVisual();
 
