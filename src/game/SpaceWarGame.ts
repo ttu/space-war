@@ -29,6 +29,7 @@ import { CommandHandler } from './CommandHandler';
 import { SelectionManager } from './SelectionManager';
 import { loadScenario, fetchScenario } from '../engine/data/ScenarioLoader';
 import { demoScenario } from '../engine/data/scenarios/demo';
+import { solarSystemScenario } from '../engine/data/scenarios/solarSystem';
 import { e2eScenario } from '../engine/data/scenarios/e2e';
 import { showShipConfigScreen } from '../ui/ShipConfigScreen';
 import { TimeControls } from '../ui/TimeControls';
@@ -837,7 +838,7 @@ export class SpaceWarGame {
   // --- Demo scenario ---
 
   loadDemoScenario(): void {
-    loadScenario(this.world, demoScenario);
+    loadScenario(this.world, solarSystemScenario);
     this.victorySystem.reset();
     this.centerCameraOnFlagship();
     this.camera.zoomToFit(30000, 30000);

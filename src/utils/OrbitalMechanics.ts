@@ -12,21 +12,25 @@ export function gravitationalAcceleration(
   mx: number,
   my: number,
   mass: number,
+  minDistance: number = 1,
 ): { ax: number; ay: number } {
   const dx = mx - px;
   const dy = my - py;
-  const distSq = dx * dx + dy * dy;
-  const dist = Math.sqrt(distSq);
+  const rawDistSq = dx * dx + dy * dy;
+  const rawDist = Math.sqrt(rawDistSq);
 
-  if (dist < 1) {
-    // Prevent singularity at very close distances
+  if (rawDist < 1) {
     return { ax: 0, ay: 0 };
   }
 
-  const accel = (G_KM * mass) / distSq;
+  // Clamp distance to minDistance (body radius) so gravity never exceeds surface gravity
+  const effectiveDist = Math.max(rawDist, minDistance);
+  const effectiveDistSq = effectiveDist * effectiveDist;
+
+  const accel = (G_KM * mass) / effectiveDistSq;
   return {
-    ax: accel * (dx / dist),
-    ay: accel * (dy / dist),
+    ax: accel * (dx / rawDist),
+    ay: accel * (dy / rawDist),
   };
 }
 

@@ -43,7 +43,7 @@ const LUNA_MASS = 7.342e22;
 const stationTerraOrbitalSpeed = circularOrbitSpeed(TERRA_MASS, STATION_TERRA_ORBITAL_RADIUS);
 const stationLunaOrbitalSpeed = circularOrbitSpeed(LUNA_MASS, STATION_LUNA_ORBITAL_RADIUS);
 
-// Ship orbital speeds
+// Ship orbital speeds around their host planet
 const shipOrbitalSpeedTerra = circularOrbitSpeed(TERRA_MASS, 42000);
 const shipOrbitalSpeedVenus = circularOrbitSpeed(VENUS_MASS, 18000);
 const shipOrbitalSpeedMars = circularOrbitSpeed(MARS_MASS, 20000);
@@ -147,39 +147,39 @@ export const solarSystemScenario: Scenario = {
     {
       templateId: 'cruiser', name: 'TCS Resolute', faction: 'player', flagship: true,
       x: TERRA_X + 42000, y: TERRA_Y,
-      vx: 0, vy: terraOrbitalSpeed + shipOrbitalSpeedTerra,
+      vx: 0, vy: shipOrbitalSpeedTerra,
     },
     {
       templateId: 'destroyer', name: 'TCS Vigilant', faction: 'player',
       x: TERRA_X + 42500, y: TERRA_Y + 1000,
-      vx: 0, vy: terraOrbitalSpeed + shipOrbitalSpeedTerra * 0.99,
+      vx: 0, vy: shipOrbitalSpeedTerra * 0.99,
     },
     // --- Enemy fleet near Terra (lower left of Earth) ---
     {
       templateId: 'cruiser', name: 'UES Aggressor', faction: 'enemy', flagship: true,
       x: TERRA_X - 80000, y: TERRA_Y - 60000,
-      vx: 2.0, vy: terraOrbitalSpeed - 1.5,
+      vx: 2.0, vy: -1.5,
     },
     {
       templateId: 'frigate', name: 'UES Raider', faction: 'enemy',
       x: TERRA_X - 75000, y: TERRA_Y - 65000,
-      vx: 2.2, vy: terraOrbitalSpeed - 1.3,
+      vx: 2.2, vy: -1.3,
     },
     // --- Enemy fleet near Venus ---
     {
       templateId: 'cruiser', name: 'UES Vanguard', faction: 'enemy',
       x: VENUS_X + 18000, y: VENUS_Y,
-      vx: VENUS_VX, vy: VENUS_VY + shipOrbitalSpeedVenus,
+      vx: 0, vy: shipOrbitalSpeedVenus,
     },
     {
       templateId: 'destroyer', name: 'UES Serpent', faction: 'enemy',
       x: VENUS_X + 18500, y: VENUS_Y + 800,
-      vx: VENUS_VX, vy: VENUS_VY + shipOrbitalSpeedVenus * 0.98,
+      vx: 0, vy: shipOrbitalSpeedVenus * 0.98,
     },
     {
       templateId: 'frigate', name: 'UES Viper', faction: 'enemy',
       x: VENUS_X + 17500, y: VENUS_Y - 600,
-      vx: VENUS_VX, vy: VENUS_VY + shipOrbitalSpeedVenus * 1.02,
+      vx: 0, vy: shipOrbitalSpeedVenus * 1.02,
     },
     // --- Enemy ships in transit Venus → Terra ---
     {
@@ -201,17 +201,17 @@ export const solarSystemScenario: Scenario = {
     {
       templateId: 'cruiser', name: 'UES Warhammer', faction: 'enemy',
       x: MARS_X, y: MARS_Y + 20000,
-      vx: -marsOrbitalSpeed - shipOrbitalSpeedMars, vy: 0,
+      vx: -shipOrbitalSpeedMars, vy: 0,
     },
     {
       templateId: 'destroyer', name: 'UES Stalker', faction: 'enemy',
       x: MARS_X, y: MARS_Y + 21000,
-      vx: -marsOrbitalSpeed - shipOrbitalSpeedMars * 0.98, vy: 0,
+      vx: -shipOrbitalSpeedMars * 0.98, vy: 0,
     },
     {
       templateId: 'frigate', name: 'UES Fang', faction: 'enemy',
       x: MARS_X - 1000, y: MARS_Y + 19500,
-      vx: -marsOrbitalSpeed - shipOrbitalSpeedMars * 1.01, vy: 0,
+      vx: -shipOrbitalSpeedMars * 1.01, vy: 0,
     },
   ],
 };
