@@ -80,7 +80,14 @@ export class NavigationSystem {
       }
     }
     if (needCorrection) {
-      const safe = getSafeWaypoint(pos.x, pos.y, nav.destinationX, nav.destinationY, bodies);
+      // Exclude orbit target from avoidance bodies for re-routing too
+      const avoidBodies = nav.orbitTargetId != null
+        ? bodies.filter(b => {
+          const orbitPos = world.getComponent<Position>(nav.orbitTargetId!, COMPONENT.Position);
+          return !orbitPos || Math.abs(b.x - orbitPos.x) >= 1 || Math.abs(b.y - orbitPos.y) >= 1;
+        })
+        : bodies;
+      const safe = getSafeWaypoint(pos.x, pos.y, nav.destinationX, nav.destinationY, avoidBodies);
       if (safe != null) {
         nav.targetX = safe.x;
         nav.targetY = safe.y;
@@ -128,11 +135,24 @@ export class NavigationSystem {
       return;
     }
 
-    if (!isIntermediate && distToTarget < nav.arrivalThreshold && speed < ARRIVAL_SPEED_THRESHOLD) {
-      if (nav.orbitTargetId != null && nav.orbitRadius != null) {
-        nav.phase = 'orbiting';
-        return;
+    // For orbit orders, check arrival relative to the planet (which is moving)
+    if (!isIntermediate && nav.orbitTargetId != null && nav.orbitRadius != null) {
+      const orbitPos = world.getComponent<Position>(nav.orbitTargetId, COMPONENT.Position);
+      const orbitVel = world.getComponent<Velocity>(nav.orbitTargetId, COMPONENT.Velocity);
+      if (orbitPos) {
+        const distToPlanet = Math.sqrt((pos.x - orbitPos.x) ** 2 + (pos.y - orbitPos.y) ** 2);
+        // Close enough to orbit radius? Use relative speed to planet for arrival check.
+        const relVx = vel.vx - (orbitVel?.vx ?? 0);
+        const relVy = vel.vy - (orbitVel?.vy ?? 0);
+        const relSpeed = Math.sqrt(relVx * relVx + relVy * relVy);
+        if (distToPlanet < nav.orbitRadius * 1.5 && relSpeed < ARRIVAL_SPEED_THRESHOLD * 4) {
+          nav.phase = 'orbiting';
+          return;
+        }
       }
+    }
+
+    if (!isIntermediate && distToTarget < nav.arrivalThreshold && speed < ARRIVAL_SPEED_THRESHOLD) {
       this.arrive(world, entityId, thruster);
       return;
     }
@@ -174,8 +194,15 @@ export class NavigationSystem {
     }
 
     // Desired velocity: toward target at approach speed
-    const desiredVx = dirX * maxApproachSpeed;
-    const desiredVy = dirY * maxApproachSpeed;
+    // For orbit orders, include the planet's velocity so we match it on arrival
+    let baseVx = 0;
+    let baseVy = 0;
+    if (nav.orbitTargetId != null) {
+      const orbitVel = world.getComponent<Velocity>(nav.orbitTargetId, COMPONENT.Velocity);
+      if (orbitVel) { baseVx = orbitVel.vx; baseVy = orbitVel.vy; }
+    }
+    const desiredVx = baseVx + dirX * maxApproachSpeed;
+    const desiredVy = baseVy + dirY * maxApproachSpeed;
 
     // Delta-v: correction needed
     const dvx = desiredVx - vel.vx;

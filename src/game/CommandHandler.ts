@@ -269,7 +269,12 @@ export class CommandHandler {
       const targetX = planetPos.x + nx * orbitRadius;
       const targetY = planetPos.y + ny * orbitRadius;
 
-      const bodies = getBodiesFromWorld(this.world);
+      // Exclude the orbit target planet from avoidance — we're heading toward it
+      const bodies = getBodiesFromWorld(this.world).filter(b => {
+        const dx = b.x - planetPos.x;
+        const dy = b.y - planetPos.y;
+        return Math.sqrt(dx * dx + dy * dy) > 1;
+      });
       const safe = getSafeWaypoint(pos.x, pos.y, targetX, targetY, bodies);
       const effectiveX = safe ? safe.x : targetX;
       const effectiveY = safe ? safe.y : targetY;
