@@ -110,10 +110,30 @@ export class NavigationSystem {
     const rotationTime = Math.PI / thruster.rotationSpeed;
     const rotationBuffer = speed * rotationTime * 0.5;
     const effectiveDist = Math.max(0, distToTarget - rotationBuffer);
-    // For intermediate waypoints, don't limit speed — fly through at full speed
-    const maxApproachSpeed = isIntermediate
-      ? Math.max(speed, Math.sqrt(2 * thruster.maxThrust * effectiveDist))
-      : Math.sqrt(2 * thruster.maxThrust * effectiveDist);
+    // For intermediate waypoints, scale speed based on the turn angle at the waypoint.
+    // turnFactor: 1 = straight ahead (full speed), 0 = U-turn (must nearly stop).
+    const stoppingSpeed = Math.sqrt(2 * thruster.maxThrust * effectiveDist);
+    let maxApproachSpeed: number;
+    if (isIntermediate) {
+      const nextX = (atDestination && nav.waypoints.length > 0) ? nav.waypoints[0].x : nav.destinationX;
+      const nextY = (atDestination && nav.waypoints.length > 0) ? nav.waypoints[0].y : nav.destinationY;
+      // Direction from current target to next target
+      const toNextX = nextX - nav.targetX;
+      const toNextY = nextY - nav.targetY;
+      const toNextLen = Math.sqrt(toNextX * toNextX + toNextY * toNextY);
+      if (toNextLen > 1) {
+        // cos(turn angle) via dot product of approach dir and next-leg dir
+        const cosAngle = (dirX * toNextX + dirY * toNextY) / toNextLen;
+        // turnFactor: 1 for straight, 0 for U-turn
+        const turnFactor = (1 + cosAngle) / 2;
+        // Blend: gentle turns → maintain speed, sharp turns → slow to redirect
+        maxApproachSpeed = stoppingSpeed + turnFactor * Math.max(0, speed - stoppingSpeed);
+      } else {
+        maxApproachSpeed = stoppingSpeed;
+      }
+    } else {
+      maxApproachSpeed = stoppingSpeed;
+    }
 
     // Desired velocity: toward target at approach speed
     const desiredVx = dirX * maxApproachSpeed;
