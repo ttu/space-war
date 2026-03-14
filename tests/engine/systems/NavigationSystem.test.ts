@@ -252,7 +252,7 @@ describe('NavigationSystem', () => {
     expect(nav!.targetX).toBe(20000);
     expect(nav!.targetY).toBe(5000);
     expect(nav!.waypoints).toHaveLength(0);
-    expect(nav!.phase).toBe('rotating');
+    expect(nav!.phase).toBe('accelerating');
   });
 
   it('advances through multiple waypoints sequentially', () => {

@@ -65,31 +65,37 @@ export class NavigationSystem {
     const distToTarget = Math.sqrt(dx * dx + dy * dy);
     const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
 
-    if (distToTarget < nav.arrivalThreshold && speed < ARRIVAL_SPEED_THRESHOLD) {
-      const atDestination =
-        Math.abs(nav.targetX - nav.destinationX) < 1 &&
-        Math.abs(nav.targetY - nav.destinationY) < 1;
-      if (atDestination) {
-        if (nav.waypoints.length > 0) {
-          // Advance to next waypoint
-          const next = nav.waypoints.shift()!;
-          nav.destinationX = next.x;
-          nav.destinationY = next.y;
-          nav.targetX = next.x;
-          nav.targetY = next.y;
-          nav.burnPlan = computeBurnPlan(
-            pos.x, pos.y, vel.vx, vel.vy,
-            nav.targetX, nav.targetY, thruster.maxThrust,
-          );
-          nav.phase = 'rotating';
-          return;
-        }
-        this.arrive(world, entityId, thruster);
-        return;
+    // Determine if the current target is intermediate (not the final stop)
+    const atDestination =
+      Math.abs(nav.targetX - nav.destinationX) < 1 &&
+      Math.abs(nav.targetY - nav.destinationY) < 1;
+    const isIntermediate = !atDestination || nav.waypoints.length > 0;
+
+    // For intermediate waypoints: fly through (distance only, no speed check)
+    // For final destination: stop (distance + speed check)
+    if (isIntermediate && distToTarget < nav.arrivalThreshold) {
+      if (atDestination && nav.waypoints.length > 0) {
+        // Advance to next user waypoint
+        const next = nav.waypoints.shift()!;
+        nav.destinationX = next.x;
+        nav.destinationY = next.y;
+        nav.targetX = next.x;
+        nav.targetY = next.y;
+      } else {
+        // Arrived at an avoidance waypoint — advance target to destination
+        nav.targetX = nav.destinationX;
+        nav.targetY = nav.destinationY;
       }
-      // Arrived at an avoidance waypoint — advance target to destination
-      nav.targetX = nav.destinationX;
-      nav.targetY = nav.destinationY;
+      nav.burnPlan = computeBurnPlan(
+        pos.x, pos.y, vel.vx, vel.vy,
+        nav.targetX, nav.targetY, thruster.maxThrust,
+      );
+      nav.phase = 'accelerating';
+      return;
+    }
+
+    if (!isIntermediate && distToTarget < nav.arrivalThreshold && speed < ARRIVAL_SPEED_THRESHOLD) {
+      this.arrive(world, entityId, thruster);
       return;
     }
 
@@ -104,7 +110,10 @@ export class NavigationSystem {
     const rotationTime = Math.PI / thruster.rotationSpeed;
     const rotationBuffer = speed * rotationTime * 0.5;
     const effectiveDist = Math.max(0, distToTarget - rotationBuffer);
-    const maxApproachSpeed = Math.sqrt(2 * thruster.maxThrust * effectiveDist);
+    // For intermediate waypoints, don't limit speed — fly through at full speed
+    const maxApproachSpeed = isIntermediate
+      ? Math.max(speed, Math.sqrt(2 * thruster.maxThrust * effectiveDist))
+      : Math.sqrt(2 * thruster.maxThrust * effectiveDist);
 
     // Desired velocity: toward target at approach speed
     const desiredVx = dirX * maxApproachSpeed;
