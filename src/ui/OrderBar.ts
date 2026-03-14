@@ -13,7 +13,7 @@ export class OrderBar {
   private pendingOrder: PendingOrderType = 'none';
   private buttons: Map<PendingOrderType, HTMLButtonElement> = new Map();
   private shadowBtn!: HTMLButtonElement;
-  private shadowsEnabled = false;
+  private shadowsEnabled = true;
 
   constructor(
     container: HTMLElement,
@@ -46,7 +46,7 @@ export class OrderBar {
 
     this.shadowBtn = document.createElement('button');
     this.shadowBtn.type = 'button';
-    this.shadowBtn.className = 'order-bar-btn order-bar-toggle';
+    this.shadowBtn.className = 'order-bar-btn order-bar-toggle active';
     this.shadowBtn.textContent = 'Shadows (V)';
     this.shadowBtn.title = 'Toggle sensor shadow zones for selected ships';
     this.shadowBtn.addEventListener('click', () => {
