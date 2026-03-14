@@ -107,7 +107,7 @@ export interface Order {
 
 // --- Navigation ---
 
-export type NavPhase = 'rotating' | 'accelerating' | 'flipping' | 'decelerating' | 'arrived';
+export type NavPhase = 'rotating' | 'accelerating' | 'flipping' | 'decelerating' | 'arrived' | 'orbiting';
 
 export interface BurnPlan {
   accelTime: number;    // seconds of acceleration burn
@@ -130,6 +130,10 @@ export interface NavigationOrder extends Component {
   burnPlan: BurnPlan;
   phaseStartTime: number; // game time when current phase started
   arrivalThreshold: number; // km — close enough to consider arrived
+  /** Entity ID of celestial body to orbit (sustained circular orbit on arrival). */
+  orbitTargetId?: EntityId;
+  /** Desired orbit radius in km (distance from body center). */
+  orbitRadius?: number;
 }
 
 export interface RotationState extends Component {

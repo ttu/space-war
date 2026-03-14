@@ -1,10 +1,11 @@
 import { World, EntityId } from '../types';
 import {
   Position, Velocity, Thruster, Facing, NavigationOrder, RotationState,
-  COMPONENT,
+  CelestialBody, COMPONENT,
 } from '../components';
 import { shortestAngleDelta, normalizeAngle, computeBurnPlan } from '../../game/TrajectoryCalculator';
 import { getBodiesFromWorld, getSafeWaypoint, segmentPassesThroughInterior } from '../../game/PlanetAvoidance';
+import { circularOrbitSpeed } from '../../utils/OrbitalMechanics';
 
 const ALIGNMENT_THRESHOLD = 0.05; // radians — close enough to "aligned"
 const ARRIVAL_SPEED_THRESHOLD = 0.5; // km/s — slow enough to consider stopped
@@ -30,11 +31,44 @@ export class NavigationSystem {
     const nav = world.getComponent<NavigationOrder>(entityId, COMPONENT.NavigationOrder)!;
     const rot = world.getComponent<RotationState>(entityId, COMPONENT.RotationState)!;
 
+    // Sustained orbit phase: maintain circular orbit around target body
+    if (nav.phase === 'orbiting' && nav.orbitTargetId != null && nav.orbitRadius != null) {
+      this.updateOrbit(world, entityId, pos, vel, thruster, nav, rot, dt);
+      return;
+    }
+
+    // Track moving orbit target: update destination to follow the planet
+    if (nav.orbitTargetId != null && nav.orbitRadius != null) {
+      const orbitPos = world.getComponent<Position>(nav.orbitTargetId, COMPONENT.Position);
+      if (orbitPos) {
+        const dx = pos.x - orbitPos.x;
+        const dy = pos.y - orbitPos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const nx = dist > 0 ? dx / dist : 1;
+        const ny = dist > 0 ? dy / dist : 0;
+        nav.destinationX = orbitPos.x + nx * nav.orbitRadius;
+        nav.destinationY = orbitPos.y + ny * nav.orbitRadius;
+        // If not currently detouring around another body, also update immediate target
+        const atDestination =
+          Math.abs(nav.targetX - nav.destinationX) < nav.arrivalThreshold * 2 ||
+          (Math.abs(nav.targetX - nav.destinationX) < 1 && Math.abs(nav.targetY - nav.destinationY) < 1);
+        if (atDestination) {
+          nav.targetX = nav.destinationX;
+          nav.targetY = nav.destinationY;
+        }
+      }
+    }
+
     // In-flight course correction: avoid planets. (1) If within caution radius of any body, escape early.
     // (2) If path to current target passes through a body's interior, re-route to a safe waypoint.
     const bodies = getBodiesFromWorld(world);
     let needCorrection = false;
     for (const body of bodies) {
+      // Skip avoidance for the orbit target body itself
+      if (nav.orbitTargetId != null) {
+        const orbitPos = world.getComponent<Position>(nav.orbitTargetId, COMPONENT.Position);
+        if (orbitPos && Math.abs(body.x - orbitPos.x) < 1 && Math.abs(body.y - orbitPos.y) < 1) continue;
+      }
       const distToBody = Math.sqrt((pos.x - body.x) ** 2 + (pos.y - body.y) ** 2);
       if (distToBody < body.cautionRadius) {
         needCorrection = true;
@@ -95,6 +129,10 @@ export class NavigationSystem {
     }
 
     if (!isIntermediate && distToTarget < nav.arrivalThreshold && speed < ARRIVAL_SPEED_THRESHOLD) {
+      if (nav.orbitTargetId != null && nav.orbitRadius != null) {
+        nav.phase = 'orbiting';
+        return;
+      }
       this.arrive(world, entityId, thruster);
       return;
     }
@@ -183,6 +221,97 @@ export class NavigationSystem {
     if (facing) {
       facing.angle = rot.currentAngle;
     }
+  }
+
+  /**
+   * Maintain sustained circular orbit around the target body.
+   * Computes desired orbital velocity (tangential) and corrects drift with thrust.
+   */
+  private updateOrbit(
+    world: World, entityId: EntityId,
+    pos: Position, vel: Velocity, thruster: Thruster,
+    nav: NavigationOrder, rot: RotationState, dt: number,
+  ): void {
+    const targetPos = world.getComponent<Position>(nav.orbitTargetId!, COMPONENT.Position);
+    const targetVel = world.getComponent<Velocity>(nav.orbitTargetId!, COMPONENT.Velocity);
+    const targetBody = world.getComponent<CelestialBody>(nav.orbitTargetId!, COMPONENT.CelestialBody);
+    if (!targetPos || !targetBody) {
+      // Target destroyed or missing — stop orbiting
+      this.arrive(world, entityId, thruster);
+      return;
+    }
+
+    const orbitRadius = nav.orbitRadius!;
+    const orbSpeed = circularOrbitSpeed(targetBody.mass, orbitRadius);
+
+    // Planet velocity (planets orbit the star, so they move)
+    const pvx = targetVel?.vx ?? 0;
+    const pvy = targetVel?.vy ?? 0;
+
+    // Vector from planet center to ship (relative)
+    const rx = pos.x - targetPos.x;
+    const ry = pos.y - targetPos.y;
+    const dist = Math.sqrt(rx * rx + ry * ry);
+    if (dist < 1) return;
+
+    // Radial unit vector (outward from planet)
+    const radX = rx / dist;
+    const radY = ry / dist;
+
+    // Tangential unit vector (counter-clockwise)
+    const tanX = -radY;
+    const tanY = radX;
+
+    // Desired position: on orbit circle at current angular position
+    const desiredX = targetPos.x + radX * orbitRadius;
+    const desiredY = targetPos.y + radY * orbitRadius;
+
+    // Desired velocity: planet velocity + tangential orbital velocity + radial correction
+    const radialError = dist - orbitRadius;
+    // Gentle radial correction proportional to drift
+    const radialCorrection = -radialError * 0.05;
+
+    const desiredVx = pvx + tanX * orbSpeed + radX * radialCorrection;
+    const desiredVy = pvy + tanY * orbSpeed + radY * radialCorrection;
+
+    // Delta-v needed
+    const dvx = desiredVx - vel.vx;
+    const dvy = desiredVy - vel.vy;
+    const dvMag = Math.sqrt(dvx * dvx + dvy * dvy);
+
+    if (dvMag < 0.01) {
+      thruster.throttle = 0;
+      // Update destination to track planet movement
+      nav.destinationX = desiredX;
+      nav.destinationY = desiredY;
+      nav.targetX = desiredX;
+      nav.targetY = desiredY;
+      return;
+    }
+
+    const desiredAngle = normalizeAngle(Math.atan2(dvy, dvx));
+    const angleDelta = Math.abs(shortestAngleDelta(rot.currentAngle, desiredAngle));
+
+    if (angleDelta > ALIGNMENT_THRESHOLD) {
+      thruster.throttle = 0;
+      rot.targetAngle = desiredAngle;
+      this.rotateToward(rot, thruster.rotationSpeed, dt);
+    } else {
+      // Thrust to correct, but limit to avoid overshooting
+      thruster.thrustAngle = desiredAngle;
+      thruster.throttle = Math.min(1, dvMag / (thruster.maxThrust * dt));
+      rot.currentAngle = desiredAngle;
+    }
+
+    // Update destination to track planet movement
+    nav.destinationX = desiredX;
+    nav.destinationY = desiredY;
+    nav.targetX = desiredX;
+    nav.targetY = desiredY;
+
+    // Sync Facing
+    const facing = world.getComponent<Facing>(entityId, COMPONENT.Facing);
+    if (facing) facing.angle = rot.currentAngle;
   }
 
   private arrive(world: World, entityId: EntityId, thruster: Thruster): void {

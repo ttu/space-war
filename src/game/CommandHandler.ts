@@ -3,11 +3,12 @@ import { EventBus } from '../engine/core/EventBus';
 import {
   Position, Velocity, Ship, Thruster, Selectable, Facing, ThermalSignature,
   NavigationOrder, RotationState, MissileLauncher, Missile, Railgun, Projectile,
-  COMPONENT,
+  CelestialBody, COMPONENT,
 } from '../engine/components';
 import { computeBurnPlan, angleBetweenPoints } from './TrajectoryCalculator';
 import { computeLeadSolution, hitProbability } from './FiringComputer';
 import { getBodiesFromWorld, getSafeWaypoint } from './PlanetAvoidance';
+import { DANGER_ZONE_MULTIPLIER } from '../engine/systems/CollisionSystem';
 
 /** Rounds per player "Fire railgun" + right-click (one leaves the ship each interval). */
 const RAILGUN_BURST_SIZE = 5;
@@ -218,6 +219,102 @@ export class CommandHandler {
       rot.targetAngle = burnPlan.burnDirection;
     }
     thruster.throttle = 0;
+  }
+
+  /**
+   * Issue an orbit order for selected player ships around a celestial body.
+   * Ships navigate to the orbit radius then enter sustained circular orbit.
+   */
+  issueOrbitTo(planetId: EntityId): void {
+    const planetPos = this.world.getComponent<Position>(planetId, COMPONENT.Position);
+    const planetBody = this.world.getComponent<CelestialBody>(planetId, COMPONENT.CelestialBody);
+    if (!planetPos || !planetBody) return;
+
+    const orbitRadius = planetBody.radius * DANGER_ZONE_MULTIPLIER * 1.3;
+
+    const ships = this.world.query(
+      COMPONENT.Position, COMPONENT.Velocity, COMPONENT.Ship,
+      COMPONENT.Thruster, COMPONENT.Selectable,
+    );
+
+    const toCommand: EntityId[] = [];
+    let flagshipId: EntityId | null = null;
+    const playerShips: EntityId[] = [];
+
+    for (const id of ships) {
+      const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
+      if (ship.faction !== 'player') continue;
+      playerShips.push(id);
+      if (ship.flagship) flagshipId = id;
+      const sel = this.world.getComponent<Selectable>(id, COMPONENT.Selectable)!;
+      if (sel.selected) toCommand.push(id);
+    }
+
+    if (toCommand.length === 0) {
+      if (flagshipId !== null) toCommand.push(flagshipId);
+      else if (playerShips.length === 1) toCommand.push(playerShips[0]);
+    }
+
+    for (const id of toCommand) {
+      const pos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
+      const vel = this.world.getComponent<Velocity>(id, COMPONENT.Velocity)!;
+      const thruster = this.world.getComponent<Thruster>(id, COMPONENT.Thruster)!;
+
+      // Compute approach point: closest point on orbit circle to the ship
+      const dx = pos.x - planetPos.x;
+      const dy = pos.y - planetPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const nx = dist > 0 ? dx / dist : 1;
+      const ny = dist > 0 ? dy / dist : 0;
+      const targetX = planetPos.x + nx * orbitRadius;
+      const targetY = planetPos.y + ny * orbitRadius;
+
+      const bodies = getBodiesFromWorld(this.world);
+      const safe = getSafeWaypoint(pos.x, pos.y, targetX, targetY, bodies);
+      const effectiveX = safe ? safe.x : targetX;
+      const effectiveY = safe ? safe.y : targetY;
+
+      const burnPlan = computeBurnPlan(
+        pos.x, pos.y,
+        vel.vx, vel.vy,
+        effectiveX, effectiveY,
+        thruster.maxThrust,
+      );
+
+      if (this.world.hasComponent(id, COMPONENT.NavigationOrder)) {
+        this.world.removeComponent(id, COMPONENT.NavigationOrder);
+      }
+
+      this.world.addComponent<NavigationOrder>(id, {
+        type: 'NavigationOrder',
+        destinationX: targetX,
+        destinationY: targetY,
+        targetX: effectiveX,
+        targetY: effectiveY,
+        waypoints: [],
+        phase: 'rotating',
+        burnPlan,
+        phaseStartTime: 0,
+        arrivalThreshold: 100,
+        orbitTargetId: planetId,
+        orbitRadius,
+      });
+
+      if (!this.world.hasComponent(id, COMPONENT.RotationState)) {
+        const currentAngle = angleBetweenPoints(0, 0, vel.vx, vel.vy);
+        this.world.addComponent<RotationState>(id, {
+          type: 'RotationState',
+          currentAngle: currentAngle || 0,
+          targetAngle: burnPlan.burnDirection,
+          rotating: false,
+        });
+      } else {
+        const rot = this.world.getComponent<RotationState>(id, COMPONENT.RotationState)!;
+        rot.targetAngle = burnPlan.burnDirection;
+      }
+
+      thruster.throttle = 0;
+    }
   }
 
   /**

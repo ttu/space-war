@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { WorldImpl } from '../../../src/engine/ecs/World';
 import { NavigationSystem } from '../../../src/engine/systems/NavigationSystem';
 import {
-  Position, Velocity, Thruster, NavigationOrder, RotationState, COMPONENT,
+  Position, Velocity, Thruster, NavigationOrder, RotationState, CelestialBody, COMPONENT,
 } from '../../../src/engine/components';
 
 function createShipWithNav(world: WorldImpl, opts: {
@@ -278,5 +278,103 @@ describe('NavigationSystem', () => {
     // Second waypoint still queued
     expect(nav!.waypoints).toHaveLength(1);
     expect(nav!.waypoints[0]).toEqual({ x: 30000, y: 10000 });
+  });
+
+  it('enters orbiting phase on arrival when orbitTargetId is set', () => {
+    const world = new WorldImpl();
+    const system = new NavigationSystem();
+
+    // Create a planet
+    const planetId = world.createEntity();
+    world.addComponent<Position>(planetId, { type: 'Position', x: 10000, y: 0, prevX: 10000, prevY: 0 });
+    world.addComponent<Velocity>(planetId, { type: 'Velocity', vx: 0, vy: 0 });
+    world.addComponent<CelestialBody>(planetId, {
+      type: 'CelestialBody', name: 'TestPlanet', mass: 5e23, radius: 2000, bodyType: 'planet',
+    });
+
+    // Ship near the orbit point, slow enough to arrive
+    const orbitRadius = 3900;
+    const id = createShipWithNav(world, {
+      px: 10000 + orbitRadius - 5, py: 0,
+      vx: 0.01, vy: 0,
+      targetX: 10000 + orbitRadius, targetY: 0,
+      destinationX: 10000 + orbitRadius, destinationY: 0,
+      phase: 'decelerating',
+    });
+    const nav = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder)!;
+    nav.orbitTargetId = planetId;
+    nav.orbitRadius = orbitRadius;
+
+    system.update(world, 1, 10);
+
+    const navAfter = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder);
+    expect(navAfter).toBeDefined();
+    expect(navAfter!.phase).toBe('orbiting');
+  });
+
+  it('maintains circular orbit velocity in orbiting phase', () => {
+    const world = new WorldImpl();
+    const system = new NavigationSystem();
+
+    // Create a planet at origin
+    const planetId = world.createEntity();
+    world.addComponent<Position>(planetId, { type: 'Position', x: 0, y: 0, prevX: 0, prevY: 0 });
+    world.addComponent<Velocity>(planetId, { type: 'Velocity', vx: 0, vy: 0 });
+    world.addComponent<CelestialBody>(planetId, {
+      type: 'CelestialBody', name: 'TestPlanet', mass: 5e23, radius: 2000, bodyType: 'planet',
+    });
+
+    const orbitRadius = 4000;
+    // Ship on orbit circle, already in orbiting phase, zero velocity, facing +y (tangent direction)
+    const id = createShipWithNav(world, {
+      px: orbitRadius, py: 0,
+      vx: 0, vy: 0,
+      targetX: orbitRadius, targetY: 0,
+      destinationX: orbitRadius, destinationY: 0,
+      phase: 'orbiting',
+      currentAngle: Math.PI / 2, // facing +y, aligned with tangent
+    });
+    const nav = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder)!;
+    nav.orbitTargetId = planetId;
+    nav.orbitRadius = orbitRadius;
+
+    system.update(world, 0.1, 10);
+
+    // Ship should be thrusting to reach orbital velocity (tangential = +y direction from +x position)
+    const thruster = world.getComponent<Thruster>(id, COMPONENT.Thruster)!;
+    expect(thruster.throttle).toBeGreaterThan(0);
+  });
+
+  it('coasts when already at correct orbital velocity', () => {
+    const world = new WorldImpl();
+    const system = new NavigationSystem();
+
+    const planetId = world.createEntity();
+    world.addComponent<Position>(planetId, { type: 'Position', x: 0, y: 0, prevX: 0, prevY: 0 });
+    world.addComponent<Velocity>(planetId, { type: 'Velocity', vx: 0, vy: 0 });
+    world.addComponent<CelestialBody>(planetId, {
+      type: 'CelestialBody', name: 'TestPlanet', mass: 5e23, radius: 2000, bodyType: 'planet',
+    });
+
+    const orbitRadius = 4000;
+    // Circular orbit speed: sqrt(G_KM * M / r) = sqrt(6.674e-20 * 5e23 / 4000)
+    const orbSpeed = Math.sqrt(6.674e-20 * 5e23 / orbitRadius);
+
+    // Ship at +x, orbital velocity is +y (counter-clockwise)
+    const id = createShipWithNav(world, {
+      px: orbitRadius, py: 0,
+      vx: 0, vy: orbSpeed,
+      targetX: orbitRadius, targetY: 0,
+      destinationX: orbitRadius, destinationY: 0,
+      phase: 'orbiting',
+    });
+    const nav = world.getComponent<NavigationOrder>(id, COMPONENT.NavigationOrder)!;
+    nav.orbitTargetId = planetId;
+    nav.orbitRadius = orbitRadius;
+
+    system.update(world, 0.1, 10);
+
+    const thruster = world.getComponent<Thruster>(id, COMPONENT.Thruster)!;
+    expect(thruster.throttle).toBe(0);
   });
 });

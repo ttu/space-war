@@ -15,7 +15,7 @@ import { DamageSystem } from '../engine/systems/DamageSystem';
 import { AIStrategicSystem } from '../engine/systems/AIStrategicSystem';
 import { AITacticalSystem } from '../engine/systems/AITacticalSystem';
 import { VictorySystem } from '../engine/systems/VictorySystem';
-import { CollisionSystem } from '../engine/systems/CollisionSystem';
+import { CollisionSystem, DANGER_ZONE_MULTIPLIER } from '../engine/systems/CollisionSystem';
 import { RadarRenderer } from '../rendering/RadarRenderer';
 import { ShipRenderer } from '../rendering/ShipRenderer';
 import { CelestialRenderer } from '../rendering/CelestialRenderer';
@@ -86,7 +86,7 @@ export class SpaceWarGame {
   private offScreenContactRenderer!: OffScreenContactRenderer;
   private planetContactIndicatorsRenderer!: PlanetContactIndicatorsRenderer;
   private sensorOcclusionRenderer!: SensorOcclusionRenderer;
-  private shadowsEnabled = false;
+  private shadowsEnabled = true;
 
   private selectionManager!: SelectionManager;
   private timeControls!: TimeControls;
@@ -614,7 +614,26 @@ export class SpaceWarGame {
       this.orderBar.setPendingOrder('none');
       this.pendingOrder = 'none';
     } else if (order === 'move' || order === 'none') {
-      this.commandHandler.issueMoveTo(worldPos.x, worldPos.y, shiftKey);
+      // Check if click is on a celestial body — issue orbit instead of move
+      let clickedPlanet: EntityId | null = null;
+      const celestials = this.world.query(COMPONENT.Position, COMPONENT.CelestialBody);
+      for (const id of celestials) {
+        const body = this.world.getComponent<CelestialBody>(id, COMPONENT.CelestialBody)!;
+        const bPos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
+        const hitRadius = body.radius * DANGER_ZONE_MULTIPLIER;
+        const dx = bPos.x - worldPos.x;
+        const dy = bPos.y - worldPos.y;
+        if (dx * dx + dy * dy < hitRadius * hitRadius) {
+          clickedPlanet = id;
+          break;
+        }
+      }
+
+      if (clickedPlanet) {
+        this.commandHandler.issueOrbitTo(clickedPlanet);
+      } else {
+        this.commandHandler.issueMoveTo(worldPos.x, worldPos.y, shiftKey);
+      }
       if (order === 'move') {
         this.orderBar.setPendingOrder('none');
         this.pendingOrder = 'none';
