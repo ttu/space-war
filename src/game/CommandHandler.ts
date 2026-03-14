@@ -359,16 +359,19 @@ export class CommandHandler {
     this.world.addComponent<ThermalSignature>(missileId, {
       type: 'ThermalSignature', baseSignature: 100, thrustMultiplier: 500,
     });
+    const missileFuel = launcher.maxRange / (launcher.missileAccel * 100);
     this.world.addComponent<Missile>(missileId, {
       type: 'Missile',
       targetId,
       launcherFaction: ship.faction,
       count: salvoSize,
-      fuel: launcher.maxRange / (launcher.missileAccel * 100),
+      fuel: missileFuel,
+      totalFuel: missileFuel,
       accel: launcher.missileAccel,
       seekerRange: launcher.seekerRange,
       seekerSensitivity: launcher.seekerSensitivity,
       guidanceMode: 'sensor',
+      phase: 'boost',
       armed: false,
       armingDistance: 5,
     });
@@ -515,16 +518,19 @@ export class CommandHandler {
       this.world.addComponent<ThermalSignature>(missileId, {
         type: 'ThermalSignature', baseSignature: 100, thrustMultiplier: 500,
       });
+      const missileFuel = launcher.maxRange / (launcher.missileAccel * 100);
       this.world.addComponent<Missile>(missileId, {
         type: 'Missile',
         targetId,
         launcherFaction: ship.faction,
         count: salvoSize,
-        fuel: launcher.maxRange / (launcher.missileAccel * 100),
+        fuel: missileFuel,
+        totalFuel: missileFuel,
         accel: launcher.missileAccel,
         seekerRange: launcher.seekerRange,
         seekerSensitivity: launcher.seekerSensitivity,
         guidanceMode: 'sensor',
+        phase: 'boost',
         armed: false,
         armingDistance: 5,
       });

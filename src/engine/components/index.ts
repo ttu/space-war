@@ -1,7 +1,7 @@
 import { Component, EntityId } from '../types';
 
 export type { SensorArray, DetectedContact, ContactTracker } from './sensor-components';
-export type { MissileLauncher, Missile, GuidanceMode, PDC, Railgun, Projectile } from './weapon-components';
+export type { MissileLauncher, Missile, GuidanceMode, MissilePhase, PDC, Railgun, Projectile } from './weapon-components';
 export type { ShipSystems, SubsystemHealth } from './damage-components';
 export { createShipSystems } from './damage-components';
 

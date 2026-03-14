@@ -9,6 +9,8 @@ import {
 export const DETONATION_RADIUS = 5; // km — proximity detonation (includes margin for gravity and discretization)
 const NAV_CONSTANT = 4; // proportional navigation gain
 const BALLISTIC_TIMEOUT = 120; // seconds before removing fuel-depleted missiles
+const FUEL_RESERVE_FRACTION = 0.35; // fraction of total fuel reserved for terminal maneuvers
+const TERMINAL_RANGE_SECONDS = 15; // enter terminal phase when estimated time-to-intercept is this many seconds
 
 /**
  * Minimum distance from point (tx, ty) to the segment from (ax, ay) to (bx, by).
@@ -75,11 +77,18 @@ export class MissileSystem {
         missile.guidanceMode = 'ballistic';
       }
 
-      // Apply guidance
-      if (missile.guidanceMode !== 'ballistic' && missile.fuel > 0 && targetData.position) {
-        this.applyProportionalNavigation(vel, facing, pos, targetData.position, targetData.velocity, missile, dt);
+      // Update fuel phase
+      this.updatePhase(missile, vel, pos, targetData);
+
+      // Apply guidance — only burn fuel during boost and terminal phases
+      const shouldBurn = missile.guidanceMode !== 'ballistic'
+        && missile.fuel > 0
+        && targetData.position
+        && missile.phase !== 'coast';
+
+      if (shouldBurn) {
+        this.applyProportionalNavigation(vel, facing, pos, targetData.position!, targetData.velocity, missile, dt);
         missile.fuel = Math.max(0, missile.fuel - dt);
-        // Re-check: if fuel just ran out, switch to ballistic
         if (missile.fuel <= 0) {
           missile.guidanceMode = 'ballistic';
         }
@@ -128,6 +137,62 @@ export class MissileSystem {
     for (const id of toRemove) {
       world.removeEntity(id);
       this.ballisticTimestamps.delete(id);
+    }
+  }
+
+  /**
+   * Manage fuel phases: boost → coast → terminal.
+   * - Boost: burn to build closing speed, stop when fuel hits reserve threshold
+   * - Coast: drift on momentum, no fuel consumed
+   * - Terminal: re-engage thrust for final intercept maneuvers
+   */
+  private updatePhase(
+    missile: Missile,
+    vel: Velocity,
+    missilePos: Position,
+    targetData: TargetData,
+  ): void {
+    const reserveFuel = missile.totalFuel * FUEL_RESERVE_FRACTION;
+
+    if (missile.phase === 'boost') {
+      // Transition to coast when fuel drops to reserve level
+      if (missile.fuel <= reserveFuel) {
+        missile.phase = 'terminal'; // not enough to coast, go straight to terminal
+      } else if (missile.fuel <= missile.totalFuel - reserveFuel) {
+        // Boost budget (totalFuel - reserve) is spent — we used our boost allocation
+        // This shouldn't happen since we check reserveFuel first, but as a safeguard
+        missile.phase = 'coast';
+      } else if (targetData.position) {
+        // Check if we have good closing speed — can coast early
+        const dx = targetData.position.x - missilePos.x;
+        const dy = targetData.position.y - missilePos.y;
+        const range = Math.sqrt(dx * dx + dy * dy);
+        const relVx = (targetData.velocity?.vx ?? 0) - vel.vx;
+        const relVy = (targetData.velocity?.vy ?? 0) - vel.vy;
+        const closingSpeed = -(relVx * dx + relVy * dy) / (range || 1);
+
+        // Coast once we're closing fast and used at least half the boost budget
+        const boostBudget = missile.totalFuel - reserveFuel;
+        const boostUsed = missile.totalFuel - missile.fuel;
+        if (closingSpeed > 0.5 * missile.accel * boostBudget && boostUsed > boostBudget * 0.3) {
+          missile.phase = 'coast';
+        }
+      }
+    }
+
+    if (missile.phase === 'coast' && targetData.position) {
+      const dx = targetData.position.x - missilePos.x;
+      const dy = targetData.position.y - missilePos.y;
+      const range = Math.sqrt(dx * dx + dy * dy);
+      const relVx = (targetData.velocity?.vx ?? 0) - vel.vx;
+      const relVy = (targetData.velocity?.vy ?? 0) - vel.vy;
+      const closingSpeed = -(relVx * dx + relVy * dy) / (range || 1);
+
+      // Enter terminal phase based on time-to-intercept
+      const timeToIntercept = closingSpeed > 0 ? range / closingSpeed : Infinity;
+      if (timeToIntercept <= TERMINAL_RANGE_SECONDS || range < missile.seekerRange) {
+        missile.phase = 'terminal';
+      }
     }
   }
 
