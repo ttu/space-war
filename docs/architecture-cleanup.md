@@ -10,14 +10,14 @@ Identified 2026-03-15. Goal: clean separation of engine/game/rendering/UI layers
 - [x] Update all import paths (NavigationSystem, AIStrategicSystem, AITacticalSystem, CommandHandler, ShipDetailPanel, ActiveMissilesPanel)
 - [x] Run build + tests to verify
 
-## 2. Extract PlayerInteractionHandler from SpaceWarGame
+## 2. Extract PlayerInteractionHandler from SpaceWarGame ✅
 
-- [ ] Create `src/game/PlayerInteractionHandler.ts`
-- [ ] Move `handleRightClick` logic (SpaceWarGame lines 579-676)
-- [ ] Move `tryStartWaypointDrag` / `handleWaypointDragEnd` logic (lines 720-785)
-- [ ] Move `handleDeleteWaypoint` logic (lines 686-717) — currently bypasses CommandHandler
-- [ ] Route waypoint mutations through CommandHandler instead of direct component mutation
-- [ ] Run build + tests to verify
+- [x] Create `src/game/PlayerInteractionHandler.ts`
+- [x] Move `handleRightClick` logic (SpaceWarGame lines 579-676)
+- [x] Move `tryStartWaypointDrag` / `handleWaypointDragEnd` logic (lines 720-785)
+- [x] Move `handleDeleteWaypoint` logic (lines 686-717) — currently bypasses CommandHandler
+- [x] Route waypoint mutations through CommandHandler instead of direct component mutation
+- [x] Run build + tests to verify
 
 ## 3. Decouple AITacticalSystem from CommandHandler
 

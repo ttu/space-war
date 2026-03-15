@@ -590,6 +590,76 @@ export class CommandHandler {
     }
   }
 
+  /**
+   * Delete a waypoint or destination from a ship's navigation order.
+   * waypointIndex: -1 = destination (promotes next waypoint), 0+ = waypoints[i].
+   * Returns true if something was deleted.
+   */
+  deleteWaypoint(shipId: EntityId, waypointIndex: number): boolean {
+    const nav = this.world.getComponent<NavigationOrder>(shipId, COMPONENT.NavigationOrder);
+    if (!nav || nav.phase === 'arrived') return false;
+
+    if (waypointIndex === -1) {
+      // Deleting destination — promote next waypoint or remove order entirely
+      if (nav.waypoints.length > 0) {
+        const next = nav.waypoints.shift()!;
+        nav.destinationX = next.x;
+        nav.destinationY = next.y;
+        nav.targetX = next.x;
+        nav.targetY = next.y;
+      } else {
+        this.world.removeComponent(shipId, COMPONENT.NavigationOrder);
+      }
+      return true;
+    }
+
+    // Deleting an intermediate waypoint
+    if (waypointIndex >= 0 && waypointIndex < nav.waypoints.length) {
+      nav.waypoints.splice(waypointIndex, 1);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Move a waypoint or destination to a new position (used during drag).
+   * waypointIndex: -1 = destination, 0+ = waypoints[i].
+   */
+  moveWaypoint(shipId: EntityId, waypointIndex: number, x: number, y: number): void {
+    const nav = this.world.getComponent<NavigationOrder>(shipId, COMPONENT.NavigationOrder);
+    if (!nav) return;
+
+    if (waypointIndex === -1) {
+      nav.destinationX = x;
+      nav.destinationY = y;
+      nav.targetX = x;
+      nav.targetY = y;
+    } else {
+      const wp = nav.waypoints[waypointIndex];
+      if (wp) { wp.x = x; wp.y = y; }
+    }
+  }
+
+  /**
+   * Recompute burn plan after a destination drag. Recalculates avoidance waypoints.
+   */
+  recomputeAfterDrag(shipId: EntityId): void {
+    const nav = this.world.getComponent<NavigationOrder>(shipId, COMPONENT.NavigationOrder);
+    if (!nav) return;
+    const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position);
+    const vel = this.world.getComponent<Velocity>(shipId, COMPONENT.Velocity);
+    const thruster = this.world.getComponent<Thruster>(shipId, COMPONENT.Thruster);
+    if (!pos || !vel || !thruster) return;
+
+    const bodies = getBodiesFromWorld(this.world);
+    const avoidanceWaypoints = getSafeWaypoints(pos.x, pos.y, nav.destinationX, nav.destinationY, bodies);
+    const effectiveX = avoidanceWaypoints.length > 0 ? avoidanceWaypoints[0].x : nav.destinationX;
+    const effectiveY = avoidanceWaypoints.length > 0 ? avoidanceWaypoints[0].y : nav.destinationY;
+    nav.targetX = effectiveX;
+    nav.targetY = effectiveY;
+    nav.burnPlan = computeBurnPlan(pos.x, pos.y, vel.vx, vel.vy, effectiveX, effectiveY, thruster.maxThrust);
+  }
+
   /** Fire railguns from selected player ships at the target entity (lead targeting).
    * If none selected, uses flagship or all player ships with railgun (same fallback as move).
    * Emits OrderFeedback when no shots fired (no ships or out of range). */
