@@ -7,7 +7,7 @@ import {
   AIStrategicIntent,
   COMPONENT,
 } from '../components';
-import { getBodiesFromWorld, getSafeWaypoint } from '../../game/PlanetAvoidance';
+import { getBodiesFromWorld, getSafeWaypoint } from '../utils/PlanetAvoidance';
 
 const STRATEGIC_INTERVAL = 3; // seconds between re-evaluation
 const DISENGAGE_HULL_RATIO = 0.35; // retreat when hull below this fraction

@@ -4,7 +4,7 @@ import {
   angleBetweenPoints,
   normalizeAngle,
   shortestAngleDelta,
-} from '../../src/game/TrajectoryCalculator';
+} from '../../src/engine/utils/TrajectoryCalculator';
 
 describe('TrajectoryCalculator', () => {
   describe('normalizeAngle', () => {

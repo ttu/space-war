@@ -3,8 +3,8 @@ import {
   Position, Velocity, Thruster, Facing, NavigationOrder, RotationState,
   CelestialBody, COMPONENT,
 } from '../components';
-import { shortestAngleDelta, normalizeAngle, computeBurnPlan } from '../../game/TrajectoryCalculator';
-import { getBodiesFromWorld, getSafeWaypoints, segmentPassesThroughInterior } from '../../game/PlanetAvoidance';
+import { shortestAngleDelta, normalizeAngle, computeBurnPlan } from '../utils/TrajectoryCalculator';
+import { getBodiesFromWorld, getSafeWaypoints, segmentPassesThroughInterior } from '../utils/PlanetAvoidance';
 import { circularOrbitSpeed } from '../../utils/OrbitalMechanics';
 
 const ALIGNMENT_THRESHOLD = 0.05; // radians — close enough to "aligned"

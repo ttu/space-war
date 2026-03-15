@@ -6,7 +6,7 @@ import {
   getSafeWaypoints,
   getBodiesFromWorld,
   type BodyDanger,
-} from '../../src/game/PlanetAvoidance';
+} from '../../src/engine/utils/PlanetAvoidance';
 import { WorldImpl } from '../../src/engine/ecs/World';
 
 describe('segmentIntersectsCircle', () => {

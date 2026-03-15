@@ -3,7 +3,7 @@ import {
   computeLeadSolution,
   hitProbability,
   type LeadSolution,
-} from '../../src/game/FiringComputer';
+} from '../../src/engine/utils/FiringComputer';
 
 describe('FiringComputer', () => {
   describe('computeLeadSolution', () => {

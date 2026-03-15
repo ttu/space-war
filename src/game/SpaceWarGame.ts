@@ -53,8 +53,8 @@ import {
   CelestialBody,
   COMPONENT,
 } from '../engine/components';
-import { computeBurnPlan } from './TrajectoryCalculator';
-import { getBodiesFromWorld, getSafeWaypoint } from './PlanetAvoidance';
+import { computeBurnPlan } from '../engine/utils/TrajectoryCalculator';
+import { getBodiesFromWorld, getSafeWaypoint } from '../engine/utils/PlanetAvoidance';
 
 export class SpaceWarGame {
   readonly world = new WorldImpl();

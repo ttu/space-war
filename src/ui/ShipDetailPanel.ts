@@ -17,7 +17,7 @@ import {
   Railgun,
   COMPONENT,
 } from '../engine/components';
-import { missileHitProbability } from '../game/FiringComputer';
+import { missileHitProbability } from '../engine/utils/FiringComputer';
 
 function pct(current: number, max: number): string {
   if (max <= 0) return '0%';

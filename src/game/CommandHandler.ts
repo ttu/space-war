@@ -5,9 +5,9 @@ import {
   NavigationOrder, RotationState, MissileLauncher, Missile, Railgun, Projectile,
   CelestialBody, COMPONENT,
 } from '../engine/components';
-import { computeBurnPlan, angleBetweenPoints } from './TrajectoryCalculator';
-import { computeLeadSolution, hitProbability } from './FiringComputer';
-import { getBodiesFromWorld, getSafeWaypoints } from './PlanetAvoidance';
+import { computeBurnPlan, angleBetweenPoints } from '../engine/utils/TrajectoryCalculator';
+import { computeLeadSolution, hitProbability } from '../engine/utils/FiringComputer';
+import { getBodiesFromWorld, getSafeWaypoints } from '../engine/utils/PlanetAvoidance';
 import { DANGER_ZONE_MULTIPLIER } from '../engine/systems/CollisionSystem';
 
 /** Rounds per player "Fire railgun" + right-click (one leaves the ship each interval). */

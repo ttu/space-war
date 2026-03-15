@@ -1,4 +1,4 @@
-import { BurnPlan } from '../engine/components';
+import { BurnPlan } from '../components';
 
 const TWO_PI = Math.PI * 2;
 

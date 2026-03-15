@@ -1,7 +1,7 @@
 import type { World, EntityId } from '../engine/types';
 import type { Position, Velocity, Ship, Missile } from '../engine/components';
 import { COMPONENT } from '../engine/components';
-import { missileHitProbability } from '../game/FiringComputer';
+import { missileHitProbability } from '../engine/utils/FiringComputer';
 
 interface SalvoInfo {
   missileId: EntityId;

@@ -13,7 +13,7 @@ import {
   COMPONENT,
 } from '../components';
 import { CommandHandler } from '../../game/CommandHandler';
-import { hitProbability } from '../../game/FiringComputer';
+import { hitProbability } from '../utils/FiringComputer';
 
 const MISSILE_RANGE_FRACTION = 0.85; // fire when within this fraction of maxRange
 /** AI only fires railgun when estimated hit probability is at least this (realistic chance to hit). */
