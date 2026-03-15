@@ -11,6 +11,7 @@ const NAV_CONSTANT = 4; // proportional navigation gain
 const BALLISTIC_TIMEOUT = 120; // seconds before removing fuel-depleted missiles
 const FUEL_RESERVE_FRACTION = 0.35; // fraction of total fuel reserved for terminal maneuvers
 const TERMINAL_RANGE_SECONDS = 15; // enter terminal phase when estimated time-to-intercept is this many seconds
+const COAST_THRUST_FRACTION = 0.15; // fraction of max thrust used for mid-course corrections during coast
 
 /**
  * Minimum distance from point (tx, ty) to the segment from (ax, ay) to (bx, by).
@@ -80,15 +81,15 @@ export class MissileSystem {
       // Update fuel phase
       this.updatePhase(missile, vel, pos, targetData);
 
-      // Apply guidance — only burn fuel during boost and terminal phases
-      const shouldBurn = missile.guidanceMode !== 'ballistic'
+      // Apply guidance — full thrust during boost/terminal, reduced corrections during coast
+      const canBurn = missile.guidanceMode !== 'ballistic'
         && missile.fuel > 0
-        && targetData.position
-        && missile.phase !== 'coast';
+        && targetData.position;
 
-      if (shouldBurn) {
-        this.applyProportionalNavigation(vel, facing, pos, targetData.position!, targetData.velocity, missile, dt);
-        missile.fuel = Math.max(0, missile.fuel - dt);
+      if (canBurn) {
+        const thrustFraction = missile.phase === 'coast' ? COAST_THRUST_FRACTION : 1.0;
+        this.applyProportionalNavigation(vel, facing, pos, targetData.position!, targetData.velocity, missile, dt, thrustFraction);
+        missile.fuel = Math.max(0, missile.fuel - dt * thrustFraction);
         if (missile.fuel <= 0) {
           missile.guidanceMode = 'ballistic';
         }
@@ -243,37 +244,47 @@ export class MissileSystem {
     targetVel: { vx: number; vy: number } | null,
     missile: Missile,
     dt: number,
+    thrustFraction: number = 1.0,
   ): void {
     const dx = targetPos.x - missilePos.x;
     const dy = targetPos.y - missilePos.y;
     const range = Math.sqrt(dx * dx + dy * dy);
     if (range < 1) return;
 
-    // Line of sight angle
-    const losAngle = Math.atan2(dy, dx);
-
     // Relative velocity
     const relVx = (targetVel?.vx ?? 0) - vel.vx;
     const relVy = (targetVel?.vy ?? 0) - vel.vy;
 
-    // Closing speed (negative = closing)
+    // Closing speed (positive = closing)
     const closingSpeed = -(relVx * dx + relVy * dy) / range;
 
-    // LOS rotation rate
+    // Estimate time-to-intercept and predict where target will be.
+    // Cap prediction to missile fuel time to avoid wild extrapolation at low closing speeds.
+    const maxPredictionTime = missile.fuel > 0 ? missile.fuel : 30;
+    const rawIntercept = closingSpeed > 1 ? range / closingSpeed : range;
+    const tIntercept = Math.min(rawIntercept, maxPredictionTime);
+    const predictedX = targetPos.x + (targetVel?.vx ?? 0) * tIntercept;
+    const predictedY = targetPos.y + (targetVel?.vy ?? 0) * tIntercept;
+
+    // Use predicted intercept point for LOS angle (lead pursuit)
+    const pdx = predictedX - missilePos.x;
+    const pdy = predictedY - missilePos.y;
+    const losAngle = Math.atan2(pdy, pdx);
+
+    // LOS rotation rate (using actual target position for PN corrections)
     const losRate = (dx * relVy - dy * relVx) / (range * range);
 
     // Proportional navigation: commanded acceleration perpendicular to LOS (to null LOS rate).
     const commandAccel = NAV_CONSTANT * closingSpeed * losRate;
 
-    // Thrust mostly toward target (along LOS), with bounded perpendicular correction for PN.
-    // If we use thrustAngle = losAngle + atan2(commandAccel*dt, accel), large commandAccel
-    // can rotate thrust ~90° off LOS so the missile never closes (explains ~400 km miss).
-    const perpRatio = Math.max(-0.9, Math.min(0.9, commandAccel / missile.accel));
+    // Thrust toward predicted intercept point, with bounded PN correction.
+    const effectiveAccel = missile.accel * thrustFraction;
+    const perpRatio = Math.max(-0.9, Math.min(0.9, commandAccel / effectiveAccel));
     const thrustAngle = losAngle + Math.asin(perpRatio);
 
     // Apply thrust
-    vel.vx += Math.cos(thrustAngle) * missile.accel * dt;
-    vel.vy += Math.sin(thrustAngle) * missile.accel * dt;
+    vel.vx += Math.cos(thrustAngle) * effectiveAccel * dt;
+    vel.vy += Math.sin(thrustAngle) * effectiveAccel * dt;
 
     // Update facing to velocity direction
     if (facing) {
