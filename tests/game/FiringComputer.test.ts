@@ -50,6 +50,68 @@ describe('FiringComputer', () => {
       );
       expect(result).toBeNull();
     });
+
+    it('accounts for target acceleration when provided', () => {
+      // Target at (100, 0) stationary but accelerating in +x at 1 km/s²
+      const withAccel = computeLeadSolution(
+        0, 0, 0, 0,
+        100, 0, 0, 0,
+        10,           // 10 km/s projectile
+        undefined,
+        1, 0,         // accelerating +x at 1 km/s²
+      );
+      const withoutAccel = computeLeadSolution(
+        0, 0, 0, 0,
+        100, 0, 0, 0,
+        10,
+      );
+      expect(withAccel).not.toBeNull();
+      expect(withoutAccel).not.toBeNull();
+      // Accelerating target: intercept point should be further ahead
+      expect(withAccel!.interceptX).toBeGreaterThan(withoutAccel!.interceptX);
+      expect(withAccel!.timeToImpact).toBeGreaterThan(withoutAccel!.timeToImpact);
+    });
+
+    it('predicts accurate intercept for constant acceleration target', () => {
+      // Target at (500, 0), velocity (0, 10), accelerating (0, 0) — straight line
+      // vs target at (500, 0), velocity (0, 10), accelerating (0, 2) — curving
+      const straight = computeLeadSolution(
+        0, 0, 0, 0,
+        500, 0, 0, 10,
+        50,
+      );
+      const curving = computeLeadSolution(
+        0, 0, 0, 0,
+        500, 0, 0, 10,
+        50,
+        undefined,
+        0, 2,
+      );
+      expect(straight).not.toBeNull();
+      expect(curving).not.toBeNull();
+      // Curving target's intercept Y should be further along due to acceleration
+      expect(curving!.interceptY).toBeGreaterThan(straight!.interceptY);
+    });
+
+    it('with zero acceleration produces same result as without', () => {
+      const without = computeLeadSolution(
+        0, 0, 0, 0,
+        100, 0, 5, 3,
+        20,
+      );
+      const withZero = computeLeadSolution(
+        0, 0, 0, 0,
+        100, 0, 5, 3,
+        20,
+        undefined,
+        0, 0,
+      );
+      expect(without).not.toBeNull();
+      expect(withZero).not.toBeNull();
+      expect(withZero!.interceptX).toBeCloseTo(without!.interceptX, 6);
+      expect(withZero!.interceptY).toBeCloseTo(without!.interceptY, 6);
+      expect(withZero!.timeToImpact).toBeCloseTo(without!.timeToImpact, 6);
+    });
   });
 
   describe('hitProbability', () => {

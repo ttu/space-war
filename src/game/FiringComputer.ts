@@ -12,36 +12,14 @@ export interface LeadSolution {
 }
 
 /**
- * Compute intercept solution: where to aim and time to impact.
- * Projectile is assumed to travel in a straight line at constant speed from shooter position.
- * Target moves at constant velocity.
- * Returns null if no solution (target out of maxRange or unreachable).
+ * Solve the constant-velocity intercept quadratic.
+ * Returns the smallest positive time, or null if no solution.
  */
-export function computeLeadSolution(
-  shooterX: number,
-  shooterY: number,
-  shooterVx: number,
-  shooterVy: number,
-  targetX: number,
-  targetY: number,
-  targetVx: number,
-  targetVy: number,
+function solveConstantVelocityIntercept(
+  Dx: number, Dy: number,
+  relVx: number, relVy: number,
   projectileSpeed: number,
-  maxRange?: number,
-): LeadSolution | null {
-  const Dx = targetX - shooterX;
-  const Dy = targetY - shooterY;
-  const rangeSq = Dx * Dx + Dy * Dy;
-  const range = Math.sqrt(rangeSq);
-  if (range < 1e-6) return null;
-  if (maxRange != null && range > maxRange) return null;
-
-  // Relative velocity: target velocity in shooter frame (we treat shooter as stationary for intercept)
-  const relVx = targetVx - shooterVx;
-  const relVy = targetVy - shooterVy;
-
-  // Solve: |D + V_rel * t| = projectileSpeed * t
-  // => (Dx + relVx*t)^2 + (Dy + relVy*t)^2 = projectileSpeed^2 * t^2
+): number | null {
   const a = relVx * relVx + relVy * relVy - projectileSpeed * projectileSpeed;
   const b = 2 * (Dx * relVx + Dy * relVy);
   const c = Dx * Dx + Dy * Dy;
@@ -61,11 +39,72 @@ export function computeLeadSolution(
     t = Math.min(...valid);
   }
   if (t == null || t <= 0) return null;
+  return t;
+}
+
+/**
+ * Compute intercept solution: where to aim and time to impact.
+ * Projectile is assumed to travel in a straight line at constant speed from shooter position.
+ *
+ * When target acceleration (targetAx, targetAy) is provided, uses iterative refinement
+ * to account for the target's acceleration — solving the quartic implicitly by re-solving
+ * the quadratic with updated predicted positions. Converges in 3 iterations for smooth burns.
+ *
+ * Returns null if no solution (target out of maxRange or unreachable).
+ */
+export function computeLeadSolution(
+  shooterX: number,
+  shooterY: number,
+  shooterVx: number,
+  shooterVy: number,
+  targetX: number,
+  targetY: number,
+  targetVx: number,
+  targetVy: number,
+  projectileSpeed: number,
+  maxRange?: number,
+  targetAx: number = 0,
+  targetAy: number = 0,
+): LeadSolution | null {
+  const Dx = targetX - shooterX;
+  const Dy = targetY - shooterY;
+  const range = Math.sqrt(Dx * Dx + Dy * Dy);
+  if (range < 1e-6) return null;
+  if (maxRange != null && range > maxRange) return null;
+
+  const relVx = targetVx - shooterVx;
+  const relVy = targetVy - shooterVy;
+
+  // Solve constant-velocity intercept as initial estimate
+  let t = solveConstantVelocityIntercept(Dx, Dy, relVx, relVy, projectileSpeed);
+  if (t == null) return null;
+
+  // If target is accelerating, iteratively refine the intercept time.
+  // Each iteration: compute where acceleration moves the target by time t,
+  // shift the target position by that offset, and re-solve the constant-velocity quadratic.
+  const hasAccel = Math.abs(targetAx) > 1e-12 || Math.abs(targetAy) > 1e-12;
+  if (hasAccel) {
+    const ITERATIONS = 3;
+    for (let i = 0; i < ITERATIONS; i++) {
+      // Extra displacement from acceleration at estimated time t
+      const accelOffsetX = 0.5 * targetAx * t * t;
+      const accelOffsetY = 0.5 * targetAy * t * t;
+
+      // Re-solve with shifted target position, keeping original velocity
+      const adjDx = Dx + accelOffsetX;
+      const adjDy = Dy + accelOffsetY;
+
+      const newT = solveConstantVelocityIntercept(adjDx, adjDy, relVx, relVy, projectileSpeed);
+      if (newT == null) return null;
+      t = newT;
+    }
+  }
 
   if (maxRange != null && projectileSpeed * t > maxRange) return null;
 
-  const interceptX = targetX + targetVx * t;
-  const interceptY = targetY + targetVy * t;
+  // Final intercept position (with acceleration if present)
+  const interceptX = targetX + targetVx * t + 0.5 * targetAx * t * t;
+  const interceptY = targetY + targetVy * t + 0.5 * targetAy * t * t;
   const fireAngle = Math.atan2(interceptY - shooterY, interceptX - shooterX);
 
   return {

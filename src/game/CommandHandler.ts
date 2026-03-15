@@ -31,6 +31,30 @@ interface PendingRailgunBurst {
   rangeToTarget: number;
 }
 
+/**
+ * Extract target's current acceleration vector from its NavigationOrder.
+ * Returns {ax, ay} in km/s². Returns zero if the target isn't actively burning.
+ */
+function getTargetAcceleration(
+  world: World,
+  targetId: EntityId,
+): { ax: number; ay: number } {
+  const nav = world.getComponent<NavigationOrder>(targetId, COMPONENT.NavigationOrder);
+  const thruster = world.getComponent<Thruster>(targetId, COMPONENT.Thruster);
+  if (!nav || !thruster) return { ax: 0, ay: 0 };
+
+  const phase = nav.phase;
+  if (phase === 'accelerating') {
+    const angle = nav.burnPlan.burnDirection;
+    return { ax: Math.cos(angle) * thruster.maxThrust, ay: Math.sin(angle) * thruster.maxThrust };
+  }
+  if (phase === 'decelerating') {
+    const angle = nav.burnPlan.flipAngle;
+    return { ax: Math.cos(angle) * thruster.maxThrust, ay: Math.sin(angle) * thruster.maxThrust };
+  }
+  return { ax: 0, ay: 0 };
+}
+
 export class CommandHandler {
   private pendingRailgunBursts: PendingRailgunBurst[] = [];
 
@@ -412,12 +436,14 @@ export class CommandHandler {
     const targetVy = targetVel?.vy ?? 0;
     const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position)!;
     const vel = this.world.getComponent<Velocity>(shipId, COMPONENT.Velocity)!;
+    const { ax: targetAx, ay: targetAy } = getTargetAcceleration(this.world, targetId);
 
     const solution = computeLeadSolution(
       pos.x, pos.y, vel.vx, vel.vy,
       targetPos.x, targetPos.y, targetVx, targetVy,
       railgun.projectileSpeed,
       undefined, // no max range limit
+      targetAx, targetAy,
     );
     if (!solution) return false;
 
@@ -590,6 +616,7 @@ export class CommandHandler {
 
     const targetVx = targetVel?.vx ?? 0;
     const targetVy = targetVel?.vy ?? 0;
+    const { ax: targetAx, ay: targetAy } = getTargetAcceleration(this.world, targetId);
 
     let fired = 0;
     for (const shipId of toFire) {
@@ -608,6 +635,7 @@ export class CommandHandler {
         targetPos.x, targetPos.y, targetVx, targetVy,
         railgun.projectileSpeed,
         undefined, // no max range limit — fire at any distance
+        targetAx, targetAy,
       );
       if (!solution) continue;
 
