@@ -67,4 +67,7 @@ export interface Projectile extends Component {
   faction: Faction;
   damage: number;
   hitRadius: number;           // km — proximity for hit
+  spawnX: number;              // km — origin for max range check
+  spawnY: number;
+  maxRange: number;            // km — removed after traveling this far
 }

@@ -101,6 +101,9 @@ describe('Weapon Components', () => {
       faction: 'player',
       damage: 50,
       hitRadius: 0.5,
+      spawnX: 0,
+      spawnY: 0,
+      maxRange: 12_000,
     };
     world.addComponent(id, projectile);
     const retrieved = world.getComponent<Projectile>(id, COMPONENT.Projectile);

@@ -69,8 +69,9 @@ function createProjectile(world: WorldImpl, opts: { x: number; y: number }) {
     type: 'Velocity', vx: 0, vy: 0,
   } as Velocity);
   world.addComponent(id, {
-    type: 'Projectile', speed: 10, maxRange: 10000, distanceTraveled: 0,
+    type: 'Projectile', shooterId: '', targetId: '', hitRadius: 0.5,
     damage: 30, faction: 'player',
+    spawnX: opts.x, spawnY: opts.y, maxRange: 10_000,
   } as Projectile);
   return id;
 }

@@ -28,6 +28,7 @@ interface PendingRailgunBurst {
   projectileSpeed: number;
   damage: number;
   faction: string;
+  rangeToTarget: number;
 }
 
 export class CommandHandler {
@@ -74,6 +75,9 @@ export class CommandHandler {
         faction: b.faction as 'player' | 'enemy' | 'neutral',
         damage: b.damage,
         hitRadius: 0.5,
+        spawnX: pos.x,
+        spawnY: pos.y,
+        maxRange: b.rangeToTarget * 2,
       });
       b.roundsSpawned += 1;
       if (b.roundsSpawned >= b.roundsTotal) {
@@ -437,6 +441,7 @@ export class CommandHandler {
       projectileSpeed: railgun.projectileSpeed,
       damage: railgun.damage,
       faction: ship.faction,
+      rangeToTarget: range,
     });
     railgun.lastFiredTime = gameTime;
     this.eventBus?.emit({
@@ -631,6 +636,7 @@ export class CommandHandler {
         projectileSpeed: railgun.projectileSpeed,
         damage: railgun.damage,
         faction: ship.faction,
+        rangeToTarget: range,
       });
 
       railgun.lastFiredTime = gameTime;
