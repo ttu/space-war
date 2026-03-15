@@ -227,8 +227,15 @@ export class NavigationSystem {
     const angleDelta = Math.abs(shortestAngleDelta(rot.currentAngle, desiredAngle));
 
     if (angleDelta > ALIGNMENT_THRESHOLD) {
-      // Rotate toward desired direction — no thrust during rotation
-      thruster.throttle = 0;
+      // Rotate toward desired direction — apply partial thrust along current facing
+      // to avoid drifting off-course while turning (prevents spiraling paths)
+      const cosAlign = Math.cos(angleDelta);
+      if (cosAlign > 0) {
+        thruster.thrustAngle = rot.currentAngle;
+        thruster.throttle = cosAlign;
+      } else {
+        thruster.throttle = 0;
+      }
       rot.targetAngle = desiredAngle;
       this.rotateToward(rot, thruster.rotationSpeed, dt);
       nav.phase = 'rotating';
