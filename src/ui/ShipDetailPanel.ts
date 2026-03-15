@@ -33,6 +33,7 @@ export class ShipDetailPanel {
   private root: HTMLElement;
   private content: HTMLElement;
   private header: HTMLElement;
+  private expandedShipId: EntityId | null = null;
 
   constructor(
     container: HTMLElement,
@@ -97,6 +98,26 @@ export class ShipDetailPanel {
 
     // Build missile target map: targetId → { targetId, targetName, count }[]
     const missileTargets = this.buildMissileTargetMap();
+
+    // Multi-select: compact row view
+    if (ids.length > 1) {
+      this.header.textContent = `Selected (${ids.length} ships)`;
+      for (const id of ids) {
+        const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship);
+        if (!ship) {
+          // Could be a missile entity
+          const missile = this.world.getComponent<Missile>(id, COMPONENT.Missile);
+          if (missile) this.renderMissileDetail(id, missile, ids);
+          continue;
+        }
+        const isExpanded = this.expandedShipId === id;
+        this.renderCompactShipRow(id, isExpanded);
+        if (isExpanded) {
+          this.renderShipDetail(id, missileTargets, ids, false);
+        }
+      }
+      return;
+    }
 
     for (const id of ids) {
       // Check if entity is a missile (no Ship component)
@@ -216,9 +237,6 @@ export class ShipDetailPanel {
       const suffix = viaWaypoint ? ' (via waypoint)' : '';
       this.addRow(`Order: Move → (${Math.round(nav.destinationX)}, ${Math.round(nav.destinationY)}) [${nav.phase}]${suffix}`);
     }
-
-    // Show active missile targets from this ship's missiles
-    this.renderActiveMissiles(id);
 
     const ml = this.world.getComponent<MissileLauncher>(id, COMPONENT.MissileLauncher);
     if (ml) {
@@ -360,26 +378,42 @@ export class ShipDetailPanel {
     }
   }
 
-  private renderActiveMissiles(shipId: EntityId): void {
-    // Find missiles launched by this ship's faction that we can attribute
-    // Since missiles don't store launcherId, show all player missiles and their targets
-    const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship);
-    if (!ship || ship.faction !== 'player') return;
+  private renderCompactShipRow(id: EntityId, isExpanded: boolean): void {
+    const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship);
+    if (!ship) return;
 
-    const missileEntities = this.world.query(COMPONENT.Position, COMPONENT.Missile);
-    const targetCounts = new Map<string, number>();
+    const hull = this.world.getComponent<Hull>(id, COMPONENT.Hull);
+    const ml = this.world.getComponent<MissileLauncher>(id, COMPONENT.MissileLauncher);
+    const rg = this.world.getComponent<Railgun>(id, COMPONENT.Railgun);
 
-    for (const mid of missileEntities) {
-      const missile = this.world.getComponent<Missile>(mid, COMPONENT.Missile)!;
-      if (missile.launcherFaction !== 'player') continue;
-      const targetShip = this.world.getComponent<Ship>(missile.targetId, COMPONENT.Ship);
-      const name = targetShip ? targetShip.name : 'Unknown';
-      targetCounts.set(name, (targetCounts.get(name) ?? 0) + missile.count);
-    }
+    const prefix = isExpanded ? '▾' : '▸';
+    const hullText = hull ? `${hull.current}/${hull.max}` : '';
+    const parts: string[] = [hullText];
+    if (ml) parts.push(`M:${ml.ammo}`);
+    if (rg) parts.push(`R:${rg.ammo}`);
+    const stats = parts.filter(Boolean).join(' · ');
 
-    for (const [name, count] of targetCounts) {
-      this.addRow(`Missiles → ${name}: ${count}`, 'ship-detail-row ship-detail-target');
-    }
+    const row = document.createElement('div');
+    row.className = 'ship-detail-compact-row';
+    row.style.cursor = 'pointer';
+    row.style.display = 'flex';
+    row.style.justifyContent = 'space-between';
+    row.style.padding = '2px 4px';
+    if (isExpanded) row.style.color = 'cyan';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = `${prefix} ${ship.name}`;
+    const statsSpan = document.createElement('span');
+    statsSpan.textContent = stats;
+    statsSpan.style.opacity = '0.7';
+
+    row.appendChild(nameSpan);
+    row.appendChild(statsSpan);
+    row.addEventListener('click', () => {
+      this.expandedShipId = this.expandedShipId === id ? null : id;
+    });
+
+    this.content.appendChild(row);
   }
 
   private addRow(text: string, className = 'ship-detail-row'): void {

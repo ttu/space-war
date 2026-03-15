@@ -10,7 +10,8 @@ export type InputEvent =
   | { type: 'escape' }
   | { type: 'focusNearestEnemy' }
   | { type: 'toggleShadows' }
-  | { type: 'deleteKey'; screenX: number; screenY: number };
+  | { type: 'deleteKey'; screenX: number; screenY: number }
+  | { type: 'panelToggle'; code: string };
 
 type InputEventCallback = (event: InputEvent) => void;
 
@@ -93,6 +94,15 @@ export class InputManager {
       }
       if (e.code === 'Delete' || e.code === 'Backspace') {
         this.emit({ type: 'deleteKey', screenX: this.currentMouseScreen.x, screenY: this.currentMouseScreen.y });
+      }
+      if (e.code === 'F1' || e.code === 'F2' || e.code === 'F3' ||
+          e.code === 'F4' || e.code === 'F5') {
+        e.preventDefault();
+        this.emit({ type: 'panelToggle', code: e.code });
+      }
+      if (e.code === 'KeyL') {
+        e.preventDefault();
+        this.emit({ type: 'panelToggle', code: 'KeyL' });
       }
     }) as EventListener);
 

@@ -161,7 +161,7 @@
         left: 12px;
         top: 56px;
         bottom: 120px;
-        width: 220px;
+        width: 200px;
         display: flex;
         flex-direction: column;
         gap: 8px;
@@ -169,9 +169,23 @@
         transform: translateZ(0);
       }
 
+      /* Right sidebar: contacts + missiles + threats */
+      .right-panel {
+        position: absolute;
+        right: 12px;
+        top: 56px;
+        bottom: 50px;
+        width: 260px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
       .fleet-panel,
       .ship-detail-panel,
-      .contacts-panel {
+      .contacts-panel,
+      .active-missiles-panel,
+      .incoming-threats-panel {
         background: rgba(10, 14, 24, 0.9);
         border: 1px solid var(--border-subtle);
         border-radius: 4px;
@@ -233,6 +247,23 @@
         color: var(--status-red);
       }
 
+      .contacts-panel-distance {
+        font-size: 10px;
+        color: var(--text-muted);
+      }
+
+      .distance-close {
+        color: var(--status-red);
+      }
+
+      .distance-medium {
+        color: var(--status-yellow);
+      }
+
+      .distance-far {
+        color: var(--text-muted);
+      }
+
       .fleet-panel-header,
       .ship-detail-header,
       .contacts-panel-header,
@@ -243,6 +274,39 @@
         margin-bottom: 6px;
         font-size: 11px;
         text-transform: uppercase;
+      }
+
+      .panel-header-collapsible {
+        color: var(--accent-cyan);
+        font-weight: bold;
+        font-size: 11px;
+        text-transform: uppercase;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        user-select: none;
+      }
+
+      .panel-header-collapsible:hover {
+        color: var(--text-primary);
+      }
+
+      .panel-hotkey-hint {
+        font-size: 10px;
+        color: var(--text-muted);
+        font-weight: normal;
+        text-transform: none;
+        margin-left: 6px;
+      }
+
+      .panel-collapsed {
+        overflow: hidden;
+      }
+
+      .panel-collapsed > *:not(.panel-header-collapsible) {
+        display: none;
       }
 
       .fleet-panel-list {
@@ -406,11 +470,12 @@
       }
 
       /* Combat log */
-      .combat-log-wrap {
+      .combat-log-overlay {
         position: absolute;
-        right: 12px;
-        bottom: 12px;
-        width: 280px;
+        bottom: 50px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 420px;
         max-height: 180px;
         z-index: 11;
       }
@@ -444,7 +509,7 @@
       #info-overlay {
         position: absolute;
         bottom: 12px;
-        left: 240px;
+        left: 220px;
         font-size: 11px;
         color: var(--text-muted);
         z-index: 10;

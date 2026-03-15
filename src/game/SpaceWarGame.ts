@@ -37,6 +37,9 @@ import { ContactsPanel } from '../ui/ContactsPanel';
 import { ShipDetailPanel } from '../ui/ShipDetailPanel';
 import { OrderBar } from '../ui/OrderBar';
 import { CombatLog } from '../ui/CombatLog';
+import { ActiveMissilesPanel } from '../ui/ActiveMissilesPanel';
+import { IncomingThreatsPanel } from '../ui/IncomingThreatsPanel';
+import { PanelManager } from '../ui/PanelManager';
 import type { PendingOrderType } from '../ui/OrderBar';
 import type { EntityId } from '../engine/types';
 import {
@@ -94,6 +97,9 @@ export class SpaceWarGame {
   private shipDetailPanel!: ShipDetailPanel;
   private orderBar!: OrderBar;
   private combatLog!: CombatLog;
+  private activeMissilesPanel!: ActiveMissilesPanel;
+  private incomingThreatsPanel!: IncomingThreatsPanel;
+  private panelManager!: PanelManager;
   private pendingOrder: PendingOrderType = 'none';
 
   private cameraLockIndicator: HTMLElement | null = null;
@@ -323,16 +329,6 @@ export class SpaceWarGame {
         this.focusCameraOnShip(entityId);
       },
     );
-    this.contactsPanel = new ContactsPanel(
-      leftPanel,
-      this.world,
-      () => this.getPlayerContacts() ?? undefined,
-      () => this.gameTime.elapsed,
-      (entityId) => {
-        this.selectionManager.setSelectionToEntity(entityId);
-        this.focusCameraOnContact(entityId);
-      },
-    );
     this.shipDetailPanel = new ShipDetailPanel(
       leftPanel,
       this.world,
@@ -342,6 +338,30 @@ export class SpaceWarGame {
       () => this.gameTime.elapsed,
       () => this.selectionManager.getSelectedCelestialId(),
       (entityId) => this.setCameraLock(entityId),
+    );
+
+    // Right panel — combat intel
+    const rightPanel = document.createElement('div');
+    rightPanel.id = 'right-panel';
+    rightPanel.className = 'right-panel';
+    uiRoot.appendChild(rightPanel);
+
+    this.contactsPanel = new ContactsPanel(
+      rightPanel,
+      this.world,
+      () => this.getPlayerContacts() ?? undefined,
+      () => this.gameTime.elapsed,
+      (entityId) => {
+        this.selectionManager.setSelectionToEntity(entityId);
+        this.focusCameraOnContact(entityId);
+      },
+      () => this.selectionManager.getSelectedPlayerIds(),
+    );
+    this.activeMissilesPanel = new ActiveMissilesPanel(rightPanel, this.world);
+    this.incomingThreatsPanel = new IncomingThreatsPanel(
+      rightPanel,
+      this.world,
+      () => this.selectionManager.getSelectedPlayerIds(),
     );
 
     const orderBarWrap = document.createElement('div');
@@ -357,15 +377,23 @@ export class SpaceWarGame {
       },
     });
 
-    const combatLogWrap = document.createElement('div');
-    combatLogWrap.id = 'combat-log-wrap';
-    combatLogWrap.className = 'combat-log-wrap';
-    uiRoot.appendChild(combatLogWrap);
-    this.combatLog = new CombatLog(combatLogWrap, this.eventBus);
+    // Combat log overlay (hidden by default, toggled with L)
+    this.combatLog = new CombatLog(uiRoot, this.eventBus);
+
+    // Panel manager — collapse/expand with hotkeys
+    this.panelManager = new PanelManager();
+    const fleetEl = document.getElementById('fleet-panel')!;
+    const shipDetailEl = document.getElementById('ship-detail-panel')!;
+    const contactsEl = document.getElementById('contacts-panel')!;
+    this.panelManager.register({ id: 'fleet', element: fleetEl, headerElement: fleetEl.querySelector('.fleet-panel-header')!, hotkey: 'F1' });
+    this.panelManager.register({ id: 'shipDetail', element: shipDetailEl, headerElement: shipDetailEl.querySelector('.ship-detail-header')!, hotkey: 'F2' });
+    this.panelManager.register({ id: 'contacts', element: contactsEl, headerElement: contactsEl.querySelector('.contacts-panel-header')!, hotkey: 'F3' });
+    this.panelManager.register({ id: 'activeMissiles', element: this.activeMissilesPanel.header.parentElement!, headerElement: this.activeMissilesPanel.header, hotkey: 'F4' });
+    this.panelManager.register({ id: 'incomingThreats', element: this.incomingThreatsPanel.header.parentElement!, headerElement: this.incomingThreatsPanel.header, hotkey: 'F5' });
 
     const infoOverlay = document.createElement('div');
     infoOverlay.id = 'info-overlay';
-    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/-: Speed | E: Focus enemy | V: Shadows | Shift+RClick: Add waypoint | Del: Remove waypoint';
+    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/-: Speed | E: Focus enemy | V: Shadows | F1-F5: Panels | L: Combat log';
     uiRoot.appendChild(infoOverlay);
 
     const cameraLockIndicator = document.createElement('div');
@@ -436,6 +464,13 @@ export class SpaceWarGame {
           break;
         case 'toggleShadows':
           this.orderBar.toggleShadows();
+          break;
+        case 'panelToggle':
+          if (event.code === 'KeyL') {
+            this.combatLog.toggle();
+          } else {
+            this.panelManager.handleHotkey(event.code);
+          }
           break;
       }
     });
@@ -839,6 +874,8 @@ export class SpaceWarGame {
       this.contactsPanel.update();
     }
     this.shipDetailPanel.update();
+    this.activeMissilesPanel.update();
+    this.incomingThreatsPanel.update();
     this.combatLog.update();
 
     this.renderer.render(this.scene, this.camera.camera);

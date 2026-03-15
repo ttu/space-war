@@ -100,7 +100,7 @@ export class ContactsPanel {
   private lastSummaryLoc = '';
   private lastSummaryAge = '';
   /** Cache last displayed values per contact to avoid DOM writes when unchanged. */
-  private lastRowState = new Map<EntityId, { name: string; meta: string; metaClass: string; location: string }>();
+  private lastRowState = new Map<EntityId, { name: string; meta: string; metaClass: string; location: string; distance: string; distanceClass: string }>();
   private lastUpdateTime = 0;
   private readonly updateIntervalMs = 500;
 
@@ -110,6 +110,7 @@ export class ContactsPanel {
     private getContacts: () => ContactTracker | undefined,
     private getGameTime: () => number,
     private onContactClick?: (entityId: EntityId) => void,
+    private getSelectedPlayerIds?: () => EntityId[],
   ) {
     this.root = document.createElement('div');
     this.root.id = 'contacts-panel';
@@ -189,14 +190,23 @@ export class ContactsPanel {
         row = document.createElement('div');
         row.className = 'contacts-panel-row';
         row.dataset.entityId = id;
+        row.style.display = 'flex';
+        row.style.flexWrap = 'wrap';
+        row.style.justifyContent = 'space-between';
+        row.style.alignItems = 'baseline';
         const nameEl = document.createElement('span');
         nameEl.className = 'contacts-panel-name';
         row.appendChild(nameEl);
+        const distEl = document.createElement('span');
+        distEl.className = 'contacts-panel-distance';
+        row.appendChild(distEl);
         const meta = document.createElement('span');
         meta.className = 'contacts-panel-meta';
+        meta.style.width = '100%';
         row.appendChild(meta);
         const locationEl = document.createElement('span');
         locationEl.className = 'contacts-panel-location';
+        locationEl.style.width = '100%';
         row.appendChild(locationEl);
         this.list.appendChild(row);
         this.contactRows.set(id, row);
@@ -225,7 +235,36 @@ export class ContactsPanel {
       const locationChanged = cached?.location !== locationText;
       const isNewRow = cached === undefined;
 
-      if ((shouldUpdateContent || isNewRow) && (nameChanged || metaChanged || locationChanged)) {
+      // Calculate distance from nearest selected player ship
+      let distText = '';
+      let distClass = 'contacts-panel-distance';
+      const distEl = row.querySelector('.contacts-panel-distance') as HTMLElement | null;
+      if (distEl && this.getSelectedPlayerIds) {
+        const selectedIds = this.getSelectedPlayerIds();
+        let minDist = Infinity;
+        for (const sid of selectedIds) {
+          const sPos = this.world.getComponent<Position>(sid, COMPONENT.Position);
+          if (!sPos) continue;
+          const d = Math.hypot(locX - sPos.x, locY - sPos.y);
+          if (d < minDist) minDist = d;
+        }
+        if (minDist < Infinity) {
+          const formatted = minDist >= 1_000_000
+            ? `${(minDist / 1_000_000).toFixed(1)}M`
+            : minDist >= 1000
+              ? `${(minDist / 1000).toFixed(0)}k`
+              : `${Math.round(minDist)}`;
+          const colorClass = minDist < 50_000 ? 'distance-close'
+            : minDist < 150_000 ? 'distance-medium'
+            : 'distance-far';
+          distText = `${formatted} km`;
+          distClass = `contacts-panel-distance ${colorClass}`;
+        }
+      }
+
+      const distChanged = cached?.distance !== distText || cached?.distanceClass !== distClass;
+
+      if ((shouldUpdateContent || isNewRow) && (nameChanged || metaChanged || locationChanged || distChanged)) {
         if (nameChanged) nameEl.textContent = ship.name;
         if (metaChanged) {
           metaEl.textContent = metaText;
@@ -233,8 +272,12 @@ export class ContactsPanel {
         }
         const locationEl = row.querySelector('.contacts-panel-location') as HTMLElement | null;
         if (locationEl && locationChanged) locationEl.textContent = locationText;
+        if (distEl && distChanged) {
+          distEl.textContent = distText;
+          distEl.className = distClass;
+        }
       }
-      this.lastRowState.set(id, { name: ship.name, meta: metaText, metaClass, location: locationText });
+      this.lastRowState.set(id, { name: ship.name, meta: metaText, metaClass, location: locationText, distance: distText, distanceClass: distClass });
     }
 
     for (const [id, row] of this.contactRows) {

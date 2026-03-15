@@ -60,30 +60,48 @@ function eventSummary(e: GameEvent): string {
  * Scrollable combat/event log fed from EventBus history.
  */
 export class CombatLog {
+  private wrap: HTMLElement;
   private root: HTMLElement;
   private list: HTMLElement;
+  readonly header: HTMLElement;
   private lastCount = 0;
 
   constructor(
     container: HTMLElement,
     private eventBus: EventBus,
   ) {
+    this.wrap = document.createElement('div');
+    this.wrap.className = 'combat-log-overlay';
+    this.wrap.style.display = 'none';
+
     this.root = document.createElement('div');
     this.root.id = 'combat-log';
     this.root.className = 'combat-log-panel';
 
-    const header = document.createElement('div');
-    header.className = 'combat-log-header';
-    header.textContent = 'Combat log';
-    this.root.appendChild(header);
+    this.header = document.createElement('div');
+    this.header.className = 'combat-log-header';
+    this.header.textContent = 'Combat log';
+    const closeHint = document.createElement('span');
+    closeHint.textContent = '(L to close)';
+    closeHint.style.opacity = '0.5';
+    closeHint.style.marginLeft = '8px';
+    closeHint.style.fontSize = '10px';
+    this.header.appendChild(closeHint);
+    this.root.appendChild(this.header);
 
     this.list = document.createElement('div');
     this.list.className = 'combat-log-list';
     this.list.setAttribute('role', 'log');
     this.root.appendChild(this.list);
 
-    container.appendChild(this.root);
+    this.wrap.appendChild(this.root);
+    container.appendChild(this.wrap);
   }
+
+  show(): void { this.wrap.style.display = ''; }
+  hide(): void { this.wrap.style.display = 'none'; }
+  toggle(): void { this.wrap.style.display === 'none' ? this.show() : this.hide(); }
+  get visible(): boolean { return this.wrap.style.display !== 'none'; }
 
   /** Call when rendering or on a timer to refresh from event history. */
   update(): void {
