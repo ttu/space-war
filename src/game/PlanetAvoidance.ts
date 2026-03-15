@@ -109,6 +109,9 @@ const BYPASS_MARGIN = 1.15;
  * Returns a point on the circle (cx,cy) with radius r that is tangent from (fromX, fromY).
  * Returns the tangent point closer to (toX, toY). If (fromX, fromY) is inside the circle,
  * returns undefined (caller should use escape vector instead).
+ *
+ * The tangent touch point is where the tangent line from the external point grazes the circle.
+ * The segment from→tangentPoint follows the tangent line and does NOT enter the circle.
  */
 function tangentPointCloserTo(
   fromX: number,
@@ -123,20 +126,50 @@ function tangentPointCloserTo(
   const dy = fromY - cy;
   const d = Math.sqrt(dx * dx + dy * dy);
   if (d <= r) return undefined;
-  const sin = r / d;
-  const cos = Math.sqrt(1 - sin * sin);
-  const ux = -dx / d;
-  const uy = -dy / d;
-  const perpX = -uy;
-  const perpY = ux;
-  const t1x = cx + r * (ux * cos + perpX * sin);
-  const t1y = cy + r * (uy * cos + perpY * sin);
-  const t2x = cx + r * (ux * cos - perpX * sin);
-  const t2y = cy + r * (uy * cos - perpY * sin);
+  // Unit vector from circle center toward "from" point
+  const unitX = dx / d;
+  const unitY = dy / d;
+  // CCW perpendicular
+  const perpX = -unitY;
+  const perpY = unitX;
+  // Tangent angle: sin = r/d, cos = sqrt(1 - (r/d)^2)
+  const sinA = r / d;
+  const cosA = Math.sqrt(1 - sinA * sinA);
+  // Tangent touch points on the circle (near side, facing "from")
+  const t1x = cx + r * (sinA * unitX + cosA * perpX);
+  const t1y = cy + r * (sinA * unitY + cosA * perpY);
+  const t2x = cx + r * (sinA * unitX - cosA * perpX);
+  const t2y = cy + r * (sinA * unitY - cosA * perpY);
   const dist1 = (t1x - toX) ** 2 + (t1y - toY) ** 2;
   const dist2 = (t2x - toX) ** 2 + (t2y - toY) ** 2;
   if (dist1 <= dist2) return { x: t1x, y: t1y };
   return { x: t2x, y: t2y };
+}
+
+const MAX_RECURSION_DEPTH = 8;
+
+/**
+ * Pre-compute a chain of waypoints that form a clear path around all blocking bodies.
+ * Returns an ordered array of intermediate waypoints (empty = path is clear).
+ * Uses recursive segment splitting: for each blocked segment, compute a waypoint
+ * around the nearest blocking body, then recursively check both sub-segments.
+ */
+export function getSafeWaypoints(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  bodies: BodyDanger[],
+  depth = 0,
+): { x: number; y: number }[] {
+  if (depth > MAX_RECURSION_DEPTH || bodies.length === 0) return [];
+
+  const wp = getSafeWaypoint(fromX, fromY, toX, toY, bodies);
+  if (!wp) return []; // path is clear
+
+  const before = getSafeWaypoints(fromX, fromY, wp.x, wp.y, bodies, depth + 1);
+  const after = getSafeWaypoints(wp.x, wp.y, toX, toY, bodies, depth + 1);
+  return [...before, wp, ...after];
 }
 
 /**

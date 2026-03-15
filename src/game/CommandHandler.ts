@@ -7,7 +7,7 @@ import {
 } from '../engine/components';
 import { computeBurnPlan, angleBetweenPoints } from './TrajectoryCalculator';
 import { computeLeadSolution, hitProbability } from './FiringComputer';
-import { getBodiesFromWorld, getSafeWaypoint } from './PlanetAvoidance';
+import { getBodiesFromWorld, getSafeWaypoints } from './PlanetAvoidance';
 import { DANGER_ZONE_MULTIPLIER } from '../engine/systems/CollisionSystem';
 
 /** Rounds per player "Fire railgun" + right-click (one leaves the ship each interval). */
@@ -149,9 +149,9 @@ export class CommandHandler {
       const thruster = this.world.getComponent<Thruster>(id, COMPONENT.Thruster)!;
 
       const bodies = getBodiesFromWorld(this.world);
-      const safe = getSafeWaypoint(pos.x, pos.y, targetX, targetY, bodies);
-      const effectiveX = safe ? safe.x : targetX;
-      const effectiveY = safe ? safe.y : targetY;
+      const avoidanceWaypoints = getSafeWaypoints(pos.x, pos.y, targetX, targetY, bodies);
+      const effectiveX = avoidanceWaypoints.length > 0 ? avoidanceWaypoints[0].x : targetX;
+      const effectiveY = avoidanceWaypoints.length > 0 ? avoidanceWaypoints[0].y : targetY;
 
       const burnPlan = computeBurnPlan(
         pos.x, pos.y,
@@ -165,13 +165,16 @@ export class CommandHandler {
         this.world.removeComponent(id, COMPONENT.NavigationOrder);
       }
 
+      // Remaining avoidance waypoints go into the waypoint queue
+      const queuedWaypoints = avoidanceWaypoints.slice(1).map(w => ({ x: w.x, y: w.y }));
+
       this.world.addComponent<NavigationOrder>(id, {
         type: 'NavigationOrder',
         destinationX: targetX,
         destinationY: targetY,
         targetX: effectiveX,
         targetY: effectiveY,
-        waypoints: [],
+        waypoints: queuedWaypoints,
         phase: 'rotating',
         burnPlan,
         phaseStartTime: 0,
@@ -206,9 +209,9 @@ export class CommandHandler {
     if (!pos || !vel || !thruster) return;
 
     const bodies = getBodiesFromWorld(this.world);
-    const safe = getSafeWaypoint(pos.x, pos.y, targetX, targetY, bodies);
-    const effectiveX = safe ? safe.x : targetX;
-    const effectiveY = safe ? safe.y : targetY;
+    const avoidanceWaypoints = getSafeWaypoints(pos.x, pos.y, targetX, targetY, bodies);
+    const effectiveX = avoidanceWaypoints.length > 0 ? avoidanceWaypoints[0].x : targetX;
+    const effectiveY = avoidanceWaypoints.length > 0 ? avoidanceWaypoints[0].y : targetY;
 
     const burnPlan = computeBurnPlan(
       pos.x, pos.y,
@@ -221,13 +224,15 @@ export class CommandHandler {
       this.world.removeComponent(shipId, COMPONENT.NavigationOrder);
     }
 
+    const queuedWaypoints = avoidanceWaypoints.slice(1).map(w => ({ x: w.x, y: w.y }));
+
     this.world.addComponent<NavigationOrder>(shipId, {
       type: 'NavigationOrder',
       destinationX: targetX,
       destinationY: targetY,
       targetX: effectiveX,
       targetY: effectiveY,
-      waypoints: [],
+      waypoints: queuedWaypoints,
       phase: 'rotating',
       burnPlan,
       phaseStartTime: 0,
@@ -303,9 +308,9 @@ export class CommandHandler {
         const dy = b.y - planetPos.y;
         return Math.sqrt(dx * dx + dy * dy) > 1;
       });
-      const safe = getSafeWaypoint(pos.x, pos.y, targetX, targetY, bodies);
-      const effectiveX = safe ? safe.x : targetX;
-      const effectiveY = safe ? safe.y : targetY;
+      const avoidanceWaypoints = getSafeWaypoints(pos.x, pos.y, targetX, targetY, bodies);
+      const effectiveX = avoidanceWaypoints.length > 0 ? avoidanceWaypoints[0].x : targetX;
+      const effectiveY = avoidanceWaypoints.length > 0 ? avoidanceWaypoints[0].y : targetY;
 
       const burnPlan = computeBurnPlan(
         pos.x, pos.y,
@@ -318,13 +323,15 @@ export class CommandHandler {
         this.world.removeComponent(id, COMPONENT.NavigationOrder);
       }
 
+      const queuedOrbitWaypoints = avoidanceWaypoints.slice(1).map(w => ({ x: w.x, y: w.y }));
+
       this.world.addComponent<NavigationOrder>(id, {
         type: 'NavigationOrder',
         destinationX: targetX,
         destinationY: targetY,
         targetX: effectiveX,
         targetY: effectiveY,
-        waypoints: [],
+        waypoints: queuedOrbitWaypoints,
         phase: 'rotating',
         burnPlan,
         phaseStartTime: 0,

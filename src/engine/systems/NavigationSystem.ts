@@ -4,7 +4,7 @@ import {
   CelestialBody, COMPONENT,
 } from '../components';
 import { shortestAngleDelta, normalizeAngle, computeBurnPlan } from '../../game/TrajectoryCalculator';
-import { getBodiesFromWorld, getSafeWaypoint, segmentPassesThroughInterior } from '../../game/PlanetAvoidance';
+import { getBodiesFromWorld, getSafeWaypoints, segmentPassesThroughInterior } from '../../game/PlanetAvoidance';
 import { circularOrbitSpeed } from '../../utils/OrbitalMechanics';
 
 const ALIGNMENT_THRESHOLD = 0.05; // radians — close enough to "aligned"
@@ -59,25 +59,45 @@ export class NavigationSystem {
       }
     }
 
-    // In-flight course correction: avoid planets. (1) If within caution radius of any body, escape early.
-    // (2) If path to current target passes through a body's interior, re-route to a safe waypoint.
+    // In-flight course correction: avoid planets.
+    // (1) Emergency: ship within caution radius of a body — must escape.
+    // (2) Path check: any remaining path segment passes through a body's danger zone.
+    // Uses dangerRadius (not planning radius) to avoid over-correcting pre-planned avoidance paths.
     const bodies = getBodiesFromWorld(world);
     let needCorrection = false;
+
+    // Build remaining path segments: ship → target → waypoints → destination
+    const pathPoints = [
+      { x: pos.x, y: pos.y },
+      { x: nav.targetX, y: nav.targetY },
+      ...nav.waypoints,
+      { x: nav.destinationX, y: nav.destinationY },
+    ];
+
     for (const body of bodies) {
       // Skip avoidance for the orbit target body itself
       if (nav.orbitTargetId != null) {
         const orbitPos = world.getComponent<Position>(nav.orbitTargetId, COMPONENT.Position);
         if (orbitPos && Math.abs(body.x - orbitPos.x) < 1 && Math.abs(body.y - orbitPos.y) < 1) continue;
       }
+      // Emergency: within caution radius
       const distToBody = Math.sqrt((pos.x - body.x) ** 2 + (pos.y - body.y) ** 2);
       if (distToBody < body.cautionRadius) {
         needCorrection = true;
         break;
       }
-      if (segmentPassesThroughInterior(pos.x, pos.y, nav.targetX, nav.targetY, body.x, body.y, body.radius)) {
-        needCorrection = true;
-        break;
+      // Check all remaining path segments against danger zone (tighter than planning radius)
+      for (let i = 0; i < pathPoints.length - 1; i++) {
+        if (segmentPassesThroughInterior(
+          pathPoints[i].x, pathPoints[i].y,
+          pathPoints[i + 1].x, pathPoints[i + 1].y,
+          body.x, body.y, body.dangerRadius,
+        )) {
+          needCorrection = true;
+          break;
+        }
       }
+      if (needCorrection) break;
     }
     if (needCorrection) {
       // Exclude orbit target from avoidance bodies for re-routing too
@@ -87,10 +107,11 @@ export class NavigationSystem {
           return !orbitPos || Math.abs(b.x - orbitPos.x) >= 1 || Math.abs(b.y - orbitPos.y) >= 1;
         })
         : bodies;
-      const safe = getSafeWaypoint(pos.x, pos.y, nav.destinationX, nav.destinationY, avoidBodies);
-      if (safe != null) {
-        nav.targetX = safe.x;
-        nav.targetY = safe.y;
+      const waypoints = getSafeWaypoints(pos.x, pos.y, nav.destinationX, nav.destinationY, avoidBodies);
+      if (waypoints.length > 0) {
+        nav.targetX = waypoints[0].x;
+        nav.targetY = waypoints[0].y;
+        nav.waypoints = waypoints.slice(1).map(w => ({ x: w.x, y: w.y }));
         nav.burnPlan = computeBurnPlan(
           pos.x, pos.y,
           vel.vx, vel.vy,
@@ -122,8 +143,13 @@ export class NavigationSystem {
         nav.destinationY = next.y;
         nav.targetX = next.x;
         nav.targetY = next.y;
+      } else if (nav.waypoints.length > 0) {
+        // Arrived at an avoidance waypoint — advance to next queued waypoint
+        const next = nav.waypoints.shift()!;
+        nav.targetX = next.x;
+        nav.targetY = next.y;
       } else {
-        // Arrived at an avoidance waypoint — advance target to destination
+        // Arrived at last avoidance waypoint — advance target to destination
         nav.targetX = nav.destinationX;
         nav.targetY = nav.destinationY;
       }
