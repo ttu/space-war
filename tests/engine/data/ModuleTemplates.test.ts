@@ -37,7 +37,7 @@ describe('ModuleTemplates', () => {
     const m = getModuleById('sensor_heavy');
     expect(m).toBeDefined();
     expect(m!.kind).toBe('sensor');
-    expect((m as SensorModule).maxRange).toBe(500_000);
+    expect((m as SensorModule).maxRange).toBe(50_000_000);
   });
 
   it('returns undefined for unknown id', () => {
