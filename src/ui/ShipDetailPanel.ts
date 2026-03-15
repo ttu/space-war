@@ -421,6 +421,12 @@ export class ShipDetailPanel {
           : `${body.mass.toLocaleString()} kg`;
     this.addRow(`Mass: ${massStr}`);
 
+    const vel = this.world.getComponent<Velocity>(entityId, COMPONENT.Velocity);
+    if (vel) {
+      const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
+      this.addRow(`Speed: ${speed.toFixed(1)} km/s`);
+    }
+
     const orbital = this.world.getComponent<OrbitalPrimary>(entityId, COMPONENT.OrbitalPrimary);
     if (orbital) {
       const primaryBody = this.world.getComponent<CelestialBody>(orbital.primaryId, COMPONENT.CelestialBody);
