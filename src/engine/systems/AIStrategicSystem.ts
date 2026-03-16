@@ -5,6 +5,8 @@ import {
   Hull,
   ContactTracker,
   AIStrategicIntent,
+  MissileLauncher,
+  Railgun,
   COMPONENT,
 } from '../components';
 import { getBodiesFromWorld, getSafeWaypoint } from '../utils/PlanetAvoidance';
@@ -38,7 +40,7 @@ export class AIStrategicSystem {
       const hull = world.getComponent<Hull>(shipId, COMPONENT.Hull)!;
       const hullRatio = hull.max > 0 ? hull.current / hull.max : 1;
 
-      if (hullRatio < DISENGAGE_HULL_RATIO) {
+      if (hullRatio < DISENGAGE_HULL_RATIO || this.isOutOfAmmo(world, shipId)) {
         this.setDisengage(world, shipId, intent, pos, enemyTracker, gameTime);
       } else if (enemyTracker && enemyTracker.contacts.size > 0) {
         this.setEngage(world, shipId, intent, pos, enemyTracker, gameTime);
@@ -59,6 +61,16 @@ export class AIStrategicSystem {
       if (t.faction === 'enemy') return t;
     }
     return undefined;
+  }
+
+  private isOutOfAmmo(world: World, shipId: EntityId): boolean {
+    const ml = world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher);
+    const rg = world.getComponent<Railgun>(shipId, COMPONENT.Railgun);
+    // If ship has no weapons at all, don't treat as "out of ammo"
+    if (!ml && !rg) return false;
+    const missilesEmpty = !ml || ml.ammo <= 0;
+    const railgunEmpty = !rg || rg.ammo <= 0;
+    return missilesEmpty && railgunEmpty;
   }
 
   private setDisengage(
