@@ -33,6 +33,7 @@ import { loadScenario, fetchScenario } from '../engine/data/ScenarioLoader';
 import { demoScenario } from '../engine/data/scenarios/demo';
 import { solarSystemScenario } from '../engine/data/scenarios/solarSystem';
 import { redDwarfScenario } from '../engine/data/scenarios/redDwarf';
+import { provingGroundsScenario } from '../engine/data/scenarios/provingGrounds';
 import { e2eScenario } from '../engine/data/scenarios/e2e';
 import { showShipConfigScreen } from '../ui/ShipConfigScreen';
 import { TimeControls } from '../ui/TimeControls';
@@ -103,7 +104,7 @@ export class SpaceWarGame {
   private scenarioSelector!: ScenarioSelector;
   private playerInteraction!: PlayerInteractionHandler;
   private pendingOrder: PendingOrderType = 'none';
-  currentScenarioId = 'demo';
+  currentScenarioId = 'provingGrounds';
 
   private cameraLockIndicator: HTMLElement | null = null;
 
@@ -139,7 +140,7 @@ export class SpaceWarGame {
       this.scenarioSelector.setScenario(scenarioParam);
       // Scenario loaded async in main.ts via loadScenarioByName()
     } else {
-      this.loadDemoScenario();
+      this.loadProvingGroundsScenario();
     }
     this.cameraAnimator = new CameraAnimator(this.camera);
     this.commandHandler = new CommandHandler(this.world, this.eventBus);
@@ -704,6 +705,7 @@ export class SpaceWarGame {
       demo: () => this.loadDemoScenario(),
       solarSystem: () => this.loadSolarSystemScenario(),
       redDwarf: () => this.loadRedDwarfScenario(),
+      provingGrounds: () => this.loadProvingGroundsScenario(),
     };
 
     if (builtIn[id]) {
@@ -794,6 +796,13 @@ export class SpaceWarGame {
     this.victorySystem.reset();
     this.centerCameraOnFlagship();
     this.camera.zoomToFit(500_000, 500_000);
+  }
+
+  private loadProvingGroundsScenario(): void {
+    loadScenario(this.world, provingGroundsScenario);
+    this.victorySystem.reset();
+    this.centerCameraOnFlagship();
+    this.camera.zoomToFit(400_000, 400_000);
   }
 
   loadE2eScenario(): void {
