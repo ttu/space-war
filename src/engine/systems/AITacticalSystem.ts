@@ -89,7 +89,7 @@ export class AITacticalSystem {
                   distToTarget,
                   targetSpeed,
                   railgun.projectileSpeed,
-                  Infinity, // no max range — fire at any distance
+                  railgun.maxRange,
                 );
                 if (prob >= MIN_RAILGUN_HIT_PROB && gameTime - railgun.lastFiredTime >= railgun.reloadTime) {
                   this.emitFireRailgun(shipId, intent.targetId, gameTime);

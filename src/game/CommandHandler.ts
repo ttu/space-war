@@ -476,7 +476,7 @@ export class CommandHandler {
 
     const range = Math.sqrt((targetPos.x - pos.x) ** 2 + (targetPos.y - pos.y) ** 2);
     const targetSpeed = Math.sqrt(targetVx * targetVx + targetVy * targetVy);
-    const prob = hitProbability(range, targetSpeed, railgun.projectileSpeed, Infinity);
+    const prob = hitProbability(range, targetSpeed, railgun.projectileSpeed, railgun.maxRange);
 
     const dirX = Math.cos(solution.fireAngle);
     const dirY = Math.sin(solution.fireAngle);
@@ -745,7 +745,7 @@ export class CommandHandler {
         range,
         targetSpeed,
         railgun.projectileSpeed,
-        Infinity, // no range cap for probability
+        railgun.maxRange,
       );
 
       const dirX = Math.cos(solution.fireAngle);
