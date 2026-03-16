@@ -27,12 +27,12 @@ Identified 2026-03-15. Goal: clean separation of engine/game/rendering/UI layers
 - [x] Remove `CommandHandler` import from AITacticalSystem
 - [x] Run build + tests to verify
 
-## 4. Fix DamageSystem event handling
+## 4. Fix DamageSystem event handling ✅
 
-- [ ] Replace `getHistory()` polling with `eventBus.subscribe('RailgunHit', ...)` and `subscribe('MissileImpact', ...)`
-- [ ] Remove `lastProcessedIndex` tracking
-- [ ] Verify no unbounded history growth issue remains
-- [ ] Run build + tests to verify
+- [x] Replace `getHistory()` polling with `eventBus.subscribe('RailgunHit', ...)` and `subscribe('MissileImpact', ...)`
+- [x] Remove `lastProcessedIndex` tracking
+- [x] Verify no unbounded history growth issue remains
+- [x] Run build + tests to verify
 
 ## 5. Extract CameraAnimator from SpaceWarGame
 

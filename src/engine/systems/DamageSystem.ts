@@ -1,4 +1,4 @@
-import { World, EntityId } from '../types';
+import { World, EntityId, GameEvent } from '../types';
 import { EventBus } from '../core/EventBus';
 import {
   Hull, ShipSystems, PDC, Railgun, MissileLauncher, Missile,
@@ -7,27 +7,56 @@ import {
 
 const DAMAGE_PER_MISSILE = 15;
 
-export class DamageSystem {
-  private lastProcessedIndex = 0;
+interface PendingRailgunHit {
+  targetId: EntityId;
+  damage: number;
+  time: number;
+}
 
-  constructor(private eventBus: EventBus) {}
+interface PendingMissileImpact {
+  targetId: EntityId;
+  missileCount: number;
+}
+
+export class DamageSystem {
+  private pendingRailgunHits: PendingRailgunHit[] = [];
+  private pendingMissileImpacts: PendingMissileImpact[] = [];
+
+  constructor(private eventBus: EventBus) {
+    this.eventBus.subscribe('RailgunHit', (event: GameEvent) => {
+      if (event.targetId) {
+        this.pendingRailgunHits.push({
+          targetId: event.targetId,
+          damage: (event.data?.damage as number) ?? 0,
+          time: event.time,
+        });
+      }
+    });
+
+    this.eventBus.subscribe('MissileImpact', (event: GameEvent) => {
+      if (event.targetId) {
+        this.pendingMissileImpacts.push({
+          targetId: event.targetId,
+          missileCount: (event.data?.missileCount as number) ?? 1,
+        });
+      }
+    });
+  }
 
   /**
-   * Process RailgunHit and MissileImpact events from the event bus since last call.
+   * Process queued RailgunHit and MissileImpact events.
    * Call after weapon systems in the game loop.
    */
   processHitEvents(world: World): void {
-    const history = this.eventBus.getHistory();
-    for (let i = this.lastProcessedIndex; i < history.length; i++) {
-      const e = history[i];
-      if (e.type === 'RailgunHit' && e.targetId) {
-        this.applyRailgunHit(world, e.targetId, (e.data?.damage as number) ?? 0, e.time);
-      } else if (e.type === 'MissileImpact' && e.targetId) {
-        const count = (e.data?.missileCount as number) ?? 1;
-        this.applyMissileImpact(world, e.targetId, count);
-      }
+    for (const hit of this.pendingRailgunHits) {
+      this.applyRailgunHit(world, hit.targetId, hit.damage, hit.time);
     }
-    this.lastProcessedIndex = history.length;
+    this.pendingRailgunHits.length = 0;
+
+    for (const impact of this.pendingMissileImpacts) {
+      this.applyMissileImpact(world, impact.targetId, impact.missileCount);
+    }
+    this.pendingMissileImpacts.length = 0;
   }
 
   private applyRailgunHit(world: World, targetId: EntityId, damage: number, gameTime: number): void {
