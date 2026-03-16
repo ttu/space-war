@@ -149,7 +149,7 @@ export class SpaceWarGame {
       this.loadDemoScenario();
     }
     this.commandHandler = new CommandHandler(this.world, this.eventBus);
-    this.aiTacticalSystem = new AITacticalSystem(this.commandHandler);
+    this.aiTacticalSystem = new AITacticalSystem(this.eventBus);
     this.playerInteraction = new PlayerInteractionHandler({
       world: this.world,
       camera: this.camera,

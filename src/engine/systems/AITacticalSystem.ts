@@ -1,4 +1,5 @@
 import { World, EntityId } from '../types';
+import { EventBus } from '../core/EventBus';
 import {
   Position,
   Velocity,
@@ -12,7 +13,6 @@ import {
   Railgun,
   COMPONENT,
 } from '../components';
-import { CommandHandler } from '../../game/CommandHandler';
 import { hitProbability } from '../utils/FiringComputer';
 
 const MISSILE_RANGE_FRACTION = 0.85; // fire when within this fraction of maxRange
@@ -26,7 +26,7 @@ const RAILGUN_ENGAGE_NEAR_KM = 50_000;
  * fires railguns, goes dark when disengaging. PDCs are handled by PDCSystem automatically.
  */
 export class AITacticalSystem {
-  constructor(private commandHandler: CommandHandler) {}
+  constructor(private eventBus: EventBus) {}
 
   update(world: World, _dt: number, gameTime: number): void {
     const enemyTracker = this.getEnemyContactTracker(world);
@@ -49,7 +49,7 @@ export class AITacticalSystem {
         if (intent.moveToX != null && intent.moveToY != null) {
           const hasNav = world.hasComponent(shipId, COMPONENT.NavigationOrder);
           if (!hasNav) {
-            this.commandHandler.issueMoveToForShip(shipId, intent.moveToX, intent.moveToY);
+            this.emitMoveOrder(shipId, intent.moveToX, intent.moveToY, gameTime);
           }
         } else {
           world.removeComponent(shipId, COMPONENT.NavigationOrder);
@@ -61,7 +61,7 @@ export class AITacticalSystem {
       if (intent.objective === 'engage') {
         const hasNav = nav != null && nav.phase !== 'arrived';
         if (!hasNav && intent.moveToX != null && intent.moveToY != null) {
-          this.commandHandler.issueMoveToForShip(shipId, intent.moveToX, intent.moveToY);
+          this.emitMoveOrder(shipId, intent.moveToX, intent.moveToY, gameTime);
         }
 
         if (intent.targetId != null && world.hasComponent(intent.targetId, COMPONENT.Position)) {
@@ -71,7 +71,7 @@ export class AITacticalSystem {
             if (launcher && (launcher.integrity ?? 100) > 0 && launcher.ammo > 0) {
               const missileRange = launcher.maxRange * MISSILE_RANGE_FRACTION;
               if (distToTarget <= missileRange) {
-                this.commandHandler.launchMissileFromShip(shipId, intent.targetId, gameTime);
+                this.emitFireMissile(shipId, intent.targetId, gameTime);
               }
             }
 
@@ -92,7 +92,7 @@ export class AITacticalSystem {
                   Infinity, // no max range — fire at any distance
                 );
                 if (prob >= MIN_RAILGUN_HIT_PROB && gameTime - railgun.lastFiredTime >= railgun.reloadTime) {
-                  this.commandHandler.fireRailgunFromShip(shipId, intent.targetId, gameTime);
+                  this.emitFireRailgun(shipId, intent.targetId, gameTime);
                 }
               }
             }
@@ -104,6 +104,35 @@ export class AITacticalSystem {
         thruster.throttle = nav ? thruster.throttle : 0;
       }
     }
+  }
+
+  private emitMoveOrder(shipId: EntityId, targetX: number, targetY: number, gameTime: number): void {
+    this.eventBus.emit({
+      type: 'AIMoveOrder',
+      time: gameTime,
+      entityId: shipId,
+      data: { targetX, targetY },
+    });
+  }
+
+  private emitFireMissile(shipId: EntityId, targetId: EntityId, gameTime: number): void {
+    this.eventBus.emit({
+      type: 'AIFireMissile',
+      time: gameTime,
+      entityId: shipId,
+      targetId,
+      data: {},
+    });
+  }
+
+  private emitFireRailgun(shipId: EntityId, targetId: EntityId, gameTime: number): void {
+    this.eventBus.emit({
+      type: 'AIFireRailgun',
+      time: gameTime,
+      entityId: shipId,
+      targetId,
+      data: {},
+    });
   }
 
   /** True if any player-launched missile is targeting this ship. */

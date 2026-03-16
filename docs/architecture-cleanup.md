@@ -19,13 +19,13 @@ Identified 2026-03-15. Goal: clean separation of engine/game/rendering/UI layers
 - [x] Route waypoint mutations through CommandHandler instead of direct component mutation
 - [x] Run build + tests to verify
 
-## 3. Decouple AITacticalSystem from CommandHandler
+## 3. Decouple AITacticalSystem from CommandHandler ✅
 
-- [ ] Define AI command event types (e.g. `AIMoveOrder`, `AIFireWeapon`) in `engine/types.ts`
-- [ ] AITacticalSystem emits command events via EventBus instead of calling CommandHandler directly
-- [ ] CommandHandler subscribes to AI command events and executes them
-- [ ] Remove `CommandHandler` import from AITacticalSystem
-- [ ] Run build + tests to verify
+- [x] Define AI command event types (e.g. `AIMoveOrder`, `AIFireWeapon`) in `engine/types.ts`
+- [x] AITacticalSystem emits command events via EventBus instead of calling CommandHandler directly
+- [x] CommandHandler subscribes to AI command events and executes them
+- [x] Remove `CommandHandler` import from AITacticalSystem
+- [x] Run build + tests to verify
 
 ## 4. Fix DamageSystem event handling
 

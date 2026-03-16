@@ -58,7 +58,26 @@ function getTargetAcceleration(
 export class CommandHandler {
   private pendingRailgunBursts: PendingRailgunBurst[] = [];
 
-  constructor(private world: World, private eventBus?: EventBus) {}
+  constructor(private world: World, private eventBus?: EventBus) {
+    this.subscribeToAICommands();
+  }
+
+  private subscribeToAICommands(): void {
+    if (!this.eventBus) return;
+
+    this.eventBus.subscribe('AIMoveOrder', (event) => {
+      const { targetX, targetY } = event.data as { targetX: number; targetY: number };
+      this.issueMoveToForShip(event.entityId!, targetX, targetY);
+    });
+
+    this.eventBus.subscribe('AIFireMissile', (event) => {
+      this.launchMissileFromShip(event.entityId!, event.targetId!, event.time);
+    });
+
+    this.eventBus.subscribe('AIFireRailgun', (event) => {
+      this.fireRailgunFromShip(event.entityId!, event.targetId!, event.time);
+    });
+  }
 
   /**
    * Call each fixed update to spawn the next round of any in-progress railgun bursts.

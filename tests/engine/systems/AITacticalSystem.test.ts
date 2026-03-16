@@ -85,7 +85,7 @@ describe('AITacticalSystem', () => {
     const world = new WorldImpl();
     const eventBus = new EventBusImpl();
     const commandHandler = new CommandHandler(world, eventBus);
-    const system = new AITacticalSystem(commandHandler);
+    const system = new AITacticalSystem(eventBus);
 
     const enemyId = createEnemyShipWithWeapons(world, 0, 0, {
       type: 'AIStrategicIntent',
@@ -107,7 +107,7 @@ describe('AITacticalSystem', () => {
     const world = new WorldImpl();
     const eventBus = new EventBusImpl();
     const commandHandler = new CommandHandler(world, eventBus);
-    const system = new AITacticalSystem(commandHandler);
+    const system = new AITacticalSystem(eventBus);
 
     const enemyId = createEnemyShipWithWeapons(world, 0, 0, {
       type: 'AIStrategicIntent',
@@ -132,7 +132,7 @@ describe('AITacticalSystem', () => {
     const world = new WorldImpl();
     const eventBus = new EventBusImpl();
     const commandHandler = new CommandHandler(world, eventBus);
-    const system = new AITacticalSystem(commandHandler);
+    const system = new AITacticalSystem(eventBus);
 
     const playerId = world.createEntity();
     world.addComponent(playerId, {
@@ -185,7 +185,7 @@ describe('AITacticalSystem', () => {
     const world = new WorldImpl();
     const eventBus = new EventBusImpl();
     const commandHandler = new CommandHandler(world, eventBus);
-    const system = new AITacticalSystem(commandHandler);
+    const system = new AITacticalSystem(eventBus);
 
     const playerId = world.createEntity();
     world.addComponent(playerId, {

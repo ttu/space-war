@@ -41,7 +41,10 @@ export type GameEventType =
   | 'VictoryAchieved'
   | 'DefeatSuffered'
   | 'CelestialCollision'
-  | 'OrderFeedback';
+  | 'OrderFeedback'
+  | 'AIMoveOrder'
+  | 'AIFireMissile'
+  | 'AIFireRailgun';
 
 export interface GameEvent {
   type: GameEventType;
