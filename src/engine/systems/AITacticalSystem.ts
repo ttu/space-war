@@ -16,6 +16,8 @@ import {
 import { hitProbability } from '../utils/FiringComputer';
 
 const MISSILE_RANGE_FRACTION = 0.85; // fire when within this fraction of maxRange
+/** Max relative speed (km/s) at which AI will fire missiles. Prevents wasting ammo during high-speed flybys. */
+const MAX_MISSILE_REL_SPEED = 25;
 /** AI only fires railgun when estimated hit probability is at least this (realistic chance to hit). */
 const MIN_RAILGUN_HIT_PROB = 0.45;
 /** AI only fires railguns when player is within this range (km) or player has missiles inbound at us. */
@@ -61,7 +63,7 @@ export class AITacticalSystem {
       if (intent.objective === 'engage') {
         const hasNav = nav != null && nav.phase !== 'arrived';
         if (!hasNav && intent.moveToX != null && intent.moveToY != null) {
-          this.emitMoveOrder(shipId, intent.moveToX, intent.moveToY, gameTime);
+          this.emitMoveOrder(shipId, intent.moveToX, intent.moveToY, gameTime, intent.matchVx, intent.matchVy);
         }
 
         if (intent.targetId != null && world.hasComponent(intent.targetId, COMPONENT.Position)) {
@@ -70,7 +72,10 @@ export class AITacticalSystem {
             const launcher = world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher);
             if (launcher && (launcher.integrity ?? 100) > 0 && launcher.ammo > 0) {
               const missileRange = launcher.maxRange * MISSILE_RANGE_FRACTION;
-              if (distToTarget <= missileRange) {
+              // Don't fire missiles during high-speed flybys or when relative speed is too high
+              const closingSpeed = this.getClosingSpeed(world, shipId, intent.targetId);
+              const relSpeed = this.getRelativeSpeed(world, shipId, intent.targetId);
+              if (distToTarget <= missileRange && closingSpeed >= 0 && relSpeed <= MAX_MISSILE_REL_SPEED) {
                 this.emitFireMissile(shipId, intent.targetId, gameTime);
               }
             }
@@ -106,12 +111,15 @@ export class AITacticalSystem {
     }
   }
 
-  private emitMoveOrder(shipId: EntityId, targetX: number, targetY: number, gameTime: number): void {
+  private emitMoveOrder(
+    shipId: EntityId, targetX: number, targetY: number, gameTime: number,
+    matchVx?: number, matchVy?: number,
+  ): void {
     this.eventBus.emit({
       type: 'AIMoveOrder',
       time: gameTime,
       entityId: shipId,
-      data: { targetX, targetY },
+      data: { targetX, targetY, matchVx, matchVy },
     });
   }
 
@@ -153,6 +161,32 @@ export class AITacticalSystem {
       if (t.faction === 'enemy') return t;
     }
     return undefined;
+  }
+
+  /** Total relative speed between ship and target (km/s). */
+  private getRelativeSpeed(world: World, shipId: EntityId, targetId: EntityId): number {
+    const vel = world.getComponent<Velocity>(shipId, COMPONENT.Velocity);
+    const targetVel = world.getComponent<Velocity>(targetId, COMPONENT.Velocity);
+    const dvx = (vel?.vx ?? 0) - (targetVel?.vx ?? 0);
+    const dvy = (vel?.vy ?? 0) - (targetVel?.vy ?? 0);
+    return Math.sqrt(dvx * dvx + dvy * dvy);
+  }
+
+  /** Positive = closing on target, negative = moving away. */
+  private getClosingSpeed(world: World, shipId: EntityId, targetId: EntityId): number {
+    const pos = world.getComponent<Position>(shipId, COMPONENT.Position)!;
+    const vel = world.getComponent<Velocity>(shipId, COMPONENT.Velocity);
+    const targetPos = world.getComponent<Position>(targetId, COMPONENT.Position);
+    const targetVel = world.getComponent<Velocity>(targetId, COMPONENT.Velocity);
+    if (!targetPos) return 0;
+    const dx = targetPos.x - pos.x;
+    const dy = targetPos.y - pos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 1) return 0;
+    const relVx = (vel?.vx ?? 0) - (targetVel?.vx ?? 0);
+    const relVy = (vel?.vy ?? 0) - (targetVel?.vy ?? 0);
+    // Positive when closing (relative velocity points toward target)
+    return (relVx * dx + relVy * dy) / dist;
   }
 
   private getDistanceToTarget(

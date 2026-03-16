@@ -1,8 +1,10 @@
 import { World, EntityId } from '../types';
 import {
   Position,
+  Velocity,
   Ship,
   Hull,
+  Thruster,
   ContactTracker,
   AIStrategicIntent,
   MissileLauncher,
@@ -14,6 +16,12 @@ import { getBodiesFromWorld, getSafeWaypoint } from '../utils/PlanetAvoidance';
 const STRATEGIC_INTERVAL = 3; // seconds between re-evaluation
 const DISENGAGE_HULL_RATIO = 0.35; // retreat when hull below this fraction
 const RETREAT_DISTANCE_KM = 5000; // how far to set retreat point from contact
+/** Max lead time (seconds) to prevent wild extrapolation for distant targets. */
+const MAX_LEAD_TIME = 600;
+/** Distance threshold (km) to switch from lead-intercept to velocity-matching. */
+const VELOCITY_MATCH_RANGE = 80_000;
+/** Desired closing speed (km/s) when velocity-matched. */
+const DESIRED_CLOSING_SPEED = 5;
 
 /**
  * Fleet-level AI: sets objective (engage / disengage / hold), primary target,
@@ -49,6 +57,8 @@ export class AIStrategicSystem {
         intent.targetId = undefined;
         intent.moveToX = undefined;
         intent.moveToY = undefined;
+        intent.matchVx = undefined;
+        intent.matchVy = undefined;
         intent.nextStrategicUpdate = gameTime + STRATEGIC_INTERVAL;
       }
     }
@@ -83,6 +93,8 @@ export class AIStrategicSystem {
   ): void {
     intent.objective = 'disengage';
     intent.targetId = undefined;
+    intent.matchVx = undefined;
+    intent.matchVy = undefined;
 
     if (tracker && tracker.contacts.size > 0) {
       let cx = 0;
@@ -120,7 +132,7 @@ export class AIStrategicSystem {
 
   private setEngage(
     world: World,
-    _shipId: EntityId,
+    shipId: EntityId,
     intent: AIStrategicIntent,
     pos: Position,
     tracker: ContactTracker,
@@ -130,6 +142,8 @@ export class AIStrategicSystem {
     let bestDistSq = Infinity;
     let bestX = 0;
     let bestY = 0;
+    let bestVx = 0;
+    let bestVy = 0;
 
     for (const [entityId, contact] of tracker.contacts) {
       if (contact.lost) continue;
@@ -141,19 +155,57 @@ export class AIStrategicSystem {
         bestId = entityId;
         bestX = contact.lastKnownX;
         bestY = contact.lastKnownY;
+        bestVx = contact.lastKnownVx;
+        bestVy = contact.lastKnownVy;
       }
     }
 
     intent.objective = 'engage';
     intent.targetId = bestId;
     if (bestId !== undefined) {
+      const dist = Math.sqrt(bestDistSq);
+      const thruster = world.getComponent<Thruster>(shipId, COMPONENT.Thruster);
+      const accel = thruster?.maxThrust ?? 0.01;
+      const vel = world.getComponent<Velocity>(shipId, COMPONENT.Velocity);
+      const shipVx = vel?.vx ?? 0;
+      const shipVy = vel?.vy ?? 0;
+
+      // Unit vector toward target
+      const ux = (bestX - pos.x) / (dist || 1);
+      const uy = (bestY - pos.y) / (dist || 1);
+      const closingSpeed = (shipVx - bestVx) * ux + (shipVy - bestVy) * uy;
+
+      // Estimate time-to-arrive
+      let estTime: number;
+      if (closingSpeed > 1) {
+        estTime = dist / closingSpeed;
+      } else {
+        estTime = 2 * Math.sqrt(dist / accel);
+      }
+
+      const leadTime = Math.min(estTime * 0.5, MAX_LEAD_TIME);
+      const interceptX = bestX + bestVx * leadTime;
+      const interceptY = bestY + bestVy * leadTime;
+
       const bodies = getBodiesFromWorld(world);
-      const safe = getSafeWaypoint(pos.x, pos.y, bestX, bestY, bodies);
-      intent.moveToX = safe ? safe.x : bestX;
-      intent.moveToY = safe ? safe.y : bestY;
+      const safe = getSafeWaypoint(pos.x, pos.y, interceptX, interceptY, bodies);
+      intent.moveToX = safe ? safe.x : interceptX;
+      intent.moveToY = safe ? safe.y : interceptY;
+
+      // Velocity matching: arrive at target's velocity + small closing component
+      // instead of decelerating to zero (which causes flyby overshooting).
+      if (dist <= VELOCITY_MATCH_RANGE) {
+        intent.matchVx = bestVx + ux * DESIRED_CLOSING_SPEED;
+        intent.matchVy = bestVy + uy * DESIRED_CLOSING_SPEED;
+      } else {
+        intent.matchVx = undefined;
+        intent.matchVy = undefined;
+      }
     } else {
       intent.moveToX = undefined;
       intent.moveToY = undefined;
+      intent.matchVx = undefined;
+      intent.matchVy = undefined;
     }
     intent.nextStrategicUpdate = gameTime + STRATEGIC_INTERVAL;
   }

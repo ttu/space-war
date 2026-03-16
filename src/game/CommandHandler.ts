@@ -66,8 +66,10 @@ export class CommandHandler {
     if (!this.eventBus) return;
 
     this.eventBus.subscribe('AIMoveOrder', (event) => {
-      const { targetX, targetY } = event.data as { targetX: number; targetY: number };
-      this.issueMoveToForShip(event.entityId!, targetX, targetY);
+      const { targetX, targetY, matchVx, matchVy } = event.data as {
+        targetX: number; targetY: number; matchVx?: number; matchVy?: number;
+      };
+      this.issueMoveToForShip(event.entityId!, targetX, targetY, matchVx, matchVy);
     });
 
     this.eventBus.subscribe('AIFireMissile', (event) => {
@@ -221,7 +223,7 @@ export class CommandHandler {
   /**
    * Issue a move-to order for a single ship (used by AI). No faction or selection check.
    */
-  issueMoveToForShip(shipId: EntityId, targetX: number, targetY: number): void {
+  issueMoveToForShip(shipId: EntityId, targetX: number, targetY: number, matchVx?: number, matchVy?: number): void {
     const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position);
     const vel = this.world.getComponent<Velocity>(shipId, COMPONENT.Velocity);
     const thruster = this.world.getComponent<Thruster>(shipId, COMPONENT.Thruster);
@@ -256,6 +258,8 @@ export class CommandHandler {
       burnPlan,
       phaseStartTime: 0,
       arrivalThreshold: 100,
+      matchVx,
+      matchVy,
     });
 
     if (!this.world.hasComponent(shipId, COMPONENT.RotationState)) {

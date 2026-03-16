@@ -130,6 +130,9 @@ export interface NavigationOrder extends Component {
   burnPlan: BurnPlan;
   phaseStartTime: number; // game time when current phase started
   arrivalThreshold: number; // km — close enough to consider arrived
+  /** Desired arrival velocity (km/s). Ship decelerates to match this instead of zero. */
+  matchVx?: number;
+  matchVy?: number;
   /** Entity ID of celestial body to orbit (sustained circular orbit on arrival). */
   orbitTargetId?: EntityId;
   /** Desired orbit radius in km (distance from body center). */
@@ -155,6 +158,9 @@ export interface AIStrategicIntent extends Component {
   /** Where to maneuver (e.g. toward target or retreat vector). */
   moveToX?: number;
   moveToY?: number;
+  /** Desired arrival velocity (km/s). When set, NavigationSystem decelerates to match this velocity instead of zero. */
+  matchVx?: number;
+  matchVy?: number;
   /** Game time when strategic layer should re-evaluate. */
   nextStrategicUpdate: number;
 }

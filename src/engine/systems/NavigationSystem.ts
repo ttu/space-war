@@ -178,7 +178,11 @@ export class NavigationSystem {
       }
     }
 
-    if (!isIntermediate && distToTarget < nav.arrivalThreshold && speed < ARRIVAL_SPEED_THRESHOLD) {
+    // For velocity-matched arrivals, check speed relative to match velocity
+    const relSpeed = (nav.matchVx != null || nav.matchVy != null)
+      ? Math.sqrt((vel.vx - (nav.matchVx ?? 0)) ** 2 + (vel.vy - (nav.matchVy ?? 0)) ** 2)
+      : speed;
+    if (!isIntermediate && distToTarget < nav.arrivalThreshold && relSpeed < ARRIVAL_SPEED_THRESHOLD) {
       this.arrive(world, entityId, thruster);
       return;
     }
@@ -220,9 +224,10 @@ export class NavigationSystem {
     }
 
     // Desired velocity: toward target at approach speed
-    // For orbit orders, include the planet's velocity so we match it on arrival
-    let baseVx = 0;
-    let baseVy = 0;
+    // Include match velocity so ship arrives at target's speed instead of zero.
+    // For orbit orders, use planet velocity; for engagement, use explicit matchVx/matchVy.
+    let baseVx = nav.matchVx ?? 0;
+    let baseVy = nav.matchVy ?? 0;
     if (nav.orbitTargetId != null) {
       const orbitVel = world.getComponent<Velocity>(nav.orbitTargetId, COMPONENT.Velocity);
       if (orbitVel) { baseVx = orbitVel.vx; baseVy = orbitVel.vy; }
