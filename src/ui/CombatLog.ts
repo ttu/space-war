@@ -98,6 +98,12 @@ export class CombatLog {
     container.appendChild(this.wrap);
   }
 
+  clear(): void {
+    this.list.textContent = '';
+    this.lastCount = 0;
+    this.eventBus.clearHistory();
+  }
+
   show(): void { this.wrap.style.display = ''; }
   hide(): void { this.wrap.style.display = 'none'; }
   toggle(): void { this.wrap.style.display === 'none' ? this.show() : this.hide(); }

@@ -31,6 +31,8 @@ import { SelectionManager } from './SelectionManager';
 import { PlayerInteractionHandler } from './PlayerInteractionHandler';
 import { loadScenario, fetchScenario } from '../engine/data/ScenarioLoader';
 import { demoScenario } from '../engine/data/scenarios/demo';
+import { solarSystemScenario } from '../engine/data/scenarios/solarSystem';
+import { redDwarfScenario } from '../engine/data/scenarios/redDwarf';
 import { e2eScenario } from '../engine/data/scenarios/e2e';
 import { showShipConfigScreen } from '../ui/ShipConfigScreen';
 import { TimeControls } from '../ui/TimeControls';
@@ -42,6 +44,7 @@ import { CombatLog } from '../ui/CombatLog';
 import { ActiveMissilesPanel } from '../ui/ActiveMissilesPanel';
 import { IncomingThreatsPanel } from '../ui/IncomingThreatsPanel';
 import { PanelManager } from '../ui/PanelManager';
+import { ScenarioSelector } from '../ui/ScenarioSelector';
 import type { PendingOrderType } from '../ui/OrderBar';
 import type { EntityId } from '../engine/types';
 import {
@@ -97,8 +100,10 @@ export class SpaceWarGame {
   private activeMissilesPanel!: ActiveMissilesPanel;
   private incomingThreatsPanel!: IncomingThreatsPanel;
   private panelManager!: PanelManager;
+  private scenarioSelector!: ScenarioSelector;
   private playerInteraction!: PlayerInteractionHandler;
   private pendingOrder: PendingOrderType = 'none';
+  currentScenarioId = 'demo';
 
   private cameraLockIndicator: HTMLElement | null = null;
 
@@ -126,9 +131,12 @@ export class SpaceWarGame {
     this.setupUI();
     this.setupInput();
     const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const scenarioParam = params?.get('scenario');
     if (params?.get('e2e') === '1') {
       this.loadE2eScenario();
-    } else if (params?.get('scenario')) {
+    } else if (scenarioParam) {
+      this.currentScenarioId = scenarioParam;
+      this.scenarioSelector.setScenario(scenarioParam);
       // Scenario loaded async in main.ts via loadScenarioByName()
     } else {
       this.loadDemoScenario();
@@ -299,7 +307,16 @@ export class SpaceWarGame {
     uiRoot.className = 'ui-root';
     this.container.appendChild(uiRoot);
 
-    this.timeControls = new TimeControls(uiRoot, this.gameTime, {
+    // Top bar container
+    const topBar = document.createElement('div');
+    topBar.className = 'top-bar';
+    uiRoot.appendChild(topBar);
+
+    this.scenarioSelector = new ScenarioSelector(topBar, {
+      onScenarioChange: (id) => this.switchScenario(id),
+    });
+
+    this.timeControls = new TimeControls(topBar, this.gameTime, {
       onPauseToggle: () => this.togglePause(),
       onSpeedChange: (scale) => this.setSpeed(scale),
       onLoadoutClick: () => this.openLoadoutScreen(),
@@ -673,6 +690,30 @@ export class SpaceWarGame {
     return undefined;
   }
 
+  // --- Scenario switching ---
+
+  async switchScenario(id: string): Promise<void> {
+    this.currentScenarioId = id;
+    this.gameTime.elapsed = 0;
+    this.gameTime.paused = true;
+    this.gameTime.setTimeScale(1);
+    this.referenceEntityId = null;
+    this.combatLog.clear();
+
+    const builtIn: Record<string, () => void> = {
+      demo: () => this.loadDemoScenario(),
+      solarSystem: () => this.loadSolarSystemScenario(),
+      redDwarf: () => this.loadRedDwarfScenario(),
+    };
+
+    if (builtIn[id]) {
+      builtIn[id]();
+    } else {
+      await this.loadScenarioByName(id);
+    }
+    this.updatePauseUI();
+  }
+
   // --- Demo scenario ---
 
   loadDemoScenario(): void {
@@ -739,6 +780,20 @@ export class SpaceWarGame {
       }
     }
     if (nearestId) this.focusCameraOnContact(nearestId);
+  }
+
+  private loadSolarSystemScenario(): void {
+    loadScenario(this.world, solarSystemScenario);
+    this.victorySystem.reset();
+    this.centerCameraOnFlagship();
+    this.camera.zoomToFit(300_000_000, 300_000_000);
+  }
+
+  private loadRedDwarfScenario(): void {
+    loadScenario(this.world, redDwarfScenario);
+    this.victorySystem.reset();
+    this.centerCameraOnFlagship();
+    this.camera.zoomToFit(500_000, 500_000);
   }
 
   loadE2eScenario(): void {
