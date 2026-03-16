@@ -5,6 +5,29 @@ import {
   COMPONENT,
 } from '../components';
 
+/**
+ * Minimum distance from point (tx, ty) to the segment from (ax, ay) to (bx, by).
+ * Used to detect projectiles passing through targets in one tick (tunneling).
+ */
+function pointToSegmentDistance(
+  ax: number, ay: number,
+  bx: number, by: number,
+  tx: number, ty: number,
+): number {
+  const vx = bx - ax;
+  const vy = by - ay;
+  const wx = tx - ax;
+  const wy = ty - ay;
+  const vv = vx * vx + vy * vy;
+  if (vv <= 1e-20) return Math.sqrt(wx * wx + wy * wy);
+  let t = (wx * vx + wy * vy) / vv;
+  if (t <= 0) return Math.sqrt(wx * wx + wy * wy);
+  if (t >= 1) return Math.sqrt((tx - bx) ** 2 + (ty - by) ** 2);
+  const cx = ax + t * vx;
+  const cy = ay + t * vy;
+  return Math.sqrt((tx - cx) ** 2 + (ty - cy) ** 2);
+}
+
 export class RailgunSystem {
   constructor(private eventBus?: EventBus) {}
 
@@ -31,10 +54,13 @@ export class RailgunSystem {
         continue;
       }
 
-      const dx = pos.x - targetPos.x;
-      const dy = pos.y - targetPos.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist <= proj.hitRadius) {
+      // Check hit using both current distance AND segment from previous position.
+      // Projectiles travel ~10 km/tick (100 km/s * 0.1s) but hitRadius is 0.5 km,
+      // so point-only checks miss most hits (tunneling).
+      const prevX = pos.prevX ?? pos.x;
+      const prevY = pos.prevY ?? pos.y;
+      const distSegment = pointToSegmentDistance(prevX, prevY, pos.x, pos.y, targetPos.x, targetPos.y);
+      if (distSegment <= proj.hitRadius) {
         this.eventBus?.emit({
           type: 'RailgunHit',
           time: gameTime,
