@@ -17,7 +17,7 @@ import {
   Railgun,
   COMPONENT,
 } from '../engine/components';
-import { missileHitProbability } from '../engine/utils/FiringComputer';
+
 
 function pct(current: number, max: number): string {
   if (max <= 0) return '0%';
@@ -285,16 +285,7 @@ export class ShipDetailPanel {
     if (pos && targetPos) {
       const distToTarget = Math.hypot(targetPos.x - pos.x, targetPos.y - pos.y);
       this.addRow(`Distance to target: ${distToTarget.toFixed(0)} km`);
-      const vel = this.world.getComponent<Velocity>(id, COMPONENT.Velocity);
-      const targetVel = this.world.getComponent<Velocity>(missile.targetId, COMPONENT.Velocity);
-      const hitP = missileHitProbability(
-        pos.x, pos.y,
-        vel?.vx ?? 0, vel?.vy ?? 0,
-        missile.accel, missile.fuel, missile.seekerRange,
-        targetPos.x, targetPos.y,
-        targetVel?.vx ?? 0, targetVel?.vy ?? 0,
-      );
-      this.addRow(`Hit probability: ${Math.round(hitP * 100)}%`, 'ship-detail-row ship-detail-target');
+      this.addRow(`Hit probability: ${Math.round(missile.hitProbability * 100)}%`, 'ship-detail-row ship-detail-target');
     }
 
     // Salvo status

@@ -428,6 +428,7 @@ export class CommandHandler {
       phase: 'boost',
       armed: false,
       armingDistance: 5,
+      hitProbability: 0,
     });
     this.world.addComponent<Selectable>(missileId, {
       type: 'Selectable', selected: false,
@@ -590,6 +591,7 @@ export class CommandHandler {
         phase: 'boost',
         armed: false,
         armingDistance: 5,
+        hitProbability: 0,
       });
       this.world.addComponent<Selectable>(missileId, {
         type: 'Selectable', selected: false,

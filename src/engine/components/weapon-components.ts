@@ -33,6 +33,8 @@ export interface Missile extends Component {
   phase: MissilePhase;          // fuel management phase
   armed: boolean;               // safe until min distance from launcher
   armingDistance: number;        // km — distance from launch point before arming
+  /** Pre-computed hit probability (0..1), updated each tick by MissileSystem. */
+  hitProbability: number;
 }
 
 export interface PDC extends Component {

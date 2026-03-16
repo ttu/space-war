@@ -1,7 +1,6 @@
 import type { World, EntityId } from '../engine/types';
-import type { Position, Velocity, Ship, Missile } from '../engine/components';
+import type { Position, Ship, Missile } from '../engine/components';
 import { COMPONENT } from '../engine/components';
-import { missileHitProbability } from '../engine/utils/FiringComputer';
 
 interface SalvoInfo {
   missileId: EntityId;
@@ -81,25 +80,13 @@ export class ActiveMissilesPanel {
       if (!missile || missile.launcherFaction !== this.playerFaction) continue;
 
       const pos = this.world.getComponent<Position>(mid, COMPONENT.Position);
-      const vel = this.world.getComponent<Velocity>(mid, COMPONENT.Velocity);
       const targetPos = this.world.getComponent<Position>(missile.targetId, COMPONENT.Position);
-      const targetVel = this.world.getComponent<Velocity>(missile.targetId, COMPONENT.Velocity);
       const targetShip = this.world.getComponent<Ship>(missile.targetId, COMPONENT.Ship);
 
       const targetName = targetShip ? targetShip.name : 'Unknown';
       const distance = pos && targetPos
         ? Math.hypot(targetPos.x - pos.x, targetPos.y - pos.y)
         : Infinity;
-
-      const hitP = pos && targetPos
-        ? missileHitProbability(
-            pos.x, pos.y,
-            vel?.vx ?? 0, vel?.vy ?? 0,
-            missile.accel, missile.fuel, missile.seekerRange,
-            targetPos.x, targetPos.y,
-            targetVel?.vx ?? 0, targetVel?.vy ?? 0,
-          )
-        : 0;
 
       salvos.push({
         missileId: mid,
@@ -108,7 +95,7 @@ export class ActiveMissilesPanel {
         distance,
         guidanceMode: missile.guidanceMode,
         fuel: missile.fuel,
-        hitProbability: hitP,
+        hitProbability: missile.hitProbability,
       });
     }
 

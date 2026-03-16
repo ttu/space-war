@@ -76,6 +76,7 @@ function createMissile(world: WorldImpl, opts: {
     guidanceMode: 'sensor',
     armed: opts.armed ?? true,
     armingDistance: 5,
+    hitProbability: 0,
   });
   return id;
 }

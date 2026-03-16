@@ -60,6 +60,7 @@ function createMissile(
     guidanceMode: 'sensor',
     armed: true,
     armingDistance: 5,
+    hitProbability: 0,
   });
   return id;
 }

@@ -48,12 +48,12 @@ Identified 2026-03-15. Goal: clean separation of engine/game/rendering/UI layers
 - [x] Update imports in CollisionSystem, CelestialRenderer, PlanetAvoidance, CommandHandler, PlayerInteractionHandler
 - [x] Run build + tests to verify
 
-## 7. Pre-compute hit probabilities
+## 7. Pre-compute hit probabilities ✅
 
-- [ ] Add hit probability data to missile entities or contact components
-- [ ] Compute in a system (MissileSystem or a new HitProbabilitySystem) rather than in UI panels
-- [ ] ShipDetailPanel and ActiveMissilesPanel read pre-computed data instead of importing FiringComputer
-- [ ] Run build + tests to verify
+- [x] Add `hitProbability` field to Missile component
+- [x] Compute in MissileSystem each tick using `missileHitProbability`
+- [x] ShipDetailPanel and ActiveMissilesPanel read pre-computed `missile.hitProbability` instead of importing FiringComputer
+- [x] Run build + tests to verify
 
 ## 8. Make TimeControls event-driven
 

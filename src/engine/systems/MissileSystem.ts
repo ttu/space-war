@@ -5,6 +5,7 @@ import {
   Missile, ContactTracker,
   COMPONENT,
 } from '../components';
+import { missileHitProbability } from '../utils/FiringComputer';
 
 export const DETONATION_RADIUS = 5; // km — proximity detonation (includes margin for gravity and discretization)
 const NAV_CONSTANT = 4; // proportional navigation gain
@@ -107,6 +108,20 @@ export class MissileSystem {
         }
       } else {
         this.ballisticTimestamps.delete(missileId);
+      }
+
+      // Update pre-computed hit probability
+      if (targetData.truePosition) {
+        const targetVelData = world.getComponent<Velocity>(missile.targetId, COMPONENT.Velocity);
+        missile.hitProbability = missileHitProbability(
+          pos.x, pos.y,
+          vel.vx, vel.vy,
+          missile.accel, missile.fuel, missile.seekerRange,
+          targetData.truePosition.x, targetData.truePosition.y,
+          targetVelData?.vx ?? 0, targetVelData?.vy ?? 0,
+        );
+      } else {
+        missile.hitProbability = 0;
       }
 
       // Check detonation: current position within radius OR path this tick passed through target.

@@ -43,6 +43,7 @@ describe('Weapon Components', () => {
       guidanceMode: 'sensor',
       armed: false,
       armingDistance: 5,
+      hitProbability: 0,
     };
     world.addComponent(id, missile);
     const retrieved = world.getComponent<Missile>(id, COMPONENT.Missile);
