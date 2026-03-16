@@ -91,7 +91,7 @@ export class NavigationSystem {
         if (segmentPassesThroughInterior(
           pathPoints[i].x, pathPoints[i].y,
           pathPoints[i + 1].x, pathPoints[i + 1].y,
-          body.x, body.y, body.dangerRadius,
+          body.x, body.y, body.cautionRadius,
         )) {
           needCorrection = true;
           break;
