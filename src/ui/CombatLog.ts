@@ -10,7 +10,13 @@ function formatEventTime(time: number): string {
   return `T+${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-function eventSummary(e: GameEvent): string {
+/** AI-internal decision events that should not appear in the combat log. */
+const AI_INTERNAL_EVENTS = new Set([
+  'AIFireRailgun', 'AIFireMissile', 'AIMoveOrder',
+]);
+
+function eventSummary(e: GameEvent): string | null {
+  if (AI_INTERNAL_EVENTS.has(e.type)) return null;
   const t = formatEventTime(e.time);
   const typeLabel = e.type.replace(/([A-Z])/g, ' $1').trim();
   switch (e.type) {
@@ -118,9 +124,11 @@ export class CombatLog {
     const toShow = history.slice(-MAX_ENTRIES);
     this.list.textContent = '';
     for (const e of toShow) {
+      const summary = eventSummary(e);
+      if (summary === null) continue;
       const line = document.createElement('div');
       line.className = 'combat-log-line';
-      line.textContent = eventSummary(e);
+      line.textContent = summary;
       this.list.appendChild(line);
     }
     this.list.scrollTop = this.list.scrollHeight;
