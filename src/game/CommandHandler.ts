@@ -8,7 +8,7 @@ import {
 import { computeBurnPlan, angleBetweenPoints } from '../engine/utils/TrajectoryCalculator';
 import { computeLeadSolution, hitProbability } from '../engine/utils/FiringComputer';
 import { getBodiesFromWorld, getSafeWaypoints } from '../engine/utils/PlanetAvoidance';
-import { DANGER_ZONE_MULTIPLIER } from '../engine/systems/CollisionSystem';
+import { DANGER_ZONE_MULTIPLIER } from '../engine/constants';
 
 /** Rounds per player "Fire railgun" + right-click (one leaves the ship each interval). */
 const RAILGUN_BURST_SIZE = 5;

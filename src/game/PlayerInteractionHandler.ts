@@ -7,7 +7,7 @@ import type { PendingOrderType } from '../ui/OrderBar';
 import {
   Position, Ship, Missile, NavigationOrder, CelestialBody, ContactTracker, COMPONENT,
 } from '../engine/components';
-import { DANGER_ZONE_MULTIPLIER } from '../engine/systems/CollisionSystem';
+import { DANGER_ZONE_MULTIPLIER } from '../engine/constants';
 
 export interface InteractionDeps {
   world: World;

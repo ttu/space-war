@@ -1,11 +1,10 @@
 import { World, EntityId } from '../types';
 import { EventBus } from '../core/EventBus';
 import { Position, Hull, CelestialBody, COMPONENT } from '../components';
+import { DANGER_ZONE_MULTIPLIER } from '../constants';
 
 /** Hull damage per tick at the inner edge of the danger zone (surface). */
 const MAX_DAMAGE_PER_TICK = 8;
-/** Danger zone extends to this multiplier of body radius (tighter = ships can orbit closer). */
-export const DANGER_ZONE_MULTIPLIER = 1.5;
 
 export class CollisionSystem {
   constructor(private eventBus: EventBus) {}

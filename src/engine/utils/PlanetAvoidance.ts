@@ -1,6 +1,6 @@
 import type { World } from '../types';
 import { COMPONENT, type Position, type CelestialBody } from '../components';
-import { DANGER_ZONE_MULTIPLIER } from '../systems/CollisionSystem';
+import { DANGER_ZONE_MULTIPLIER } from '../constants';
 
 /** Planning radius must allow for curved PN trajectories; too small and ships cut into the danger zone. */
 const AVOIDANCE_PLANNING_MULTIPLIER = 2.0;

@@ -42,11 +42,11 @@ Identified 2026-03-15. Goal: clean separation of engine/game/rendering/UI layers
 - [x] SpaceWarGame delegates to CameraAnimator
 - [x] Run build + tests to verify
 
-## 6. Fix cross-layer constants
+## 6. Fix cross-layer constants ✅
 
-- [ ] Move `DANGER_ZONE_MULTIPLIER` from CollisionSystem to `src/engine/constants.ts` or onto `CelestialBody` component
-- [ ] Update imports in CollisionSystem and CelestialRenderer
-- [ ] Run build + tests to verify
+- [x] Move `DANGER_ZONE_MULTIPLIER` from CollisionSystem to `src/engine/constants.ts`
+- [x] Update imports in CollisionSystem, CelestialRenderer, PlanetAvoidance, CommandHandler, PlayerInteractionHandler
+- [x] Run build + tests to verify
 
 ## 7. Pre-compute hit probabilities
 

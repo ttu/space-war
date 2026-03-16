@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { World, EntityId } from '../engine/types';
 import { Position, CelestialBody, COMPONENT } from '../engine/components';
-import { DANGER_ZONE_MULTIPLIER } from '../engine/systems/CollisionSystem';
+import { DANGER_ZONE_MULTIPLIER } from '../engine/constants';
 
 interface BodyVisual {
   group: THREE.Group;
