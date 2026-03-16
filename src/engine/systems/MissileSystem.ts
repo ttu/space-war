@@ -12,7 +12,7 @@ const NAV_CONSTANT = 4; // proportional navigation gain
 const BALLISTIC_TIMEOUT = 120; // seconds before removing fuel-depleted missiles
 const FUEL_RESERVE_FRACTION = 0.35; // fraction of total fuel reserved for terminal maneuvers
 const TERMINAL_RANGE_SECONDS = 15; // enter terminal phase when estimated time-to-intercept is this many seconds
-const COAST_THRUST_FRACTION = 0.15; // fraction of max thrust used for mid-course corrections during coast
+const COAST_THRUST_FRACTION = 0.3; // fraction of max thrust used for mid-course corrections during coast
 
 /**
  * Minimum distance from point (tx, ty) to the segment from (ax, ay) to (bx, by).
@@ -266,36 +266,32 @@ export class MissileSystem {
     const range = Math.sqrt(dx * dx + dy * dy);
     if (range < 1) return;
 
-    // Relative velocity
+    // Actual LOS angle (pure PN — no prediction needed, PN naturally creates collision course)
+    const losAngle = Math.atan2(dy, dx);
+
+    // Relative velocity (target - missile)
     const relVx = (targetVel?.vx ?? 0) - vel.vx;
     const relVy = (targetVel?.vy ?? 0) - vel.vy;
 
     // Closing speed (positive = closing)
     const closingSpeed = -(relVx * dx + relVy * dy) / range;
 
-    // Estimate time-to-intercept and predict where target will be.
-    // Cap prediction to missile fuel time to avoid wild extrapolation at low closing speeds.
-    const maxPredictionTime = missile.fuel > 0 ? missile.fuel : 30;
-    const rawIntercept = closingSpeed > 1 ? range / closingSpeed : range;
-    const tIntercept = Math.min(rawIntercept, maxPredictionTime);
-    const predictedX = targetPos.x + (targetVel?.vx ?? 0) * tIntercept;
-    const predictedY = targetPos.y + (targetVel?.vy ?? 0) * tIntercept;
-
-    // Use predicted intercept point for LOS angle (lead pursuit)
-    const pdx = predictedX - missilePos.x;
-    const pdy = predictedY - missilePos.y;
-    const losAngle = Math.atan2(pdy, pdx);
-
-    // LOS rotation rate (using actual target position for PN corrections)
+    // LOS rotation rate
     const losRate = (dx * relVy - dy * relVx) / (range * range);
 
-    // Proportional navigation: commanded acceleration perpendicular to LOS (to null LOS rate).
-    const commandAccel = NAV_CONSTANT * closingSpeed * losRate;
-
-    // Thrust toward predicted intercept point, with bounded PN correction.
     const effectiveAccel = missile.accel * thrustFraction;
-    const perpRatio = Math.max(-0.9, Math.min(0.9, commandAccel / effectiveAccel));
-    const thrustAngle = losAngle + Math.asin(perpRatio);
+
+    let thrustAngle: number;
+    if (closingSpeed < 0.5) {
+      // Not closing — pure pursuit toward target to build closing speed
+      thrustAngle = losAngle;
+    } else {
+      // True Proportional Navigation: use |closingSpeed| to prevent sign reversal
+      // when transitioning from closing to receding (avoids steering away from target).
+      const commandAccel = NAV_CONSTANT * Math.abs(closingSpeed) * losRate;
+      const perpRatio = Math.max(-0.9, Math.min(0.9, commandAccel / effectiveAccel));
+      thrustAngle = losAngle + Math.asin(perpRatio);
+    }
 
     // Apply thrust
     vel.vx += Math.cos(thrustAngle) * effectiveAccel * dt;
