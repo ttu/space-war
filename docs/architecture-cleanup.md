@@ -34,13 +34,13 @@ Identified 2026-03-15. Goal: clean separation of engine/game/rendering/UI layers
 - [x] Verify no unbounded history growth issue remains
 - [x] Run build + tests to verify
 
-## 5. Extract CameraAnimator from SpaceWarGame
+## 5. Extract CameraAnimator from SpaceWarGame ✅
 
-- [ ] Create `src/core/CameraAnimator.ts`
-- [ ] Move camera focus animation state machine (SpaceWarGame lines 932-991)
-- [ ] Move related state: `focusTarget`, `focusStartPos`, `focusStartZoom`, `focusProgress` (lines 112-127)
-- [ ] SpaceWarGame delegates to CameraAnimator
-- [ ] Run build + tests to verify
+- [x] Create `src/core/CameraAnimator.ts`
+- [x] Move camera focus animation state machine (zoom out → pan → zoom in)
+- [x] Move related state: animation phases, timing constants, zoom levels
+- [x] SpaceWarGame delegates to CameraAnimator
+- [x] Run build + tests to verify
 
 ## 6. Fix cross-layer constants
 
