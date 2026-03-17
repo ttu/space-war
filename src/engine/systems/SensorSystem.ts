@@ -41,12 +41,16 @@ export class SensorSystem {
         const delayedX = target.pos.x - target.vel.vx * lightDelay;
         const delayedY = target.pos.y - target.vel.vy * lightDelay;
 
+        // Back-calculate velocity at detection time (consistent with delayed position)
+        const delayedVx = target.vel.vx - target.ax * lightDelay;
+        const delayedVy = target.vel.vy - target.ay * lightDelay;
+
         const contact: DetectedContact = {
           entityId: target.entityId,
           lastKnownX: delayedX,
           lastKnownY: delayedY,
-          lastKnownVx: target.vel.vx,
-          lastKnownVy: target.vel.vy,
+          lastKnownVx: delayedVx,
+          lastKnownVy: delayedVy,
           detectionTime: gameTime - lightDelay,
           receivedTime: gameTime,
           signalStrength: bestDetection.signalStrength,
@@ -125,7 +129,16 @@ export class SensorSystem {
       const thruster = world.getComponent<Thruster>(entityId, COMPONENT.Thruster);
       const throttle = thruster?.throttle ?? 0;
 
-      result.push({ entityId, pos, vel, thermal, throttle });
+      // Compute current acceleration vector for light-delay velocity correction
+      let ax = 0;
+      let ay = 0;
+      if (thruster && thruster.throttle > 0) {
+        const accel = thruster.maxThrust * thruster.throttle;
+        ax = Math.cos(thruster.thrustAngle) * accel;
+        ay = Math.sin(thruster.thrustAngle) * accel;
+      }
+
+      result.push({ entityId, pos, vel, thermal, throttle, ax, ay });
     }
     return result;
   }
@@ -233,6 +246,8 @@ interface TargetShipData {
   vel: Velocity;
   thermal: ThermalSignature;
   throttle: number;
+  ax: number;  // current acceleration x (km/s²) for light-delay velocity correction
+  ay: number;  // current acceleration y (km/s²)
 }
 
 interface OccludingBody {
