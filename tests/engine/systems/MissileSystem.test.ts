@@ -70,10 +70,12 @@ function createMissile(world: WorldImpl, opts: {
     launcherFaction: opts.faction,
     count: opts.count ?? 6,
     fuel: opts.fuel ?? 60,
+    totalFuel: opts.fuel ?? 60,
     accel: 0.5,
     seekerRange: opts.seekerRange ?? 5_000,
     seekerSensitivity: opts.seekerSensitivity ?? 1e-8,
     guidanceMode: 'sensor',
+    phase: 'boost',
     armed: opts.armed ?? true,
     armingDistance: 5,
     hitProbability: 0,
@@ -90,12 +92,13 @@ function createContactTracker(world: WorldImpl, faction: 'player' | 'enemy'): En
 }
 
 describe('MissileSystem', () => {
-  it('should steer missile toward target using actual position', () => {
+  it('should use seeker mode when target is within seeker range', () => {
     const world = new WorldImpl();
     const eventBus = new EventBusImpl();
     const system = new MissileSystem(eventBus);
 
-    const targetId = createTargetShip(world, { x: 10_000, y: 0, faction: 'enemy' });
+    // Target at 3,000 km — within default 5,000 km seeker range
+    const targetId = createTargetShip(world, { x: 3_000, y: 0, faction: 'enemy' });
     const missileId = createMissile(world, {
       x: 0, y: 0, vx: 5, vy: 0, targetId, faction: 'player',
     });
@@ -107,6 +110,54 @@ describe('MissileSystem', () => {
     const missile = world.getComponent<Missile>(missileId, COMPONENT.Missile)!;
     expect(missile.guidanceMode).toBe('seeker');
     expect(missile.fuel).toBeLessThan(60);
+  });
+
+  it('should use sensor mode with extrapolation when target is beyond seeker range', () => {
+    const world = new WorldImpl();
+    const eventBus = new EventBusImpl();
+    const system = new MissileSystem(eventBus);
+
+    // Target at 10,000 km — beyond default 5,000 km seeker range
+    const targetId = createTargetShip(world, { x: 10_000, y: 0, faction: 'enemy' });
+    const missileId = createMissile(world, {
+      x: 0, y: 0, vx: 5, vy: 0, targetId, faction: 'player',
+    });
+
+    // Provide sensor contact data so missile can guide via sensors
+    const trackerId = createContactTracker(world, 'player');
+    const tracker = world.getComponent<ContactTracker>(trackerId, COMPONENT.ContactTracker)!;
+    tracker.contacts.set(targetId, {
+      entityId: targetId,
+      lastKnownX: 10_000, lastKnownY: 0,
+      lastKnownVx: 0, lastKnownVy: 0,
+      detectionTime: 10, receivedTime: 10,
+      signalStrength: 0.01, lost: false, lostTime: 0,
+    });
+
+    system.update(world, 0.1, 10.0);
+
+    const missile = world.getComponent<Missile>(missileId, COMPONENT.Missile)!;
+    expect(missile.guidanceMode).toBe('sensor');
+    expect(missile.fuel).toBeLessThan(60);
+  });
+
+  it('should go ballistic when target is beyond seeker range and no sensor data', () => {
+    const world = new WorldImpl();
+    const eventBus = new EventBusImpl();
+    const system = new MissileSystem(eventBus);
+
+    // Target at 10,000 km — beyond seeker range, no sensor contact
+    const targetId = createTargetShip(world, { x: 10_000, y: 0, faction: 'enemy' });
+    const missileId = createMissile(world, {
+      x: 0, y: 0, vx: 5, vy: 0, targetId, faction: 'player',
+    });
+
+    createContactTracker(world, 'player');
+
+    system.update(world, 0.1, 10.0);
+
+    const missile = world.getComponent<Missile>(missileId, COMPONENT.Missile)!;
+    expect(missile.guidanceMode).toBe('ballistic');
   });
 
   it('should switch to seeker mode when target lost from sensors but in seeker range', () => {
@@ -135,7 +186,8 @@ describe('MissileSystem', () => {
     const eventBus = new EventBusImpl();
     const system = new MissileSystem(eventBus);
 
-    const targetId = createTargetShip(world, { x: 100_000, y: 0, faction: 'enemy', throttle: 0 });
+    // Start within seeker range so missile is actively guided
+    const targetId = createTargetShip(world, { x: 3_000, y: 0, faction: 'enemy', throttle: 0 });
     const missileId = createMissile(world, {
       x: 0, y: 0, vx: 5, vy: 0, targetId, faction: 'player',
       seekerRange: 5_000, seekerSensitivity: 1e-8,
@@ -147,6 +199,7 @@ describe('MissileSystem', () => {
     const missileBefore = world.getComponent<Missile>(missileId, COMPONENT.Missile)!;
     expect(missileBefore.guidanceMode).toBe('seeker');
 
+    // Target destroyed — position removed
     world.removeComponent(targetId, COMPONENT.Position);
     system.update(world, 0.1, 10.1);
 

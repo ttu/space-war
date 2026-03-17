@@ -68,7 +68,7 @@ export class MissileSystem {
       }
 
       // Get target position data
-      const targetData = this.getTargetData(world, missile, pos);
+      const targetData = this.getTargetData(world, missile, pos, gameTime);
 
       // Update guidance mode
       if (missile.fuel <= 0) {
@@ -213,27 +213,31 @@ export class MissileSystem {
   }
 
   private getTargetData(
-    world: World, missile: Missile, _missilePos: Position,
+    world: World, missile: Missile, missilePos: Position, gameTime: number,
   ): TargetData {
     const result: TargetData = { source: 'none', position: null, velocity: null, truePosition: null };
 
-    // Get true target position (for detonation check)
+    // Get true target position (always needed for detonation proximity check)
     const targetPos = world.getComponent<Position>(missile.targetId, COMPONENT.Position);
     if (targetPos) {
       result.truePosition = { x: targetPos.x, y: targetPos.y };
     }
 
-    // Use actual target position for guidance whenever target exists — otherwise we guide
-    // toward stale sensor data and never get within seeker range of the real target.
+    // 1. Seeker: missile's onboard sensor acquires target within seeker range
     if (targetPos) {
-      result.source = 'seeker';
-      result.position = { x: targetPos.x, y: targetPos.y };
-      const targetVel = world.getComponent<Velocity>(missile.targetId, COMPONENT.Velocity);
-      result.velocity = targetVel ? { vx: targetVel.vx, vy: targetVel.vy } : null;
-      return result;
+      const dx = targetPos.x - missilePos.x;
+      const dy = targetPos.y - missilePos.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq <= missile.seekerRange * missile.seekerRange) {
+        result.source = 'seeker';
+        result.position = { x: targetPos.x, y: targetPos.y };
+        const targetVel = world.getComponent<Velocity>(missile.targetId, COMPONENT.Velocity);
+        result.velocity = targetVel ? { vx: targetVel.vx, vy: targetVel.vy } : null;
+        return result;
+      }
     }
 
-    // Fall back to faction sensors only when target has no position (e.g. destroyed)
+    // 2. Sensor: use faction sensor data with dead-reckoning extrapolation
     const trackers = world.query(COMPONENT.ContactTracker);
     for (const trackerId of trackers) {
       const tracker = world.getComponent<ContactTracker>(trackerId, COMPONENT.ContactTracker)!;
@@ -241,13 +245,19 @@ export class MissileSystem {
 
       const contact = tracker.contacts.get(missile.targetId);
       if (contact && !contact.lost) {
+        // Extrapolate position from last known state using time since detection
+        const timeSinceDetection = gameTime - contact.detectionTime;
         result.source = 'sensor';
-        result.position = { x: contact.lastKnownX, y: contact.lastKnownY };
+        result.position = {
+          x: contact.lastKnownX + contact.lastKnownVx * timeSinceDetection,
+          y: contact.lastKnownY + contact.lastKnownVy * timeSinceDetection,
+        };
         result.velocity = { vx: contact.lastKnownVx, vy: contact.lastKnownVy };
         return result;
       }
     }
 
+    // 3. No data — missile goes ballistic
     return result;
   }
 

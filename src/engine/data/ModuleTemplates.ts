@@ -66,7 +66,7 @@ const missileLaunchers: MissileLauncherModule[] = [
     maxRange: 35_000,
     missileAccel: 0.6,
     ammo: 12,
-    seekerRange: 3_000,
+    seekerRange: 8_000,
     seekerSensitivity: 3e-8,
   },
   {
@@ -78,7 +78,7 @@ const missileLaunchers: MissileLauncherModule[] = [
     maxRange: 40_000,
     missileAccel: 0.6,
     ammo: 16,
-    seekerRange: 4_000,
+    seekerRange: 10_000,
     seekerSensitivity: 2e-8,
   },
   {
@@ -90,7 +90,7 @@ const missileLaunchers: MissileLauncherModule[] = [
     maxRange: 50_000,
     missileAccel: 0.5,
     ammo: 24,
-    seekerRange: 5_000,
+    seekerRange: 12_000,
     seekerSensitivity: 1e-8,
   },
   {
@@ -102,7 +102,7 @@ const missileLaunchers: MissileLauncherModule[] = [
     maxRange: 55_000,
     missileAccel: 0.5,
     ammo: 32,
-    seekerRange: 6_000,
+    seekerRange: 15_000,
     seekerSensitivity: 1e-8,
   },
 ];
