@@ -8,7 +8,8 @@ export interface ScenarioSelectorCallbacks {
 }
 
 const SCENARIOS: ScenarioEntry[] = [
-  { id: 'demo', label: 'Demo — Solar System' },
+  { id: 'demo', label: 'Demo — Solace System' },
+  { id: 'solarSystem', label: 'Inner Solar System' },
   { id: 'redDwarf', label: 'Red Dwarf System' },
   { id: 'provingGrounds', label: '1v1 Proving Grounds' },
   { id: 'tutorial', label: 'Tutorial' },
@@ -23,7 +24,7 @@ export class ScenarioSelector {
   constructor(
     container: HTMLElement,
     callbacks: ScenarioSelectorCallbacks,
-    initialId = 'provingGrounds',
+    initialId = 'solarSystem',
   ) {
     this.select = document.createElement('select');
     this.select.className = 'scenario-selector';

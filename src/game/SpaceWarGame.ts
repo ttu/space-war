@@ -104,7 +104,7 @@ export class SpaceWarGame {
   private scenarioSelector!: ScenarioSelector;
   private playerInteraction!: PlayerInteractionHandler;
   private pendingOrder: PendingOrderType = 'none';
-  currentScenarioId = 'provingGrounds';
+  currentScenarioId = 'solarSystem';
 
   private cameraLockIndicator: HTMLElement | null = null;
 
@@ -140,7 +140,7 @@ export class SpaceWarGame {
       this.scenarioSelector.setScenario(scenarioParam);
       // Scenario loaded async in main.ts via loadScenarioByName()
     } else {
-      this.loadProvingGroundsScenario();
+      this.loadSolarSystemScenario();
     }
     this.cameraAnimator = new CameraAnimator(this.camera);
     this.commandHandler = new CommandHandler(this.world, this.eventBus);
