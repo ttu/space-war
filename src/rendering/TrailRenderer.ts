@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { World, EntityId } from '../engine/types';
 import {
   Position, Velocity, Ship, Thruster, NavigationOrder,
-  COMPONENT,
+  CelestialBody, COMPONENT,
 } from '../engine/components';
+import { gravitationalAcceleration } from '../utils/OrbitalMechanics';
 
 interface TrailPoint {
   x: number;
@@ -184,7 +185,7 @@ export class TrailRenderer {
     const color = hasNav ? PROJECTION_COLOR_NAV : PROJECTION_COLOR_DRIFT;
     const opacity = hasNav ? PROJECTION_OPACITY_NAV : PROJECTION_OPACITY_DRIFT;
 
-    const points = this.projectPath(pos, vel, thruster, nav);
+    const points = this.projectPath(world, pos, vel, thruster, nav);
     const maxPoints = points.length;
 
     let line = this.projectionLines.get(entityId);
@@ -421,10 +422,22 @@ export class TrailRenderer {
   }
 
   private projectPath(
+    world: World,
     pos: Position, vel: Velocity,
     thruster: Thruster | undefined,
     nav: NavigationOrder | undefined,
   ): TrailPoint[] {
+    // Collect gravity sources (non-star bodies, matching PhysicsSystem ship behavior)
+    const bodyEntities = world.query(COMPONENT.Position, COMPONENT.CelestialBody);
+    const gravBodies: { x: number; y: number; mass: number; radius: number }[] = [];
+    for (const bodyId of bodyEntities) {
+      const bPos = world.getComponent<Position>(bodyId, COMPONENT.Position)!;
+      const body = world.getComponent<CelestialBody>(bodyId, COMPONENT.CelestialBody)!;
+      if (body.bodyType !== 'star') {
+        gravBodies.push({ x: bPos.x, y: bPos.y, mass: body.mass, radius: body.radius });
+      }
+    }
+
     const points: TrailPoint[] = [{ x: pos.x, y: pos.y }];
     let px = pos.x, py = pos.y;
     let vx = vel.vx, vy = vel.vy;
@@ -465,6 +478,13 @@ export class TrailRenderer {
             vy += (dvy / dvMag) * a * PROJECTION_DT;
           }
 
+          // Apply gravity from celestial bodies
+          for (const body of gravBodies) {
+            const g = gravitationalAcceleration(px, py, body.x, body.y, body.mass, body.radius);
+            vx += g.ax * PROJECTION_DT;
+            vy += g.ay * PROJECTION_DT;
+          }
+
           px += vx * PROJECTION_DT;
           py += vy * PROJECTION_DT;
           points.push({ x: px, y: py });
@@ -477,6 +497,14 @@ export class TrailRenderer {
           vx += Math.cos(thruster.thrustAngle) * accel * PROJECTION_DT;
           vy += Math.sin(thruster.thrustAngle) * accel * PROJECTION_DT;
         }
+
+        // Apply gravity from celestial bodies
+        for (const body of gravBodies) {
+          const g = gravitationalAcceleration(px, py, body.x, body.y, body.mass, body.radius);
+          vx += g.ax * PROJECTION_DT;
+          vy += g.ay * PROJECTION_DT;
+        }
+
         px += vx * PROJECTION_DT;
         py += vy * PROJECTION_DT;
         points.push({ x: px, y: py });
