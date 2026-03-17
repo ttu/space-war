@@ -18,10 +18,10 @@ const DISENGAGE_HULL_RATIO = 0.35; // retreat when hull below this fraction
 const RETREAT_DISTANCE_KM = 5000; // how far to set retreat point from contact
 /** Max lead time (seconds) to prevent wild extrapolation for distant targets. */
 const MAX_LEAD_TIME = 600;
-/** Distance threshold (km) to switch from lead-intercept to velocity-matching. */
-const VELOCITY_MATCH_RANGE = 80_000;
+/** Always velocity-match during engagement to prevent high-speed flybys. */
+const VELOCITY_MATCH_RANGE = Infinity;
 /** Desired closing speed (km/s) when velocity-matched. */
-const DESIRED_CLOSING_SPEED = 5;
+const DESIRED_CLOSING_SPEED = 10;
 
 /**
  * Fleet-level AI: sets objective (engage / disengage / hold), primary target,
@@ -183,7 +183,10 @@ export class AIStrategicSystem {
         estTime = 2 * Math.sqrt(dist / accel);
       }
 
-      const leadTime = Math.min(estTime * 0.5, MAX_LEAD_TIME);
+      // At close range, reduce lead time to avoid overshooting past the target.
+      // Beyond 50k km: full lead intercept. Within 50k km: taper to near-zero.
+      const leadFraction = Math.min(1, dist / 50_000);
+      const leadTime = Math.min(estTime * 0.5 * leadFraction, MAX_LEAD_TIME);
       const interceptX = bestX + bestVx * leadTime;
       const interceptY = bestY + bestVy * leadTime;
 

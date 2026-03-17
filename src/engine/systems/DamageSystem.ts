@@ -16,6 +16,7 @@ interface PendingRailgunHit {
 interface PendingMissileImpact {
   targetId: EntityId;
   missileCount: number;
+  time: number;
 }
 
 export class DamageSystem {
@@ -38,6 +39,7 @@ export class DamageSystem {
         this.pendingMissileImpacts.push({
           targetId: event.targetId,
           missileCount: (event.data?.missileCount as number) ?? 1,
+          time: event.time,
         });
       }
     });
@@ -54,7 +56,7 @@ export class DamageSystem {
     this.pendingRailgunHits.length = 0;
 
     for (const impact of this.pendingMissileImpacts) {
-      this.applyMissileImpact(world, impact.targetId, impact.missileCount);
+      this.applyMissileImpact(world, impact.targetId, impact.missileCount, impact.time);
     }
     this.pendingMissileImpacts.length = 0;
   }
@@ -75,31 +77,31 @@ export class DamageSystem {
     const hull = world.getComponent<Hull>(targetId, COMPONENT.Hull);
     if (!hull) return;
 
-    this.applyHullDamage(world, targetId, hull, damage);
+    this.applyHullDamage(world, targetId, hull, damage, gameTime);
   }
 
-  private applyMissileImpact(world: World, targetId: EntityId, missileCount: number): void {
+  private applyMissileImpact(world: World, targetId: EntityId, missileCount: number, gameTime: number): void {
     const hull = world.getComponent<Hull>(targetId, COMPONENT.Hull);
     if (!hull) return;
 
     const damage = DAMAGE_PER_MISSILE * missileCount;
-    this.applyHullDamage(world, targetId, hull, damage);
+    this.applyHullDamage(world, targetId, hull, damage, gameTime);
   }
 
-  private applyHullDamage(world: World, targetId: EntityId, hull: Hull, damage: number): void {
+  private applyHullDamage(world: World, targetId: EntityId, hull: Hull, damage: number, gameTime: number): void {
     const effective = Math.max(1, Math.floor(damage - hull.armor));
     hull.current = Math.max(0, hull.current - effective);
 
     // Optional subsystem damage (e.g. 30% chance to also hit a system)
     const systems = world.getComponent<ShipSystems>(targetId, COMPONENT.ShipSystems);
     if (systems && Math.random() < 0.3) {
-      this.applySubsystemDamage(world, targetId, systems, effective);
+      this.applySubsystemDamage(world, targetId, systems, effective, gameTime);
     }
 
     if (hull.current <= 0) {
       this.eventBus.emit({
         type: 'ShipDestroyed',
-        time: 0,
+        time: gameTime,
         targetId,
         data: {},
       });
@@ -112,6 +114,7 @@ export class DamageSystem {
     entityId: EntityId,
     systems: ShipSystems,
     amount: number,
+    gameTime: number,
   ): void {
     const subsystems: ('reactor' | 'engines' | 'sensors')[] = ['reactor', 'engines', 'sensors'];
     const which = subsystems[Math.floor(Math.random() * subsystems.length)];
@@ -119,7 +122,7 @@ export class DamageSystem {
     sub.current = Math.max(0, sub.current - amount);
     this.eventBus.emit({
       type: 'SystemDamaged',
-      time: 0,
+      time: gameTime,
       entityId,
       data: { system: which, current: sub.current, max: sub.max },
     });

@@ -590,7 +590,6 @@ export class SpaceWarGame {
   private fixedUpdate(dt: number): void {
     this.commandHandler.processPendingRailgunBursts(this.world, this.gameTime.elapsed);
     this.sensorSystem.update(this.world, dt, this.gameTime.elapsed);
-    this.pdcSystem.update(this.world, dt, this.gameTime.elapsed);
     this.railgunSystem.update(this.world, dt, this.gameTime.elapsed);
     this.damageSystem.processHitEvents(this.world);
     this.aiStrategicSystem.update(this.world, dt, this.gameTime.elapsed);
@@ -598,6 +597,7 @@ export class SpaceWarGame {
     this.navigationSystem.update(this.world, dt, this.gameTime.elapsed);
     this.physicsSystem.update(this.world, dt);
     this.collisionSystem.update(this.world);
+    this.pdcSystem.update(this.world, dt, this.gameTime.elapsed);
     this.missileSystem.update(this.world, dt, this.gameTime.elapsed);
     this.victorySystem.update(this.world, this.gameTime.elapsed);
     this.trailRenderer.recordPositions(this.world);

@@ -37,13 +37,14 @@ function orbitState(centralMass: number, radius: number, angleDeg: number) {
   };
 }
 
-// Planet positions — offset so ships aren't directly facing each other
+// Planet positions
 const anvil = orbitState(STAR_MASS, ANVIL_ORBITAL_RADIUS, 315);   // lower-right
 const crucible = orbitState(STAR_MASS, CRUCIBLE_ORBITAL_RADIUS, 45); // upper-right
 
-// Ship orbital speeds around their host planet
-const shipOrbitalSpeedAnvil = circularOrbitSpeed(ANVIL_MASS, 15_000);
-const shipOrbitalSpeedCrucible = circularOrbitSpeed(CRUCIBLE_MASS, 15_000);
+// Ship positions: both orbit Kael at Anvil's radius, ~30° apart (~62k km) for fast engagement
+// Offset from Anvil (315°) and Crucible (45°) to avoid planetary LOS blockage
+const playerOrbit = orbitState(STAR_MASS, ANVIL_ORBITAL_RADIUS, 240);  // well clear of planets
+const enemyOrbit = orbitState(STAR_MASS, ANVIL_ORBITAL_RADIUS, 270);   // 30° away from player
 
 // Asteroid corridor between the two planets (~180k-280k km from star)
 const asteroidPositions = [
@@ -107,27 +108,27 @@ export const provingGroundsScenario: Scenario = {
     }),
   ],
   ships: [
-    // --- Player ship near Anvil ---
+    // --- Player ship at 315° on Anvil orbit ---
     {
       templateId: "destroyer",
       name: "TCS Hammer",
       faction: "player",
       flagship: true,
-      x: anvil.x + 15_000,
-      y: anvil.y,
-      vx: anvil.vx,
-      vy: anvil.vy + shipOrbitalSpeedAnvil,
+      x: playerOrbit.x,
+      y: playerOrbit.y,
+      vx: playerOrbit.vx,
+      vy: playerOrbit.vy,
     },
-    // --- Enemy ship near Crucible ---
+    // --- Enemy ship at 345° on Anvil orbit (~62k km from player) ---
     {
       templateId: "destroyer",
       name: "UES Striker",
       faction: "enemy",
       flagship: true,
-      x: crucible.x + 15_000,
-      y: crucible.y,
-      vx: crucible.vx,
-      vy: crucible.vy + shipOrbitalSpeedCrucible,
+      x: enemyOrbit.x,
+      y: enemyOrbit.y,
+      vx: enemyOrbit.vx,
+      vy: enemyOrbit.vy,
     },
   ],
 };

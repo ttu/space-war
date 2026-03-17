@@ -232,6 +232,13 @@ export class NavigationSystem {
       const orbitVel = world.getComponent<Velocity>(nav.orbitTargetId, COMPONENT.Velocity);
       if (orbitVel) { baseVx = orbitVel.vx; baseVy = orbitVel.vy; }
     }
+    // When velocity matching, the match velocity already includes a closing component.
+    // Cap approach speed to prevent building excessive closing velocity that causes
+    // flyby oscillation. The match velocity handles long-range closing; approach speed
+    // is just for fine convergence.
+    if (nav.matchVx != null || nav.matchVy != null) {
+      maxApproachSpeed = Math.min(maxApproachSpeed, 30);
+    }
     const desiredVx = baseVx + dirX * maxApproachSpeed;
     const desiredVy = baseVy + dirY * maxApproachSpeed;
 

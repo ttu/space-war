@@ -121,7 +121,8 @@ export class CombatLog {
     if (history.length === this.lastCount) return;
     this.lastCount = history.length;
 
-    const toShow = history.slice(-MAX_ENTRIES);
+    const visible = history.filter(e => !AI_INTERNAL_EVENTS.has(e.type));
+    const toShow = visible.slice(-MAX_ENTRIES);
     this.list.textContent = '';
     for (const e of toShow) {
       const summary = eventSummary(e);

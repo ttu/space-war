@@ -60,7 +60,7 @@ function createEnemyShipWithWeapons(
     type: 'MissileLauncher',
     salvoSize: 2,
     reloadTime: 5,
-    lastFiredTime: 0,
+    lastFiredTime: -10,
     maxRange: 5000,
     missileAccel: 2,
     ammo: 10,

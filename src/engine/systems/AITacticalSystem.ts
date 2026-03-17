@@ -16,12 +16,14 @@ import {
 import { hitProbability } from '../utils/FiringComputer';
 
 const MISSILE_RANGE_FRACTION = 0.85; // fire when within this fraction of maxRange
-/** Max relative speed (km/s) at which AI will fire missiles. Prevents wasting ammo during high-speed flybys. */
-const MAX_MISSILE_REL_SPEED = 25;
+/** Max relative speed (km/s) at which AI will fire missiles. Prevents wasting ammo during extreme flybys. */
+const MAX_MISSILE_REL_SPEED = 40;
 /** AI only fires railgun when estimated hit probability is at least this (realistic chance to hit). */
 const MIN_RAILGUN_HIT_PROB = 0.45;
 /** AI only fires railguns when player is within this range (km) or player has missiles inbound at us. */
 const RAILGUN_ENGAGE_NEAR_KM = 50_000;
+/** Re-route threshold: cancel current nav when strategic target has drifted this fraction of remaining distance. */
+const REROUTE_DRIFT_FRACTION = 0.3;
 
 /**
  * Per-ship AI: executes strategic intent — issues move orders, launches missiles,
@@ -62,15 +64,33 @@ export class AITacticalSystem {
 
       if (intent.objective === 'engage') {
         const hasNav = nav != null && nav.phase !== 'arrived';
-        if (!hasNav && intent.moveToX != null && intent.moveToY != null) {
-          this.emitMoveOrder(shipId, intent.moveToX, intent.moveToY, gameTime, intent.matchVx, intent.matchVy);
+        if (intent.moveToX != null && intent.moveToY != null) {
+          if (!hasNav) {
+            this.emitMoveOrder(shipId, intent.moveToX, intent.moveToY, gameTime, intent.matchVx, intent.matchVy);
+          } else if (nav) {
+            // Re-route if the strategic target has drifted significantly from current nav destination
+            const driftX = intent.moveToX - nav.destinationX;
+            const driftY = intent.moveToY - nav.destinationY;
+            const drift = Math.sqrt(driftX * driftX + driftY * driftY);
+            const pos = world.getComponent<Position>(shipId, COMPONENT.Position)!;
+            const remainX = nav.destinationX - pos.x;
+            const remainY = nav.destinationY - pos.y;
+            const remaining = Math.sqrt(remainX * remainX + remainY * remainY);
+            // Scale minimum drift threshold with distance: 5000 km at long range, 500 km at close range
+            const minDrift = Math.max(500, Math.min(5000, remaining * 0.2));
+            if (drift > remaining * REROUTE_DRIFT_FRACTION && drift > minDrift) {
+              world.removeComponent(shipId, COMPONENT.NavigationOrder);
+              this.emitMoveOrder(shipId, intent.moveToX, intent.moveToY, gameTime, intent.matchVx, intent.matchVy);
+            }
+          }
         }
 
         if (intent.targetId != null && world.hasComponent(intent.targetId, COMPONENT.Position)) {
           const distToTarget = this.getDistanceToTarget(world, shipId, intent.targetId, enemyTracker);
           if (distToTarget != null) {
             const launcher = world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher);
-            if (launcher && (launcher.integrity ?? 100) > 0 && launcher.ammo > 0) {
+            if (launcher && (launcher.integrity ?? 100) > 0 && launcher.ammo > 0
+                && gameTime - launcher.lastFiredTime >= launcher.reloadTime) {
               const missileRange = launcher.maxRange * MISSILE_RANGE_FRACTION;
               // Don't fire missiles during high-speed flybys or when relative speed is too high
               const closingSpeed = this.getClosingSpeed(world, shipId, intent.targetId);

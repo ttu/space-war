@@ -7,7 +7,10 @@ const game = new SpaceWarGame(canvas, container);
 
 const scenarioParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('scenario') : null;
 if (scenarioParam) {
-  game.loadScenarioByName(scenarioParam).then(() => game.start());
+  game.switchScenario(scenarioParam).then(() => {
+    game.gameTime.paused = false;
+    game.start();
+  });
 } else {
   game.start();
 }
