@@ -43,6 +43,8 @@ export interface PDC extends Component {
   fireRate: number;            // rounds per second (e.g. 100)
   lastFiredTime: number;       // game time of last burst
   damagePerHit: number;       // damage to ship hull per hit (close-range)
+  /** km — max range when shooting at ships (>= range). 0 disables anti-ship fire. */
+  shipRange?: number;
   /** 0 = destroyed (weapon cannot fire). Omit or 100 = full. */
   integrity?: number;
 }

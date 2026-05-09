@@ -29,6 +29,7 @@ export type GameEventType =
   | 'RailgunFired'
   | 'RailgunHit'
   | 'PDCFiring'
+  | 'PDCHit'
   | 'ShipDetected'
   | 'ShipLostContact'
   | 'SystemDamaged'

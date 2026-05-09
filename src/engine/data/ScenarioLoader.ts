@@ -206,6 +206,7 @@ export function loadScenario(world: World, scenario: Scenario): void {
         fireRate: mod.fireRate,
         lastFiredTime: 0,
         damagePerHit: mod.damagePerHit,
+        shipRange: mod.shipRange,
       } as PDC);
     }
     if (resolved.railgun) {

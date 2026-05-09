@@ -34,6 +34,19 @@ export class DamageSystem {
       }
     });
 
+    // PDC ship hits use the same hull-damage pipeline as railgun hits; the
+    // separate event type just lets the combat log distinguish "PDC hit"
+    // from "Railgun hit" without changing the damage math.
+    this.eventBus.subscribe('PDCHit', (event: GameEvent) => {
+      if (event.targetId) {
+        this.pendingRailgunHits.push({
+          targetId: event.targetId,
+          damage: (event.data?.damage as number) ?? 0,
+          time: event.time,
+        });
+      }
+    });
+
     this.eventBus.subscribe('MissileImpact', (event: GameEvent) => {
       if (event.targetId) {
         this.pendingMissileImpacts.push({

@@ -32,6 +32,8 @@ function eventSummary(e: GameEvent): string | null {
       return `${t} Railgun hit`;
     case 'PDCFiring':
       return `${t} PDC firing`;
+    case 'PDCHit':
+      return `${t} PDC hit (${e.data?.hits ?? '?'})`;
     case 'ShipDetected':
       return `${t} Contact detected`;
     case 'ShipLostContact':

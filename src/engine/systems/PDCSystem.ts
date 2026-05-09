@@ -81,6 +81,55 @@ export class PDCSystem {
           toRemove.push(missileId);
         }
       }
+
+      // Anti-ship strafe with leftover rounds. Picks the nearest hostile
+      // ship inside shipRange — close-range chip damage to harass disabled
+      // or hull-stripped enemies, never the primary kill weapon.
+      if (roundsLeft > 0 && (pdc.shipRange ?? 0) > 0) {
+        const shipRangeSq = pdc.shipRange! * pdc.shipRange!;
+        const allShips = world.query(COMPONENT.Position, COMPONENT.Ship);
+        let nearestEnemy: { id: EntityId; dist: number; closingSpeed: number } | null = null;
+        for (const otherId of allShips) {
+          if (otherId === shipId) continue;
+          const otherShip = world.getComponent<Ship>(otherId, COMPONENT.Ship)!;
+          if (otherShip.faction === faction) continue;
+          const opos = world.getComponent<Position>(otherId, COMPONENT.Position)!;
+          const dx = opos.x - sx;
+          const dy = opos.y - sy;
+          const distSq = dx * dx + dy * dy;
+          if (distSq > shipRangeSq) continue;
+          if (nearestEnemy && distSq >= nearestEnemy.dist * nearestEnemy.dist) continue;
+          const ovel = world.getComponent<Velocity>(otherId, COMPONENT.Velocity);
+          const rvx = (ovel?.vx ?? 0) - svx;
+          const rvy = (ovel?.vy ?? 0) - svy;
+          nearestEnemy = {
+            id: otherId,
+            dist: Math.sqrt(distSq),
+            closingSpeed: Math.sqrt(rvx * rvx + rvy * rvy),
+          };
+        }
+        if (nearestEnemy) {
+          // Drop-off with range and target speed; PDCs aren't precision weapons
+          // at km-scale ranges. Roughly 25–60% per round at typical ranges.
+          const rangeFactor = 1 - nearestEnemy.dist / pdc.shipRange!;
+          const speedPenalty = Math.min(0.4, nearestEnemy.closingSpeed / 200);
+          const hitChance = Math.max(0.05, 0.6 * integrityFactor * rangeFactor - speedPenalty);
+          let hits = 0;
+          while (roundsLeft > 0) {
+            roundsLeft -= 1;
+            if (Math.random() < hitChance) hits += 1;
+          }
+          if (hits > 0) {
+            this.eventBus?.emit({
+              type: 'PDCHit',
+              time: gameTime,
+              entityId: shipId,
+              targetId: nearestEnemy.id,
+              data: { damage: hits * pdc.damagePerHit, hits, faction },
+            });
+          }
+        }
+      }
     }
 
     for (const id of toRemove) {

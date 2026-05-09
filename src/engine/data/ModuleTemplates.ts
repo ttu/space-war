@@ -25,6 +25,8 @@ export interface PDCModule {
   range: number;
   fireRate: number;
   damagePerHit: number;
+  /** Anti-ship engagement range (km). Optional; defaults to no anti-ship use. */
+  shipRange?: number;
 }
 
 // --- Railgun (stats for Railgun component) ---
@@ -108,10 +110,10 @@ const missileLaunchers: MissileLauncherModule[] = [
 ];
 
 const pdcs: PDCModule[] = [
-  { id: 'pdc_light', name: 'PDC Light', kind: 'pdc', range: 4, fireRate: 60, damagePerHit: 1 },
-  { id: 'pdc_standard', name: 'PDC Standard', kind: 'pdc', range: 5, fireRate: 80, damagePerHit: 1 },
-  { id: 'pdc_heavy', name: 'PDC Heavy', kind: 'pdc', range: 5, fireRate: 100, damagePerHit: 1 },
-  { id: 'pdc_battleship', name: 'PDC Battleship', kind: 'pdc', range: 6, fireRate: 120, damagePerHit: 1 },
+  { id: 'pdc_light', name: 'PDC Light', kind: 'pdc', range: 4, fireRate: 60, damagePerHit: 1, shipRange: 3000 },
+  { id: 'pdc_standard', name: 'PDC Standard', kind: 'pdc', range: 5, fireRate: 80, damagePerHit: 1, shipRange: 3500 },
+  { id: 'pdc_heavy', name: 'PDC Heavy', kind: 'pdc', range: 5, fireRate: 100, damagePerHit: 1, shipRange: 4000 },
+  { id: 'pdc_battleship', name: 'PDC Battleship', kind: 'pdc', range: 6, fireRate: 120, damagePerHit: 1, shipRange: 5000 },
 ];
 
 const railguns: RailgunModule[] = [
