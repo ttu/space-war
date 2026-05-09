@@ -101,15 +101,37 @@ describe('StationKeepingSystem', () => {
     expect(v.vx).toBeCloseTo(5, 5);
   });
 
-  it('falls back to the star when no planet/moon is reasonably close', () => {
-    addBody(world, 0, 0, 7, 0, 'star');
+  it('does not anchor to stars or to planets the ship is not actually orbiting', () => {
+    // Ship in a stable heliocentric orbit; the only planet is far away on the
+    // other side. Anchoring to either body would drag the ship off its orbit.
+    addBody(world, 0, 0, 0, 0, 'star');
     addBody(world, 1_000_000, 0, 999, 0, 'planet');
-    const shipId = addShip(world, 1000, 0, 0, 0);
+    const shipId = addShip(world, 120_000, 0, 0, 30);
 
     sys.update(world, dt);
 
     const v = world.getComponent<Velocity>(shipId, COMPONENT.Velocity)!;
-    expect(v.vx).toBeCloseTo(7, 5);
+    expect(v.vx).toBe(0);
+    expect(v.vy).toBe(30);
+  });
+
+  it('skips when the only planet is far beyond its anchor radius', () => {
+    // Reproduces the proving-grounds bug: ship at 120k from a 35k-radius star,
+    // 146k from a 3k-radius planet. Old logic anchored to the planet and
+    // dragged the ship into the star.
+    addBody(world, 0, 0, 0, 0, 'star');
+    const planetId = world.createEntity();
+    world.addComponent(planetId, { type: 'Position', x: 84_853, y: -84_853, prevX: 84_853, prevY: -84_853 } as Position);
+    world.addComponent(planetId, { type: 'Velocity', vx: 21, vy: 21 } as Velocity);
+    world.addComponent(planetId, { type: 'CelestialBody', name: 'Anvil', mass: 4e23, radius: 3000, bodyType: 'planet' } as CelestialBody);
+
+    const shipId = addShip(world, -60_000, -103_923, 26, -15);
+
+    sys.update(world, dt);
+
+    const v = world.getComponent<Velocity>(shipId, COMPONENT.Velocity)!;
+    expect(v.vx).toBeCloseTo(26, 5);
+    expect(v.vy).toBeCloseTo(-15, 5);
   });
 
   it('zeros throttle for station-keeping ships', () => {

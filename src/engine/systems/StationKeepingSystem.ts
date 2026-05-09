@@ -8,7 +8,13 @@ interface BodyRef {
   pos: Position;
   vel: Velocity;
   bodyType: CelestialBody['bodyType'];
+  radius: number;
 }
+
+/** Anchor only to a planet/moon the ship is plausibly orbiting. Beyond this
+ *  multiple of body radius the ship is in independent (likely heliocentric)
+ *  motion — copying the body's velocity would drag it off its real orbit. */
+const ANCHOR_RADIUS_MULTIPLIER = 30;
 
 export class StationKeepingSystem {
   update(world: World, _dt: number): void {
@@ -20,7 +26,7 @@ export class StationKeepingSystem {
       const pos = world.getComponent<Position>(id, COMPONENT.Position)!;
       const vel = world.getComponent<Velocity>(id, COMPONENT.Velocity)!;
       const body = world.getComponent<CelestialBody>(id, COMPONENT.CelestialBody)!;
-      bodies.push({ entityId: id, pos, vel, bodyType: body.bodyType });
+      bodies.push({ entityId: id, pos, vel, bodyType: body.bodyType, radius: body.radius });
     }
 
     const ships = world.query(
@@ -51,27 +57,22 @@ export class StationKeepingSystem {
 }
 
 function pickAnchor(shipPos: Position, bodies: BodyRef[]): BodyRef | null {
-  let nearestPlanetary: BodyRef | null = null;
-  let nearestPlanetaryD2 = Infinity;
-  let nearestAny: BodyRef | null = null;
-  let nearestAnyD2 = Infinity;
+  let nearest: BodyRef | null = null;
+  let nearestD2 = Infinity;
 
   for (const b of bodies) {
+    if (b.bodyType !== 'planet' && b.bodyType !== 'moon') continue;
     const dx = b.pos.x - shipPos.x;
     const dy = b.pos.y - shipPos.y;
     const d2 = dx * dx + dy * dy;
-    if (d2 < nearestAnyD2) {
-      nearestAnyD2 = d2;
-      nearestAny = b;
-    }
-    if ((b.bodyType === 'planet' || b.bodyType === 'moon') && d2 < nearestPlanetaryD2) {
-      nearestPlanetaryD2 = d2;
-      nearestPlanetary = b;
+    if (d2 < nearestD2) {
+      nearestD2 = d2;
+      nearest = b;
     }
   }
 
-  if (nearestAny && nearestAnyD2 * 25 < nearestPlanetaryD2) {
-    return nearestAny;
-  }
-  return nearestPlanetary ?? nearestAny;
+  if (!nearest) return null;
+  const limit = nearest.radius * ANCHOR_RADIUS_MULTIPLIER;
+  if (nearestD2 > limit * limit) return null;
+  return nearest;
 }
