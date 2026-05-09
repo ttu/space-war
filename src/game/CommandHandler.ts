@@ -161,6 +161,17 @@ export class CommandHandler {
       else if (playerShips.length === 1) toCommand.push(playerShips[0]);
     }
 
+    if (toCommand.length > 0) {
+      const verb = append ? 'waypoint added' : 'move order';
+      const who = toCommand.length === 1
+        ? this.world.getComponent<Ship>(toCommand[0], COMPONENT.Ship)?.name ?? 'Ship'
+        : `${toCommand.length} ships`;
+      this.eventBus?.emit({
+        type: 'OrderFeedback', time: 0,
+        data: { message: `${who} → ${verb}`, kind: 'info' },
+      });
+    }
+
     for (const id of toCommand) {
       // Append mode: if ship already has a nav order, add as waypoint
       if (append && this.world.hasComponent(id, COMPONENT.NavigationOrder)) {
@@ -546,18 +557,24 @@ export class CommandHandler {
     const targetPos = this.world.getComponent<Position>(targetId, COMPONENT.Position);
     if (!targetPos) return;
 
+    let launched = 0;
+    let blockedReason: string | null = null;
     for (const shipId of toLaunch) {
       const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship)!;
 
       const launcher = this.world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher)!;
 
-      if ((launcher.integrity ?? 100) <= 0) continue;
+      if ((launcher.integrity ?? 100) <= 0) { blockedReason = 'launcher destroyed'; continue; }
 
       // Check reload cooldown
-      if (launcher.lastFiredTime > 0 && gameTime - launcher.lastFiredTime < launcher.reloadTime) continue;
+      if (launcher.lastFiredTime > 0 && gameTime - launcher.lastFiredTime < launcher.reloadTime) {
+        blockedReason = 'reloading';
+        continue;
+      }
 
       const salvoSize = Math.min(launcher.salvoSize, launcher.ammo);
-      if (salvoSize <= 0) continue;
+      if (salvoSize <= 0) { blockedReason = 'no missiles'; continue; }
+      launched += 1;
 
       const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position)!;
       const vel = this.world.getComponent<Velocity>(shipId, COMPONENT.Velocity)!;
@@ -617,6 +634,16 @@ export class CommandHandler {
         entityId: shipId,
         targetId,
         data: { salvoSize, faction: ship.faction },
+      });
+    }
+
+    if (launched === 0 && this.eventBus) {
+      const reason = toLaunch.length === 0
+        ? 'No ships with missile launcher.'
+        : `Cannot fire missile: ${blockedReason ?? 'unavailable'}.`;
+      this.eventBus.emit({
+        type: 'OrderFeedback', time: gameTime,
+        data: { message: reason, kind: 'error' },
       });
     }
   }

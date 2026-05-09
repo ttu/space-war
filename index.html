@@ -549,6 +549,45 @@
         pointer-events: none;
       }
 
+      /* Action toasts: brief confirmation messages for player commands. */
+      .action-toast-wrap {
+        position: absolute;
+        top: 70px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        z-index: 30;
+        pointer-events: none;
+      }
+      .action-toast {
+        padding: 6px 12px;
+        font-size: 12px;
+        font-family: inherit;
+        background: rgba(10, 14, 24, 0.92);
+        border: 1px solid var(--border-subtle);
+        border-radius: 3px;
+        color: var(--text-primary);
+        opacity: 0;
+        transform: translateY(-4px);
+        transition: opacity 150ms ease-out, transform 150ms ease-out;
+        white-space: nowrap;
+      }
+      .action-toast.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .action-toast-fire {
+        border-color: var(--accent-cyan);
+        color: var(--accent-cyan);
+      }
+      .action-toast-error {
+        border-color: #cc4444;
+        color: #ff8888;
+      }
+
       /* Camera lock on-screen indicator */
       .camera-lock-indicator {
         position: absolute;

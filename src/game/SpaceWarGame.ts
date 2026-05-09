@@ -43,6 +43,7 @@ import { ContactsPanel } from '../ui/ContactsPanel';
 import { ShipDetailPanel } from '../ui/ShipDetailPanel';
 import { OrderBar } from '../ui/OrderBar';
 import { CombatLog } from '../ui/CombatLog';
+import { ActionToast } from '../ui/ActionToast';
 import { ActiveMissilesPanel } from '../ui/ActiveMissilesPanel';
 import { IncomingThreatsPanel } from '../ui/IncomingThreatsPanel';
 import { PanelManager } from '../ui/PanelManager';
@@ -391,6 +392,9 @@ export class SpaceWarGame {
 
     // Combat log overlay (hidden by default, toggled with L)
     this.combatLog = new CombatLog(uiRoot, this.eventBus);
+
+    // Brief on-screen confirmation toasts for player actions
+    new ActionToast(uiRoot, this.eventBus, this.world);
 
     // Panel manager — collapse/expand with hotkeys
     this.panelManager = new PanelManager();
