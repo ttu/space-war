@@ -13,6 +13,8 @@ function formatEventTime(time: number): string {
 /** AI-internal decision events that should not appear in the combat log. */
 const AI_INTERNAL_EVENTS = new Set([
   'AIFireRailgun', 'AIFireMissile', 'AIMoveOrder',
+  // PDC fires every tick when engaged; render-only event, would flood the log.
+  'PDCFiring',
 ]);
 
 function eventSummary(e: GameEvent): string | null {

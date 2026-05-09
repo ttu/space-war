@@ -63,6 +63,7 @@ export class PDCSystem {
         const closingSpeedPenalty = Math.min(0.3, closingSpeed / 100);
         const hitChance = Math.max(0, baseAccuracy * integrityFactor - closingSpeedPenalty);
 
+        const startedRoundsLeft = roundsLeft;
         // Fire multiple rounds at this salvo until it's destroyed or we run out
         while (roundsLeft > 0 && missile.count > 0) {
           roundsLeft -= 1;
@@ -76,6 +77,15 @@ export class PDCSystem {
               data: { faction },
             });
           }
+        }
+        if (roundsLeft < startedRoundsLeft) {
+          this.eventBus?.emit({
+            type: 'PDCFiring',
+            time: gameTime,
+            entityId: shipId,
+            targetId: missileId,
+            data: { faction },
+          });
         }
         if (missile.count <= 0) {
           toRemove.push(missileId);
@@ -128,6 +138,13 @@ export class PDCSystem {
               data: { damage: hits * pdc.damagePerHit, hits, faction },
             });
           }
+          this.eventBus?.emit({
+            type: 'PDCFiring',
+            time: gameTime,
+            entityId: shipId,
+            targetId: nearestEnemy.id,
+            data: { faction },
+          });
         }
       }
     }
