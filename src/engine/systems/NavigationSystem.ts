@@ -133,9 +133,20 @@ export class NavigationSystem {
       Math.abs(nav.targetY - nav.destinationY) < 1;
     const isIntermediate = !atDestination || nav.waypoints.length > 0;
 
+    // For intermediate waypoints we accept a "passed" condition as well as
+    // proximity. With pure-pursuit the ship cuts corners and may not enter
+    // the small arrival ring — but if its velocity points away from the
+    // waypoint and it's within a generous radius, treat it as reached.
+    let passedWaypoint = false;
+    if (isIntermediate) {
+      const closingDot = vel.vx * dx + vel.vy * dy;
+      const passRadius = Math.max(nav.arrivalThreshold * 4, speed * 4);
+      if (closingDot < 0 && distToTarget < passRadius) passedWaypoint = true;
+    }
+
     // For intermediate waypoints: fly through (distance only, no speed check)
     // For final destination: stop (distance + speed check)
-    if (isIntermediate && distToTarget < nav.arrivalThreshold) {
+    if (isIntermediate && (distToTarget < nav.arrivalThreshold || passedWaypoint)) {
       if (atDestination && nav.waypoints.length > 0) {
         // Advance to next user waypoint
         const next = nav.waypoints.shift()!;
@@ -187,41 +198,96 @@ export class NavigationSystem {
       return;
     }
 
-    // Proportional navigation guidance:
-    // Compute desired velocity (toward target, at speed that allows stopping at target)
-    // Then thrust to correct the difference between current and desired velocity.
+    // Build the remaining path (in order). When target==destination there
+    // is no avoidance hop, so destination is implicit (== target) and the
+    // future user goals live in waypoints[]. When target!=destination,
+    // destination sits at the end after the avoidance points.
+    const remainingPath: { x: number; y: number }[] = [
+      { x: nav.targetX, y: nav.targetY },
+      ...nav.waypoints,
+    ];
+    if (!atDestination) {
+      remainingPath.push({ x: nav.destinationX, y: nav.destinationY });
+    }
+
+    // Compute turnFactor for the upcoming corner: 1 = straight, 0 = U-turn.
     const dirX = dx / distToTarget;
     const dirY = dy / distToTarget;
+    let turnFactor = 1;
+    if (isIntermediate && remainingPath.length > 1) {
+      const next = remainingPath[1];
+      const legDx = next.x - nav.targetX;
+      const legDy = next.y - nav.targetY;
+      const legLen = Math.hypot(legDx, legDy);
+      if (legLen > 1) {
+        const cosAngle = (dirX * legDx + dirY * legDy) / legLen;
+        turnFactor = Math.max(0, (1 + cosAngle) / 2);
+      }
+    }
+    const turnEase = Math.sqrt(turnFactor);
 
-    // Maximum approach speed: the speed from which we can stop in the remaining distance
-    // v = sqrt(2 * a * d), with a safety margin for rotation time
+    // Pure-pursuit aim: walk a "carrot" point a small distance past the
+    // current target along the remaining path. The lookahead grows for
+    // gentle turns (so the ship curves through smoothly) and shrinks for
+    // sharp turns (so it actually points at the waypoint and slows down
+    // correctly). Cap the cross-waypoint reach to a fixed margin so we
+    // never aim wildly into a far segment.
+    let aimDirX = dirX;
+    let aimDirY = dirY;
+    if (isIntermediate && remainingPath.length > 1) {
+      const cornerReach = nav.arrivalThreshold * 2 * turnEase;
+      const lookahead = distToTarget + cornerReach;
+      let remaining = lookahead;
+      let prevX = pos.x;
+      let prevY = pos.y;
+      let aimX = remainingPath[0].x;
+      let aimY = remainingPath[0].y;
+      for (const node of remainingPath) {
+        const segDx = node.x - prevX;
+        const segDy = node.y - prevY;
+        const segLen = Math.sqrt(segDx * segDx + segDy * segDy);
+        if (segLen >= remaining) {
+          const t = remaining / segLen;
+          aimX = prevX + segDx * t;
+          aimY = prevY + segDy * t;
+          break;
+        }
+        remaining -= segLen;
+        prevX = node.x;
+        prevY = node.y;
+        aimX = node.x;
+        aimY = node.y;
+      }
+      const aimDx = aimX - pos.x;
+      const aimDy = aimY - pos.y;
+      const aimLen = Math.sqrt(aimDx * aimDx + aimDy * aimDy);
+      if (aimLen > 1) {
+        aimDirX = aimDx / aimLen;
+        aimDirY = aimDy / aimLen;
+      }
+    }
+
+    // Speed cap model: at each waypoint, the ship has a "corner speed" it
+    // can carry through. cornerSpeed = 0 at the destination (must stop) and
+    // a fraction of cruise at intermediate waypoints, bounded by how much
+    // redirection room the next leg gives. Then maxApproachSpeed is the
+    // speed from which the ship can still decelerate to cornerSpeed across
+    // the remaining distance to that waypoint.
     const rotationTime = Math.PI / thruster.rotationSpeed;
     const rotationBuffer = speed * rotationTime * 0.5;
-    const effectiveDist = Math.max(0, distToTarget - rotationBuffer);
-    // For intermediate waypoints, scale speed based on the turn angle at the waypoint.
-    // turnFactor: 1 = straight ahead (full speed), 0 = U-turn (must nearly stop).
-    const stoppingSpeed = Math.sqrt(2 * thruster.maxThrust * effectiveDist);
-    let maxApproachSpeed: number;
-    if (isIntermediate) {
-      const nextX = (atDestination && nav.waypoints.length > 0) ? nav.waypoints[0].x : nav.destinationX;
-      const nextY = (atDestination && nav.waypoints.length > 0) ? nav.waypoints[0].y : nav.destinationY;
-      // Direction from current target to next target
-      const toNextX = nextX - nav.targetX;
-      const toNextY = nextY - nav.targetY;
-      const toNextLen = Math.sqrt(toNextX * toNextX + toNextY * toNextY);
-      if (toNextLen > 1) {
-        // cos(turn angle) via dot product of approach dir and next-leg dir
-        const cosAngle = (dirX * toNextX + dirY * toNextY) / toNextLen;
-        // turnFactor: 1 for straight, 0 for U-turn
-        const turnFactor = (1 + cosAngle) / 2;
-        // Blend: gentle turns → maintain speed, sharp turns → slow to redirect
-        maxApproachSpeed = stoppingSpeed + turnFactor * Math.max(0, speed - stoppingSpeed);
-      } else {
-        maxApproachSpeed = stoppingSpeed;
-      }
-    } else {
-      maxApproachSpeed = stoppingSpeed;
+    let cornerSpeed = 0;
+    if (isIntermediate && remainingPath.length > 1) {
+      const next = remainingPath[1];
+      const nextLegLen = Math.hypot(next.x - nav.targetX, next.y - nav.targetY);
+      // Corner speed scales with sqrt(next-leg-length) and turn-factor^1.5.
+      // Straight (turnFactor=1): full leg cruise speed — no braking.
+      // 60° turn (turnFactor=0.75): ~65% of cruise — gentle slow.
+      // 90° turn (turnFactor=0.5): ~35% of cruise — meaningful brake to redirect.
+      // U-turn (turnFactor=0): zero — must stop.
+      cornerSpeed = Math.sqrt(2 * thruster.maxThrust * nextLegLen) * turnFactor;
     }
+    const effectiveDist = Math.max(0, distToTarget - rotationBuffer);
+    let maxApproachSpeed = Math.sqrt(cornerSpeed * cornerSpeed + 2 * thruster.maxThrust * effectiveDist);
 
     // Desired velocity: toward target at approach speed
     // Include match velocity so ship arrives at target's speed instead of zero.
@@ -239,8 +305,8 @@ export class NavigationSystem {
     if (nav.matchVx != null || nav.matchVy != null) {
       maxApproachSpeed = Math.min(maxApproachSpeed, 30);
     }
-    const desiredVx = baseVx + dirX * maxApproachSpeed;
-    const desiredVy = baseVy + dirY * maxApproachSpeed;
+    const desiredVx = baseVx + aimDirX * maxApproachSpeed;
+    const desiredVy = baseVy + aimDirY * maxApproachSpeed;
 
     // Delta-v: correction needed
     const dvx = desiredVx - vel.vx;
