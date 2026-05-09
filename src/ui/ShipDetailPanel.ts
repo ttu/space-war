@@ -45,6 +45,7 @@ export class ShipDetailPanel {
     private getGameTime?: () => number,
     private getSelectedCelestialId?: () => EntityId | null,
     private onLockCamera?: (entityId: EntityId) => void,
+    private getCameraLockedId?: () => EntityId | null,
   ) {
     this.root = document.createElement('div');
     this.root.id = 'ship-detail-panel';
@@ -280,7 +281,9 @@ export class ShipDetailPanel {
       const lockBtn = document.createElement('button');
       lockBtn.type = 'button';
       lockBtn.className = 'ship-detail-lock-camera';
-      lockBtn.textContent = 'Lock camera here';
+      const isLocked = this.getCameraLockedId?.() === id;
+      lockBtn.textContent = isLocked ? 'Camera locked (click to free)' : 'Lock camera here';
+      if (isLocked) lockBtn.classList.add('active');
       lockBtn.dataset.lockEntityId = id;
       this.content.appendChild(lockBtn);
     }
@@ -483,7 +486,9 @@ export class ShipDetailPanel {
       const lockBtn = document.createElement('button');
       lockBtn.type = 'button';
       lockBtn.className = 'ship-detail-lock-camera';
-      lockBtn.textContent = 'Lock camera here';
+      const isLocked = this.getCameraLockedId?.() === entityId;
+      lockBtn.textContent = isLocked ? 'Camera locked (click to free)' : 'Lock camera here';
+      if (isLocked) lockBtn.classList.add('active');
       lockBtn.dataset.lockEntityId = entityId;
       this.content.appendChild(lockBtn);
     }

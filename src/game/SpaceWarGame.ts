@@ -353,7 +353,12 @@ export class SpaceWarGame {
       () => Array.from(this.getPlayerContacts()?.contacts.keys() ?? []),
       () => this.gameTime.elapsed,
       () => this.selectionManager.getSelectedCelestialId(),
-      (entityId) => this.setCameraLock(entityId),
+      (entityId) => {
+        // Toggle: clicking the lock button on the already-locked entity frees the camera.
+        const currentLock = this.referenceEntityId;
+        this.setCameraLock(currentLock === entityId ? null : entityId);
+      },
+      () => this.referenceEntityId,
     );
 
     // Right panel — combat intel
