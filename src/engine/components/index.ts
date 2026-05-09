@@ -73,6 +73,15 @@ export interface OrbitalPrimary extends Component {
   primaryId: EntityId;
 }
 
+/**
+ * Ships with station-keeping enabled stay co-moving with their nearest celestial
+ * body when idle (no NavigationOrder). Default on; toggleable per ship via UI.
+ */
+export interface StationKeeping extends Component {
+  type: 'StationKeeping';
+  enabled: boolean;
+}
+
 // --- Selection / UI state ---
 
 export interface Selectable extends Component {
@@ -176,6 +185,7 @@ export const COMPONENT = {
   Hull: 'Hull',
   CelestialBody: 'CelestialBody',
   OrbitalPrimary: 'OrbitalPrimary',
+  StationKeeping: 'StationKeeping',
   Selectable: 'Selectable',
   ThermalSignature: 'ThermalSignature',
   Orders: 'Orders',

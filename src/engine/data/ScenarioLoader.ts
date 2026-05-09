@@ -29,6 +29,7 @@ import {
   PDC,
   Railgun,
   AIStrategicIntent,
+  StationKeeping,
   type Faction,
 } from '../components';
 
@@ -164,6 +165,10 @@ export function loadScenario(world: World, scenario: Scenario): void {
       targetAngle: 0,
       rotating: false,
     } as RotationState);
+    world.addComponent(id, {
+      type: 'StationKeeping',
+      enabled: true,
+    } as StationKeeping);
     world.addComponent(id, {
       type: 'ThermalSignature',
       baseSignature: template.baseSignature,

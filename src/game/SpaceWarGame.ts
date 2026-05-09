@@ -8,6 +8,7 @@ import { CameraAnimator } from '../core/CameraAnimator';
 import { InputManager } from '../core/InputManager';
 import { PhysicsSystem } from '../engine/systems/PhysicsSystem';
 import { NavigationSystem } from '../engine/systems/NavigationSystem';
+import { StationKeepingSystem } from '../engine/systems/StationKeepingSystem';
 import { SensorSystem } from '../engine/systems/SensorSystem';
 import { MissileSystem } from '../engine/systems/MissileSystem';
 import { PDCSystem } from '../engine/systems/PDCSystem';
@@ -71,6 +72,7 @@ export class SpaceWarGame {
   private physicsSystem = new PhysicsSystem();
   private collisionSystem = new CollisionSystem(this.eventBus);
   private navigationSystem = new NavigationSystem();
+  private stationKeepingSystem = new StationKeepingSystem();
   private sensorSystem = new SensorSystem(this.eventBus);
   private missileSystem = new MissileSystem(this.eventBus);
   private pdcSystem = new PDCSystem(this.eventBus);
@@ -596,6 +598,7 @@ export class SpaceWarGame {
     this.aiTacticalSystem.update(this.world, dt, this.gameTime.elapsed);
     this.navigationSystem.update(this.world, dt, this.gameTime.elapsed);
     this.physicsSystem.update(this.world, dt);
+    this.stationKeepingSystem.update(this.world, dt);
     this.collisionSystem.update(this.world);
     this.pdcSystem.update(this.world, dt, this.gameTime.elapsed);
     this.missileSystem.update(this.world, dt, this.gameTime.elapsed);

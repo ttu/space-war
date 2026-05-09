@@ -15,6 +15,7 @@ import {
   MissileLauncher,
   PDC,
   Railgun,
+  StationKeeping,
   COMPONENT,
 } from '../engine/components';
 
@@ -254,6 +255,25 @@ export class ShipDetailPanel {
     if (rg) {
       const int = (rg.integrity ?? 100) > 0 ? 'OK' : 'OFF';
       this.addRow(`Railgun: ${int} (${rg.ammo}/${rg.maxAmmo})`, 'ship-detail-row ship-detail-weapon-railgun');
+    }
+
+    const sk = this.world.getComponent<StationKeeping>(id, COMPONENT.StationKeeping);
+    if (sk) {
+      const row = document.createElement('label');
+      row.className = 'ship-detail-row';
+      row.style.display = 'flex';
+      row.style.gap = '6px';
+      row.style.alignItems = 'center';
+      row.style.cursor = 'pointer';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = sk.enabled;
+      cb.addEventListener('change', () => { sk.enabled = cb.checked; });
+
+      row.appendChild(cb);
+      row.appendChild(document.createTextNode('Station-keeping'));
+      this.content.appendChild(row);
     }
 
     if (showLockCameraButton && this.onLockCamera) {
