@@ -405,7 +405,7 @@ export class SpaceWarGame {
 
     const infoOverlay = document.createElement('div');
     infoOverlay.id = 'info-overlay';
-    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/-: Speed | E: Focus enemy | V: Shadows | F1-F5: Panels | L: Combat log';
+    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/-: Speed | E: Focus enemy | M/F/R: Orders | V: Shadows | F1-F5: Panels | L: Combat log';
     uiRoot.appendChild(infoOverlay);
 
     const cameraLockIndicator = document.createElement('div');
@@ -476,6 +476,9 @@ export class SpaceWarGame {
           break;
         case 'toggleShadows':
           this.orderBar.toggleShadows();
+          break;
+        case 'setOrder':
+          this.orderBar.toggleOrder(event.order);
           break;
         case 'panelToggle':
           if (event.code === 'KeyL') {

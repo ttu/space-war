@@ -10,6 +10,7 @@ export type InputEvent =
   | { type: 'escape' }
   | { type: 'focusNearestEnemy' }
   | { type: 'toggleShadows' }
+  | { type: 'setOrder'; order: 'move' | 'fireMissile' | 'fireRailgun' }
   | { type: 'deleteKey'; screenX: number; screenY: number }
   | { type: 'panelToggle'; code: string };
 
@@ -81,6 +82,18 @@ export class InputManager {
       if (e.code === 'KeyV') {
         e.preventDefault();
         this.emit({ type: 'toggleShadows' });
+      }
+      if (e.code === 'KeyM') {
+        e.preventDefault();
+        this.emit({ type: 'setOrder', order: 'move' });
+      }
+      if (e.code === 'KeyF') {
+        e.preventDefault();
+        this.emit({ type: 'setOrder', order: 'fireMissile' });
+      }
+      if (e.code === 'KeyR') {
+        e.preventDefault();
+        this.emit({ type: 'setOrder', order: 'fireRailgun' });
       }
       if (e.code === 'Minus' || e.code === 'NumpadSubtract') this.emit({ type: 'changeSpeed', delta: -1 });
       if (e.code === 'Equal' || e.code === 'NumpadAdd') this.emit({ type: 'changeSpeed', delta: 1 });

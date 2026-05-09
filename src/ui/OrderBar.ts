@@ -28,9 +28,9 @@ export class OrderBar {
     header.textContent = 'Orders';
     this.root.appendChild(header);
 
-    const btnMove = this.createOrderButton('Move', 'move', 'Right-click map to set destination');
-    const btnMissile = this.createOrderButton('Fire missile', 'fireMissile', 'Right-click enemy to launch');
-    const btnRailgun = this.createOrderButton('Fire railgun', 'fireRailgun', 'Right-click enemy or missile to fire');
+    const btnMove = this.createOrderButton('Move (M)', 'move', 'Right-click map to set destination');
+    const btnMissile = this.createOrderButton('Fire missile (F)', 'fireMissile', 'Right-click enemy to launch');
+    const btnRailgun = this.createOrderButton('Fire railgun (R)', 'fireRailgun', 'Right-click enemy or missile to fire');
 
     this.buttons.set('move', btnMove);
     this.buttons.set('fireMissile', btnMissile);
@@ -80,6 +80,13 @@ export class OrderBar {
     this.buttons.forEach((btn, key) => {
       btn.classList.toggle('active', key === order);
     });
+  }
+
+  /** Toggle a pending order from a hotkey: same effect as clicking the button. */
+  toggleOrder(order: Exclude<PendingOrderType, 'none'>): void {
+    const next = this.pendingOrder === order ? 'none' : order;
+    this.setPendingOrder(next);
+    this.callbacks.onPendingOrderChange(next);
   }
 
   getPendingOrder(): PendingOrderType {
