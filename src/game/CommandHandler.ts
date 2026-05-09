@@ -14,8 +14,11 @@ import { DANGER_ZONE_MULTIPLIER } from '../engine/constants';
 const RAILGUN_BURST_SIZE = 5;
 /** Rounds per AI railgun burst (same multi-shot stream as player). */
 const AI_RAILGUN_BURST_SIZE = 4;
-/** Seconds between each round in a burst (rounds leave the ship one by one). */
-const RAILGUN_BURST_INTERVAL_SEC = 0.12;
+/** Seconds between each round in a burst (rounds leave the ship one by one).
+ *  Measured in game time, so at 100× speed the burst plays out 100× faster
+ *  in real time — needs to be long enough that rounds spread visibly across
+ *  the tactical map. 5 s ≈ 500 km between tracers at 100 km/s. */
+const RAILGUN_BURST_INTERVAL_SEC = 5.0;
 
 interface PendingRailgunBurst {
   shipId: EntityId;
