@@ -53,15 +53,16 @@ export class TimeControls {
     btnPause.addEventListener('click', () => callbacks.onPauseToggle());
     this.root.appendChild(btnPause);
 
-    for (const scale of SPEED_SCALES) {
+    SPEED_SCALES.forEach((scale, i) => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.dataset.speed = String(scale);
       btn.textContent = speedLabel(scale as TimeScale);
+      btn.title = `${speedLabel(scale as TimeScale)} (${i + 1})`;
       btn.addEventListener('click', () => callbacks.onSpeedChange(scale as TimeScale));
       this.speedButtons.push(btn);
       this.root.appendChild(btn);
-    }
+    });
 
     this.gameTimeLabel = document.createElement('span');
     this.gameTimeLabel.className = 'game-time';

@@ -7,6 +7,7 @@ export type InputEvent =
   | { type: 'cameraPanDrag'; deltaX: number; deltaY: number; canvasWidth: number; canvasHeight: number }
   | { type: 'togglePause' }
   | { type: 'changeSpeed'; delta: number }
+  | { type: 'setSpeedIndex'; index: number }
   | { type: 'escape' }
   | { type: 'focusNearestEnemy' }
   | { type: 'toggleShadows' }
@@ -97,6 +98,12 @@ export class InputManager {
       }
       if (e.code === 'Minus' || e.code === 'NumpadSubtract') this.emit({ type: 'changeSpeed', delta: -1 });
       if (e.code === 'Equal' || e.code === 'NumpadAdd') this.emit({ type: 'changeSpeed', delta: 1 });
+      // Digit keys 1–9 select speed presets (1x, 2x, 4x, 10x, 20x, 50x, 100x, 1k, 10k).
+      const digitMatch = e.code.match(/^(?:Digit|Numpad)([1-9])$/);
+      if (digitMatch) {
+        e.preventDefault();
+        this.emit({ type: 'setSpeedIndex', index: parseInt(digitMatch[1], 10) - 1 });
+      }
       if (e.code === 'BracketRight') {
         e.preventDefault();
         this.emit({ type: 'zoom', delta: -100 });

@@ -405,7 +405,7 @@ export class SpaceWarGame {
 
     const infoOverlay = document.createElement('div');
     infoOverlay.id = 'info-overlay';
-    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/-: Speed | E: Focus enemy | M/F/R: Orders | V: Shadows | F1-F5: Panels | L: Combat log';
+    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/- or 1-9: Speed | E: Focus enemy | M/F/R: Orders | V: Shadows | F1-F5: Panels | L: Combat log';
     uiRoot.appendChild(infoOverlay);
 
     const cameraLockIndicator = document.createElement('div');
@@ -429,6 +429,9 @@ export class SpaceWarGame {
           break;
         case 'changeSpeed':
           this.cycleSpeed(event.delta);
+          break;
+        case 'setSpeedIndex':
+          this.setSpeedByIndex(event.index);
           break;
         case 'zoom':
           this.camera.zoomBy(event.delta);
@@ -506,6 +509,11 @@ export class SpaceWarGame {
     const idx = scales.indexOf(this.gameTime.timeScale);
     const newIdx = Math.max(0, Math.min(scales.length - 1, idx + delta));
     this.setSpeed(scales[newIdx]);
+  }
+
+  private setSpeedByIndex(index: number): void {
+    const scales: TimeScale[] = [1, 2, 4, 10, 20, 50, 100, 1000, 10000];
+    if (index >= 0 && index < scales.length) this.setSpeed(scales[index]);
   }
 
   private updatePauseUI(): void {
