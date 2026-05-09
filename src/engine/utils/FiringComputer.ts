@@ -105,7 +105,15 @@ export function computeLeadSolution(
   // Final intercept position (with acceleration if present)
   const interceptX = targetX + targetVx * t + 0.5 * targetAx * t * t;
   const interceptY = targetY + targetVy * t + 0.5 * targetAy * t * t;
-  const fireAngle = Math.atan2(interceptY - shooterY, interceptX - shooterX);
+
+  // Fire direction is the shooter-frame bearing to intercept. The intercept
+  // quadratic uses relative velocity (relV = targetV − shooterV), which assumes
+  // the projectile inherits the shooter's velocity. The barrel angle must
+  // therefore be measured in the shooter's frame, not from shooter position to
+  // the world-frame intercept point.
+  const shooterFrameDx = Dx + relVx * t + 0.5 * targetAx * t * t;
+  const shooterFrameDy = Dy + relVy * t + 0.5 * targetAy * t * t;
+  const fireAngle = Math.atan2(shooterFrameDy, shooterFrameDx);
 
   return {
     interceptX,

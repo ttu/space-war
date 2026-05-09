@@ -3,9 +3,12 @@ import { WorldImpl } from '../../src/engine/ecs/World';
 import { CommandHandler } from '../../src/game/CommandHandler';
 import {
   Position, Velocity, Ship, Thruster, Selectable, NavigationOrder, RotationState,
-  MissileLauncher, Missile,
+  MissileLauncher, Missile, Railgun, Projectile,
   COMPONENT,
 } from '../../src/engine/components';
+import { PhysicsSystem } from '../../src/engine/systems/PhysicsSystem';
+import { RailgunSystem } from '../../src/engine/systems/RailgunSystem';
+import { EventBusImpl } from '../../src/engine/core/EventBus';
 
 function createPlayerShip(world: WorldImpl, opts?: { x?: number; y?: number; vx?: number; vy?: number }) {
   const id = world.createEntity();
@@ -119,6 +122,84 @@ describe('CommandHandler', () => {
     expect(nav.destinationY).toBe(5000);
     expect(nav.targetX).toBe(5000);
     expect(nav.targetY).toBe(5000);
+  });
+});
+
+describe('CommandHandler - Railgun lead solution', () => {
+  function createShipWithRailgun(
+    world: WorldImpl,
+    opts: { x: number; y: number; vx?: number; vy?: number; faction: 'player' | 'enemy' },
+  ) {
+    const id = world.createEntity();
+    world.addComponent<Position>(id, {
+      type: 'Position', x: opts.x, y: opts.y, prevX: opts.x, prevY: opts.y,
+    });
+    world.addComponent<Velocity>(id, {
+      type: 'Velocity', vx: opts.vx ?? 0, vy: opts.vy ?? 0,
+    });
+    world.addComponent<Ship>(id, {
+      type: 'Ship', name: 'Ship', hullClass: 'cruiser', faction: opts.faction, flagship: true,
+    });
+    world.addComponent<Railgun>(id, {
+      type: 'Railgun',
+      projectileSpeed: 100, maxRange: 50_000, reloadTime: 2,
+      lastFiredTime: 0, damage: 50, ammo: 50, maxAmmo: 50,
+    });
+    return id;
+  }
+
+  // The lead-solution math uses target velocity relative to the shooter, which
+  // implicitly assumes the projectile inherits the shooter's velocity. If the
+  // spawn code drops shooter velocity, projectiles miss whenever the shooter
+  // is moving relative to the target.
+  it('hits a stationary target when the shooter is moving perpendicular to LOS', () => {
+    const world = new WorldImpl();
+    const events = new EventBusImpl();
+    const handler = new CommandHandler(world, events);
+    const physics = new PhysicsSystem();
+    const railgunSys = new RailgunSystem(events);
+
+    // Shooter at origin moving +y at 30 km/s; target stationary at (10000, 0).
+    const shooterId = createShipWithRailgun(world, { x: 0, y: 0, vx: 0, vy: 30, faction: 'player' });
+    const targetId = createShipWithRailgun(world, { x: 10_000, y: 0, faction: 'enemy' });
+
+    let hit = false;
+    events.subscribe('RailgunHit', (e) => {
+      if (e.targetId === targetId) hit = true;
+    });
+
+    const fireTime = 5;
+    handler.fireRailgunFromShip(shooterId, targetId, fireTime);
+
+    // Step physics + railgun system at 0.1s for up to 200s. Lead time should be ~105s.
+    const dt = 0.1;
+    for (let step = 0; step < 2000 && !hit; step++) {
+      const t = fireTime + step * dt;
+      handler.processPendingRailgunBursts(world, t);
+      physics.update(world, dt);
+      railgunSys.update(world, dt, t);
+    }
+
+    expect(hit).toBe(true);
+  });
+
+  it('spawns projectiles inheriting shooter velocity', () => {
+    const world = new WorldImpl();
+    const handler = new CommandHandler(world);
+    const shooterId = createShipWithRailgun(world, { x: 0, y: 0, vx: 0, vy: 30, faction: 'player' });
+    const targetId = createShipWithRailgun(world, { x: 10_000, y: 0, faction: 'enemy' });
+
+    handler.fireRailgunFromShip(shooterId, targetId, 5);
+    handler.processPendingRailgunBursts(world, 5);
+
+    const projIds = world.query(COMPONENT.Projectile);
+    expect(projIds.length).toBe(1);
+    const projVel = world.getComponent<Velocity>(projIds[0], COMPONENT.Velocity)!;
+    // Projectile world-frame y velocity must include the shooter's +30 km/s.
+    // Without inheritance the y component would be ~ -30 (full lead correction);
+    // with inheritance the lead correction cancels the shooter motion → ~0.
+    expect(Math.abs(projVel.vy)).toBeLessThan(1);
+    expect(projVel.vx).toBeGreaterThan(50);
   });
 });
 

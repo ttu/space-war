@@ -29,6 +29,10 @@ interface PendingRailgunBurst {
   damage: number;
   faction: string;
   rangeToTarget: number;
+  /** Shooter velocity at burst start. Projectile inherits this so the lead
+   *  solution (computed in the shooter's frame using relative velocity) holds. */
+  shooterVx: number;
+  shooterVy: number;
 }
 
 /**
@@ -110,8 +114,8 @@ export class CommandHandler {
       });
       world.addComponent<Velocity>(projId, {
         type: 'Velocity',
-        vx: b.dirX * b.projectileSpeed,
-        vy: b.dirY * b.projectileSpeed,
+        vx: b.shooterVx + b.dirX * b.projectileSpeed,
+        vy: b.shooterVy + b.dirY * b.projectileSpeed,
       });
       world.addComponent<Projectile>(projId, {
         type: 'Projectile',
@@ -499,6 +503,8 @@ export class CommandHandler {
       damage: railgun.damage,
       faction: ship.faction,
       rangeToTarget: range,
+      shooterVx: vel.vx,
+      shooterVy: vel.vy,
     });
     railgun.lastFiredTime = gameTime;
     this.eventBus?.emit({
@@ -767,6 +773,8 @@ export class CommandHandler {
         damage: railgun.damage,
         faction: ship.faction,
         rangeToTarget: range,
+        shooterVx: vel.vx,
+        shooterVy: vel.vy,
       });
 
       railgun.lastFiredTime = gameTime;
