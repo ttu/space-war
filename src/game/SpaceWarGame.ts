@@ -117,6 +117,11 @@ export class SpaceWarGame {
 
   private lastContactsPanelUpdate = 0;
   private readonly contactsPanelIntervalMs = 400;
+  // Info-panel DOM updates rebuild a few hundred elements each call; running
+  // them at render-frame rate (60 Hz) wastes most of the work since the
+  // underlying simulation ticks at 10 Hz. Throttle to ~120 ms.
+  private lastInfoPanelUpdate = 0;
+  private readonly infoPanelIntervalMs = 120;
 
   private cameraAnimator!: CameraAnimator;
 
@@ -695,15 +700,20 @@ export class SpaceWarGame {
         this.cameraLockIndicator.style.display = 'none';
       }
     }
-    this.fleetPanel.update();
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (now - this.lastInfoPanelUpdate >= this.infoPanelIntervalMs) {
+      this.lastInfoPanelUpdate = now;
+      this.fleetPanel.update();
+      this.shipDetailPanel.update();
+      this.activeMissilesPanel.update();
+      this.incomingThreatsPanel.update();
+    }
     if (now - this.lastContactsPanelUpdate >= this.contactsPanelIntervalMs) {
       this.lastContactsPanelUpdate = now;
       this.contactsPanel.update();
     }
-    this.shipDetailPanel.update();
-    this.activeMissilesPanel.update();
-    this.incomingThreatsPanel.update();
+    // Combat log is event-driven internally and cheap to call — leave at
+    // render-frame rate so new entries appear immediately.
     this.combatLog.update();
 
     this.renderer.render(this.scene, this.camera.camera);
