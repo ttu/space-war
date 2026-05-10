@@ -74,8 +74,10 @@ export class FleetPanel {
         this.list.appendChild(row);
         this.shipRows.set(id, row);
         if (this.onShipNameClick) {
-          const nameEl = row.querySelector('.fleet-panel-name')!;
-          nameEl.addEventListener('click', (e) => {
+          // Whole row is clickable — picking a ship from the roster shouldn't
+          // require hitting the small name text precisely.
+          row.style.cursor = 'pointer';
+          row.addEventListener('click', (e) => {
             e.stopPropagation();
             this.onShipNameClick?.(id);
           });
