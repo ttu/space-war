@@ -68,6 +68,15 @@ export class TrailRenderer {
   private tickCounter = 0;
   private recordInterval = 5; // Record every N ticks
 
+  // Projection paths are expensive (up to 2000 physics steps each) and don't
+  // change meaningfully between render frames — recompute at most every
+  // PROJECTION_REFRESH_MS, otherwise reuse the cached points. Without this,
+  // tiny per-frame nav drift causes the dashed line to wobble visibly and
+  // the dash pattern to shimmer because computeLineDistances() runs each frame.
+  private projectionPointsCache: Map<EntityId, TrailPoint[]> = new Map();
+  private projectionLastUpdateMs: Map<EntityId, number> = new Map();
+  private static readonly PROJECTION_REFRESH_MS = 200;
+
   constructor(private scene: THREE.Scene) {
     this.scene.add(this.group);
   }
@@ -101,6 +110,8 @@ export class TrailRenderer {
       if (!activeIds.has(id)) {
         this.group.remove(line);
         this.projectionLines.delete(id);
+        this.projectionPointsCache.delete(id);
+        this.projectionLastUpdateMs.delete(id);
       }
     }
     for (const [id, marker] of this.destinationMarkers) {
@@ -185,7 +196,18 @@ export class TrailRenderer {
     const color = hasNav ? PROJECTION_COLOR_NAV : PROJECTION_COLOR_DRIFT;
     const opacity = hasNav ? PROJECTION_OPACITY_NAV : PROJECTION_OPACITY_DRIFT;
 
-    const points = this.projectPath(world, pos, vel, thruster, nav);
+    // Throttle the heavy projection sim. Reuse cached points until the refresh
+    // interval has elapsed — visually identical to per-frame, fraction of CPU.
+    const nowMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const lastUpdate = this.projectionLastUpdateMs.get(entityId) ?? -Infinity;
+    let points = this.projectionPointsCache.get(entityId);
+    let recomputed = false;
+    if (!points || nowMs - lastUpdate >= TrailRenderer.PROJECTION_REFRESH_MS) {
+      points = this.projectPath(world, pos, vel, thruster, nav);
+      this.projectionPointsCache.set(entityId, points);
+      this.projectionLastUpdateMs.set(entityId, nowMs);
+      recomputed = true;
+    }
     const maxPoints = points.length;
 
     let line = this.projectionLines.get(entityId);
@@ -225,13 +247,15 @@ export class TrailRenderer {
 
     line.visible = true;
 
-    const posAttr = line.geometry.getAttribute('position') as THREE.BufferAttribute;
-    for (let i = 0; i < points.length; i++) {
-      posAttr.setXYZ(i, points[i].x, points[i].y, 0.3);
+    if (recomputed) {
+      const posAttr = line.geometry.getAttribute('position') as THREE.BufferAttribute;
+      for (let i = 0; i < points.length; i++) {
+        posAttr.setXYZ(i, points[i].x, points[i].y, 0.3);
+      }
+      posAttr.needsUpdate = true;
+      line.geometry.setDrawRange(0, points.length);
+      line.computeLineDistances();
     }
-    posAttr.needsUpdate = true;
-    line.geometry.setDrawRange(0, points.length);
-    line.computeLineDistances();
   }
 
   private updateDestinationMarker(world: World, entityId: EntityId, zoom: number): void {
