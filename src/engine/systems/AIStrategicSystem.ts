@@ -170,9 +170,21 @@ export class AIStrategicSystem {
       }
     }
 
+    // If all contacts are lost, fall back to hold rather than engaging a phantom.
+    if (bestId === undefined) {
+      intent.objective = 'hold';
+      intent.targetId = undefined;
+      intent.moveToX = undefined;
+      intent.moveToY = undefined;
+      intent.matchVx = undefined;
+      intent.matchVy = undefined;
+      intent.nextStrategicUpdate = gameTime + STRATEGIC_INTERVAL;
+      return;
+    }
+
     intent.objective = 'engage';
     intent.targetId = bestId;
-    if (bestId !== undefined) {
+    {
       const dist = Math.sqrt(bestDistSq);
       const thruster = world.getComponent<Thruster>(shipId, COMPONENT.Thruster);
       const accel = thruster?.maxThrust ?? 0.01;
@@ -214,11 +226,6 @@ export class AIStrategicSystem {
         intent.matchVx = undefined;
         intent.matchVy = undefined;
       }
-    } else {
-      intent.moveToX = undefined;
-      intent.moveToY = undefined;
-      intent.matchVx = undefined;
-      intent.matchVy = undefined;
     }
     intent.nextStrategicUpdate = gameTime + STRATEGIC_INTERVAL;
   }
