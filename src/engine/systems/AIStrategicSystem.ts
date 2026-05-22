@@ -16,6 +16,7 @@ import { getBodiesFromWorld, getSafeWaypoint } from '../utils/PlanetAvoidance';
 const STRATEGIC_INTERVAL = 3; // seconds between re-evaluation
 const DISENGAGE_HULL_RATIO = 0.35; // retreat when hull below this fraction
 const RETREAT_DISTANCE_KM = 5000; // how far to set retreat point from contact
+const SAFE_RETREAT_DISTANCE_KM = 80_000; // once this far from threats, stop fleeing
 /** Max lead time (seconds) to prevent wild extrapolation for distant targets. */
 const MAX_LEAD_TIME = 600;
 /** Always velocity-match during engagement to prevent high-speed flybys. */
@@ -100,12 +101,21 @@ export class AIStrategicSystem {
       let cx = 0;
       let cy = 0;
       let count = 0;
+      let nearestThreatSq = Infinity;
       for (const contact of tracker.contacts.values()) {
         cx += contact.lastKnownX;
         cy += contact.lastKnownY;
         count++;
+        const ddx = pos.x - contact.lastKnownX;
+        const ddy = pos.y - contact.lastKnownY;
+        const d2 = ddx * ddx + ddy * ddy;
+        if (d2 < nearestThreatSq) nearestThreatSq = d2;
       }
-      if (count > 0) {
+      // If already far from nearest threat, stop adding retreat goals (loiter).
+      if (nearestThreatSq > SAFE_RETREAT_DISTANCE_KM * SAFE_RETREAT_DISTANCE_KM) {
+        intent.moveToX = undefined;
+        intent.moveToY = undefined;
+      } else if (count > 0) {
         cx /= count;
         cy /= count;
         const dx = pos.x - cx;
