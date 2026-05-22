@@ -8,6 +8,10 @@ export interface EventBus {
   clearHistory(): void;
 }
 
+/** Cap history to prevent unbounded growth. PDCFiring is emitted every tick during
+ *  engagement and would otherwise consume memory and slow getHistory() callers. */
+const MAX_HISTORY = 5000;
+
 export class EventBusImpl implements EventBus {
   private listeners: Map<GameEventType, Set<(event: GameEvent) => void>> = new Map();
   private allListeners: Set<(event: GameEvent) => void> = new Set();
@@ -32,6 +36,9 @@ export class EventBusImpl implements EventBus {
 
   emit(event: GameEvent): void {
     this.history.push(event);
+    if (this.history.length > MAX_HISTORY) {
+      this.history.splice(0, this.history.length - MAX_HISTORY);
+    }
     const typeListeners = this.listeners.get(event.type);
     if (typeListeners) {
       for (const callback of typeListeners) {
