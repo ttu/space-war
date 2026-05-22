@@ -9,7 +9,7 @@ const MAX_DAMAGE_PER_TICK = 8;
 export class CollisionSystem {
   constructor(private eventBus: EventBus) {}
 
-  update(world: World): void {
+  update(world: World, gameTime: number = 0): void {
     // Collect celestial bodies
     const bodyEntities = world.query(COMPONENT.Position, COMPONENT.CelestialBody);
     const bodies: { id: EntityId; x: number; y: number; radius: number; name: string }[] = [];
@@ -40,7 +40,7 @@ export class CollisionSystem {
           // Inside surface — instant destruction
           this.eventBus.emit({
             type: 'CelestialCollision',
-            time: 0,
+            time: gameTime,
             entityId,
             data: { bodyName: body.name, collision: 'impact' },
           });

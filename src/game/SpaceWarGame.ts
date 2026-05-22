@@ -627,7 +627,7 @@ export class SpaceWarGame {
     this.navigationSystem.update(this.world, dt, this.gameTime.elapsed);
     this.physicsSystem.update(this.world, dt);
     this.stationKeepingSystem.update(this.world, dt);
-    this.collisionSystem.update(this.world);
+    this.collisionSystem.update(this.world, this.gameTime.elapsed);
     this.pdcSystem.update(this.world, dt, this.gameTime.elapsed);
     this.missileSystem.update(this.world, dt, this.gameTime.elapsed);
     this.victorySystem.update(this.world, this.gameTime.elapsed);
