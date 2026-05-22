@@ -735,6 +735,7 @@ export class SpaceWarGame {
 
   async switchScenario(id: string): Promise<void> {
     this.currentScenarioId = id;
+    this.scenarioSelector.setScenario(id);
     this.gameTime.elapsed = 0;
     this.gameTime.paused = true;
     this.gameTime.setTimeScale(1);
