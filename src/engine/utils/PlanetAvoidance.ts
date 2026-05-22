@@ -159,7 +159,15 @@ export function getSafeWaypoints(
   const wp = getSafeWaypoint(fromX, fromY, toX, toY, bodies);
   if (!wp) return []; // path is clear
 
-  const before = getSafeWaypoints(fromX, fromY, wp.x, wp.y, bodies, depth + 1);
+  // If the starting point is inside any body's planning circle, the waypoint
+  // returned is a radial escape — there's no shorter path inside the circle to
+  // explore, and recursing on the "before" segment just re-finds the same
+  // escape point, stacking duplicate waypoints at the start.
+  const startInsideBody = pointInsideAnyBody(fromX, fromY, bodies, null) !== null;
+
+  const before = startInsideBody
+    ? []
+    : getSafeWaypoints(fromX, fromY, wp.x, wp.y, bodies, depth + 1);
   const after = getSafeWaypoints(wp.x, wp.y, toX, toY, bodies, depth + 1);
   return [...before, wp, ...after];
 }
