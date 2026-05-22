@@ -58,7 +58,7 @@ export class CollisionSystem {
             if (hull.current <= 0) {
               this.eventBus.emit({
                 type: 'CelestialCollision',
-                time: 0,
+                time: gameTime,
                 entityId,
                 data: { bodyName: body.name, collision: 'atmosphere' },
               });
@@ -69,7 +69,7 @@ export class CollisionSystem {
             // Missiles/projectiles — instant destruction in danger zone
             this.eventBus.emit({
               type: 'CelestialCollision',
-              time: 0,
+              time: gameTime,
               entityId,
               data: { bodyName: body.name, collision: 'atmosphere' },
             });
