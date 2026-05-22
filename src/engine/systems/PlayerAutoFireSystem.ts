@@ -99,7 +99,10 @@ export class PlayerAutoFireSystem {
       const relVx = vel.vx - contact.lastKnownVx;
       const relVy = vel.vy - contact.lastKnownVy;
       const relSpeed = Math.hypot(relVx, relVy);
-      const closing = dist > 0 ? -(relVx * dx + relVy * dy) / dist : 0;
+      // Positive when shooter is closing on target. dx/dy point from shooter to
+      // target; relV is shooter-minus-target velocity, so a closing approach
+      // means relV projected along dx/dy is positive.
+      const closing = dist > 0 ? (relVx * dx + relVy * dy) / dist : 0;
       best = { id, dist, relSpeed, closing };
     }
     return best;
