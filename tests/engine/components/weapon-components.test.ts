@@ -43,6 +43,8 @@ describe('Weapon Components', () => {
       guidanceMode: 'sensor',
       armed: false,
       armingDistance: 5,
+      launchX: 0,
+      launchY: 0,
       hitProbability: 0,
     };
     world.addComponent(id, missile);

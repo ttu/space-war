@@ -78,6 +78,8 @@ function createMissile(world: WorldImpl, opts: {
     phase: 'boost',
     armed: opts.armed ?? true,
     armingDistance: 5,
+    launchX: opts.x ?? 0,
+    launchY: opts.y ?? 0,
     hitProbability: 0,
   });
   return id;

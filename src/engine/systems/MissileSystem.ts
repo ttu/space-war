@@ -54,16 +54,12 @@ export class MissileSystem {
       const missile = world.getComponent<Missile>(missileId, COMPONENT.Missile)!;
       const facing = world.getComponent<Facing>(missileId, COMPONENT.Facing);
 
-      // Update arming status based on distance from launch origin
+      // Update arming status based on distance from actual launch position
       if (!missile.armed) {
-        // Use prevX/prevY delta as proxy for distance traveled
-        const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
-        if (speed * dt > 0) {
-          // Check distance from origin position (approximation using total displacement)
-          const distFromStart = Math.sqrt(pos.x * pos.x + pos.y * pos.y);
-          if (distFromStart > missile.armingDistance) {
-            missile.armed = true;
-          }
+        const ddx = pos.x - missile.launchX;
+        const ddy = pos.y - missile.launchY;
+        if (ddx * ddx + ddy * ddy > missile.armingDistance * missile.armingDistance) {
+          missile.armed = true;
         }
       }
 
