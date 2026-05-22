@@ -19,8 +19,11 @@ function getNearestBody(world: World, x: number, y: number): { name: string; dis
   const bodies = world.query(COMPONENT.Position, COMPONENT.CelestialBody);
   let nearest: { name: string; distance: number } | null = null;
   for (const id of bodies) {
-    const pos = world.getComponent<Position>(id, COMPONENT.Position)!;
     const body = world.getComponent<CelestialBody>(id, COMPONENT.CelestialBody)!;
+    // Asteroids clutter the location label ("near Outer Rock 6"); only major bodies
+    // are recognizable landmarks for the player.
+    if (body.bodyType === 'asteroid') continue;
+    const pos = world.getComponent<Position>(id, COMPONENT.Position)!;
     const dx = x - pos.x;
     const dy = y - pos.y;
     const d = Math.sqrt(dx * dx + dy * dy);
@@ -54,8 +57,9 @@ function getContactsByBody(
   const bodies = world.query(COMPONENT.Position, COMPONENT.CelestialBody);
   const bodyInfo: { name: string; x: number; y: number }[] = [];
   for (const id of bodies) {
-    const pos = world.getComponent<Position>(id, COMPONENT.Position)!;
     const body = world.getComponent<CelestialBody>(id, COMPONENT.CelestialBody)!;
+    if (body.bodyType === 'asteroid') continue;
+    const pos = world.getComponent<Position>(id, COMPONENT.Position)!;
     bodyInfo.push({ name: body.name, x: pos.x, y: pos.y });
   }
   const byBody = new Map<string, { count: number; minAgeSec: number; maxAgeSec: number }>();
