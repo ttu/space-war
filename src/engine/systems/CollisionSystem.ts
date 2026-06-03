@@ -38,12 +38,14 @@ export class CollisionSystem {
 
         if (dist <= body.radius) {
           // Inside surface — instant destruction
-          this.eventBus.emit({
-            type: 'CelestialCollision',
-            time: gameTime,
-            entityId,
-            data: { bodyName: body.name, collision: 'impact' },
-          });
+          if (world.hasComponent(entityId, COMPONENT.Ship)) {
+            this.eventBus.emit({
+              type: 'CelestialCollision',
+              time: gameTime,
+              entityId,
+              data: { bodyName: body.name, collision: 'impact' },
+            });
+          }
           toRemove.push(entityId);
           break;
         } else if (dist <= dangerRadius) {
@@ -66,13 +68,7 @@ export class CollisionSystem {
               break;
             }
           } else {
-            // Missiles/projectiles — instant destruction in danger zone
-            this.eventBus.emit({
-              type: 'CelestialCollision',
-              time: gameTime,
-              entityId,
-              data: { bodyName: body.name, collision: 'atmosphere' },
-            });
+            // Missiles/projectiles — silently destroyed in danger zone
             toRemove.push(entityId);
             break;
           }
