@@ -151,10 +151,10 @@ describe('PDCSystem', () => {
     }
 
     const avgKills = totalKills / trials;
-    // With 80 km/s closing speed: hitChance ≈ 0.85 * 1.0 - min(0.3, 80/100) = 0.85 - 0.24 = 0.61
-    // Expected: ~6.1 kills out of 10 rounds. Should be well below 10 (the old 100% rate).
-    expect(avgKills).toBeGreaterThan(3);   // not zero — PDCs still work
-    expect(avgKills).toBeLessThan(9);      // noticeably below 100%
+    // With 80 km/s closing speed: hitChance ≈ 0.55 - min(0.3, 80/100) = 0.55 - 0.3 = 0.25
+    // Expected: ~2.5 kills out of 10 rounds.
+    expect(avgKills).toBeGreaterThan(1);   // not zero — PDCs still work
+    expect(avgKills).toBeLessThan(5);      // noticeably below 100%
   });
 
   it('has higher accuracy against slow-closing missiles', () => {
@@ -180,8 +180,8 @@ describe('PDCSystem', () => {
     }
 
     const avgKills = totalKills / trials;
-    // With 5 km/s: hitChance ≈ 0.85 - 0.015 = 0.835 → ~8.35 kills out of 10
-    expect(avgKills).toBeGreaterThan(7);
+    // With 5 km/s: hitChance ≈ 0.55 - 0.05 = 0.50 → ~5 kills out of 10
+    expect(avgKills).toBeGreaterThan(3);
   });
 
   it('has reduced accuracy when PDC integrity is low', () => {
@@ -207,7 +207,7 @@ describe('PDCSystem', () => {
     }
 
     const avgKills = totalKills / trials;
-    // hitChance ≈ 0.85 * 0.3 - 0 = 0.255 → ~2.55 kills out of 10
+    // hitChance ≈ 0.55 * 0.3 - 0 = 0.165 → ~1.65 kills out of 10
     expect(avgKills).toBeGreaterThan(1);
     expect(avgKills).toBeLessThan(5);
   });

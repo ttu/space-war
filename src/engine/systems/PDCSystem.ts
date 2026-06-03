@@ -59,7 +59,7 @@ export class PDCSystem {
         const missile = world.getComponent<Missile>(missileId, COMPONENT.Missile);
         if (!missile || missile.count <= 0) continue;
 
-        const baseAccuracy = 0.85;
+        const baseAccuracy = 0.55;
         const closingSpeedPenalty = Math.min(0.3, closingSpeed / 100);
         const hitChance = Math.max(0, baseAccuracy * integrityFactor - closingSpeedPenalty);
 
