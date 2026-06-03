@@ -761,13 +761,21 @@ export class CommandHandler {
     const { ax: targetAx, ay: targetAy } = getTargetAcceleration(this.world, targetId);
 
     let fired = 0;
+    // Track the most actionable failure reason across all candidate ships.
+    // Priority: reloading > destroyed > out of ammo > no intercept solution.
+    let reloadRemaining = Infinity;
+    let anyDestroyed = false;
+    let anyOutOfAmmo = false;
+    let anyNoSolution = false;
+
     for (const shipId of toFire) {
       const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship)!;
 
       const railgun = this.world.getComponent<Railgun>(shipId, COMPONENT.Railgun)!;
-      if ((railgun.integrity ?? 100) <= 0) continue;
-      if (railgun.ammo <= 0) continue;
-      if (gameTime - railgun.lastFiredTime < railgun.reloadTime) continue;
+      if ((railgun.integrity ?? 100) <= 0) { anyDestroyed = true; continue; }
+      if (railgun.ammo <= 0) { anyOutOfAmmo = true; continue; }
+      const cooldownLeft = railgun.reloadTime - (gameTime - railgun.lastFiredTime);
+      if (cooldownLeft > 0) { reloadRemaining = Math.min(reloadRemaining, cooldownLeft); continue; }
 
       const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position)!;
       const vel = this.world.getComponent<Velocity>(shipId, COMPONENT.Velocity)!;
@@ -779,7 +787,7 @@ export class CommandHandler {
         undefined, // no max range limit — fire at any distance
         targetAx, targetAy,
       );
-      if (!solution) continue;
+      if (!solution) { anyNoSolution = true; continue; }
 
       const range = Math.sqrt(
         (targetPos.x - pos.x) ** 2 + (targetPos.y - pos.y) ** 2,
@@ -824,10 +832,20 @@ export class CommandHandler {
     }
 
     if (fired === 0 && this.eventBus) {
-      const reason =
-        toFire.length === 0
-          ? 'No ships with railgun.'
-          : 'No firing solution (target unreachable).';
+      let reason: string;
+      if (toFire.length === 0) {
+        reason = 'No ships with railgun.';
+      } else if (reloadRemaining !== Infinity) {
+        reason = `Reloading (${Math.ceil(reloadRemaining)}s remaining).`;
+      } else if (anyDestroyed) {
+        reason = 'Railgun destroyed.';
+      } else if (anyOutOfAmmo) {
+        reason = 'Out of ammo.';
+      } else if (anyNoSolution) {
+        reason = 'No firing solution (target unreachable).';
+      } else {
+        reason = 'Cannot fire.';
+      }
       this.eventBus.emit({
         type: 'OrderFeedback',
         time: gameTime,
