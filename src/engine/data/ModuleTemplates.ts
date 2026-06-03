@@ -120,10 +120,10 @@ const pdcs: PDCModule[] = [
 ];
 
 const railguns: RailgunModule[] = [
-  { id: 'rg_light', name: 'RG Light', kind: 'railgun', projectileSpeed: 90, maxRange: 12_000, reloadTime: 60, damage: 35, maxAmmo: 50 },
-  { id: 'rg_medium', name: 'RG Medium', kind: 'railgun', projectileSpeed: 100, maxRange: 16_000, reloadTime: 60, damage: 40, maxAmmo: 60 },
-  { id: 'rg_heavy', name: 'RG Heavy', kind: 'railgun', projectileSpeed: 100, maxRange: 20_000, reloadTime: 60, damage: 50, maxAmmo: 80 },
-  { id: 'rg_battleship', name: 'RG Battleship', kind: 'railgun', projectileSpeed: 110, maxRange: 24_000, reloadTime: 60, damage: 60, maxAmmo: 100 },
+  { id: 'rg_light', name: 'RG Light', kind: 'railgun', projectileSpeed: 90, maxRange: 12_000, reloadTime: 60, damage: 20, maxAmmo: 50 },
+  { id: 'rg_medium', name: 'RG Medium', kind: 'railgun', projectileSpeed: 100, maxRange: 16_000, reloadTime: 60, damage: 25, maxAmmo: 60 },
+  { id: 'rg_heavy', name: 'RG Heavy', kind: 'railgun', projectileSpeed: 100, maxRange: 20_000, reloadTime: 60, damage: 30, maxAmmo: 80 },
+  { id: 'rg_battleship', name: 'RG Battleship', kind: 'railgun', projectileSpeed: 110, maxRange: 24_000, reloadTime: 60, damage: 40, maxAmmo: 100 },
 ];
 
 const sensors: SensorModule[] = [

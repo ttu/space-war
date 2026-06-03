@@ -67,7 +67,7 @@ describe('ScenarioLoader', () => {
     const ml = world.getComponent(ships[0], COMPONENT.MissileLauncher);
     expect((ml as { salvoSize: number }).salvoSize).toBe(3);
     const rg = world.getComponent(ships[0], COMPONENT.Railgun);
-    expect((rg as { damage: number }).damage).toBe(50);
+    expect((rg as { damage: number }).damage).toBe(30);
   });
 
   it('loadScenario creates contact trackers for each faction', () => {

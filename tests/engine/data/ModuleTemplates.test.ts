@@ -30,7 +30,7 @@ describe('ModuleTemplates', () => {
     const m = getModuleById('rg_heavy');
     expect(m).toBeDefined();
     expect(m!.kind).toBe('railgun');
-    expect((m as RailgunModule).damage).toBe(50);
+    expect((m as RailgunModule).damage).toBe(30);
   });
 
   it('returns sensor module by id', () => {
