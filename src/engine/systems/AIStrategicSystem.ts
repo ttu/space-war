@@ -21,8 +21,10 @@ const SAFE_RETREAT_DISTANCE_KM = 80_000; // once this far from threats, stop fle
 const MAX_LEAD_TIME = 600;
 /** Always velocity-match during engagement to prevent high-speed flybys. */
 const VELOCITY_MATCH_RANGE = Infinity;
-/** Desired closing speed (km/s) when velocity-matched and missiles available. */
+/** Desired closing speed (km/s) when outside missile range — cover distance fast. */
 const DESIRED_CLOSING_SPEED = 30;
+/** Desired closing speed (km/s) inside missile range — slow enough to fire missiles. */
+const DESIRED_CLOSING_SPEED_MISSILE = 10;
 /** Desired closing speed (km/s) when out of missiles — rush in for railgun range. */
 const DESIRED_CLOSING_SPEED_BRAWL = 60;
 
@@ -220,10 +222,16 @@ export class AIStrategicSystem {
       intent.moveToY = safe ? safe.y : interceptY;
 
       // Velocity matching: arrive at target's velocity + closing component.
-      // Ships out of missiles rush in faster for railgun engagement.
-      const missilesEmpty = !world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher)
-        || (world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher)?.ammo ?? 0) <= 0;
-      const closingDesired = missilesEmpty ? DESIRED_CLOSING_SPEED_BRAWL : DESIRED_CLOSING_SPEED;
+      // Speed is range-dependent: fast approach when far away (to cover distance),
+      // slow when inside missile range (to stay under rel-speed fire threshold),
+      // very fast when out of missiles (rush to railgun range).
+      const ml = world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher);
+      const missilesEmpty = !ml || ml.ammo <= 0;
+      const missileMaxRange = ml?.maxRange ?? 50_000;
+      const inMissileRange = dist <= missileMaxRange * 1.2;
+      const closingDesired = missilesEmpty
+        ? DESIRED_CLOSING_SPEED_BRAWL
+        : (inMissileRange ? DESIRED_CLOSING_SPEED_MISSILE : DESIRED_CLOSING_SPEED);
       if (dist <= VELOCITY_MATCH_RANGE) {
         intent.matchVx = bestVx + ux * closingDesired;
         intent.matchVy = bestVy + uy * closingDesired;
