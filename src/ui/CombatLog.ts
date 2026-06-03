@@ -34,8 +34,11 @@ function eventSummary(e: GameEvent): string | null {
       return `${t} Railgun hit`;
     case 'PDCFiring':
       return `${t} PDC firing`;
-    case 'PDCHit':
-      return `${t} PDC hit (${e.data?.hits ?? '?'})`;
+    case 'PDCHit': {
+      const hits = e.data?.hits as number | undefined;
+      const dmg = e.data?.damage as number | undefined;
+      return `${t} PDC burst: ${hits ?? '?'} hits, ${dmg ?? '?'} dmg`;
+    }
     case 'ShipDetected':
       return `${t} Contact detected`;
     case 'ShipLostContact':
@@ -64,6 +67,43 @@ function eventSummary(e: GameEvent): string | null {
     default:
       return `${t} ${typeLabel}`;
   }
+}
+
+/**
+ * Collapses consecutive PDCHit events for the same attacker-target pair within
+ * a 2-second window into a single synthetic event with aggregated hit counts.
+ */
+function aggregatePDCHits(events: GameEvent[]): GameEvent[] {
+  const PDC_WINDOW = 2;
+  const result: GameEvent[] = [];
+  let i = 0;
+  while (i < events.length) {
+    const e = events[i];
+    if (e.type !== 'PDCHit') {
+      result.push(e);
+      i++;
+      continue;
+    }
+    // Accumulate hits within window for same attacker+target pair
+    let totalHits = (e.data?.hits as number) ?? 0;
+    let totalDamage = (e.data?.damage as number) ?? 0;
+    const windowEnd = e.time + PDC_WINDOW;
+    let j = i + 1;
+    while (
+      j < events.length &&
+      events[j].type === 'PDCHit' &&
+      events[j].entityId === e.entityId &&
+      events[j].targetId === e.targetId &&
+      events[j].time <= windowEnd
+    ) {
+      totalHits += (events[j].data?.hits as number) ?? 0;
+      totalDamage += (events[j].data?.damage as number) ?? 0;
+      j++;
+    }
+    result.push({ ...e, data: { ...e.data, hits: totalHits, damage: totalDamage } });
+    i = j;
+  }
+  return result;
 }
 
 /**
@@ -128,7 +168,8 @@ export class CombatLog {
     this.lastCount = history.length;
 
     const visible = history.filter(e => !AI_INTERNAL_EVENTS.has(e.type));
-    const toShow = visible.slice(-MAX_ENTRIES);
+    const aggregated = aggregatePDCHits(visible);
+    const toShow = aggregated.slice(-MAX_ENTRIES);
     this.list.textContent = '';
     for (const e of toShow) {
       const summary = eventSummary(e);
