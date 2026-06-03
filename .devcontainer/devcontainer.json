@@ -1,0 +1,42 @@
+{
+  "name": "Space War",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
+  "mounts": [
+    "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume"
+  ],
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": {
+      "label": "Vite dev server",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "sudo chown -R node:node /home/node/.claude && ([ -f /home/node/.claude.json ] || echo '{\"hasCompletedOnboarding\":true,\"theme\":\"dark\"}' > /home/node/.claude.json) && npm install && npx playwright install --with-deps chromium && npx --yes --package @playwright/mcp@latest -- playwright install chromium",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-playwright.playwright",
+        "vitest.explorer"
+      ],
+      "settings": {
+        "editor.formatOnSave": true
+      }
+    }
+  },
+  "containerEnv": {
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "DISABLE_AUTOUPDATER": "1",
+    "GIT_TERMINAL_PROMPT": "0",
+    "SSH_AUTH_SOCK": "",
+    "GIT_ASKPASS": "/bin/false",
+    "GITHUB_TOKEN": "",
+    "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN}"
+  },
+  "remoteUser": "node"
+}
