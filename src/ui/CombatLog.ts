@@ -82,7 +82,6 @@ export class CombatLog {
   ) {
     this.wrap = document.createElement('div');
     this.wrap.className = 'combat-log-overlay';
-    this.wrap.style.display = 'none';
 
     this.root = document.createElement('div');
     this.root.id = 'combat-log';
@@ -92,7 +91,7 @@ export class CombatLog {
     this.header.className = 'combat-log-header';
     this.header.textContent = 'Combat log';
     const closeHint = document.createElement('span');
-    closeHint.textContent = '(L to close)';
+    closeHint.textContent = '(L to toggle)';
     closeHint.style.opacity = '0.5';
     closeHint.style.marginLeft = '8px';
     closeHint.style.fontSize = '10px';
@@ -106,6 +105,9 @@ export class CombatLog {
 
     this.wrap.appendChild(this.root);
     container.appendChild(this.wrap);
+
+    eventBus.subscribe('VictoryAchieved', () => this.show());
+    eventBus.subscribe('DefeatSuffered', () => this.show());
   }
 
   clear(): void {
