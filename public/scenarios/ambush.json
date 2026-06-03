@@ -8,9 +8,9 @@
       "name": "TCS Approach",
       "faction": "player",
       "flagship": true,
-      "x": 350000,
+      "x": 60000,
       "y": 384400,
-      "vx": 0,
+      "vx": -5,
       "vy": 0
     },
     {
