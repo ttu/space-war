@@ -69,39 +69,43 @@ function eventSummary(e: GameEvent): string | null {
   }
 }
 
+/** @internal exported for unit tests */
+export const _aggregatePDCHitsForTest = (events: GameEvent[]) => aggregatePDCHits(events);
+
 /**
- * Collapses consecutive PDCHit events for the same attacker-target pair within
- * a 2-second window into a single synthetic event with aggregated hit counts.
+ * Collapses PDCHit events for the same attacker-target pair within a 5-second
+ * window into a single synthetic event with aggregated hit counts. Uses a
+ * skip-set so interleaved events from other pairs don't break aggregation.
  */
 function aggregatePDCHits(events: GameEvent[]): GameEvent[] {
-  const PDC_WINDOW = 2;
+  const PDC_WINDOW = 5;
   const result: GameEvent[] = [];
-  let i = 0;
-  while (i < events.length) {
+  const skip = new Set<number>();
+
+  for (let i = 0; i < events.length; i++) {
+    if (skip.has(i)) continue;
     const e = events[i];
     if (e.type !== 'PDCHit') {
       result.push(e);
-      i++;
       continue;
     }
-    // Accumulate hits within window for same attacker+target pair
     let totalHits = (e.data?.hits as number) ?? 0;
     let totalDamage = (e.data?.damage as number) ?? 0;
     const windowEnd = e.time + PDC_WINDOW;
-    let j = i + 1;
-    while (
-      j < events.length &&
-      events[j].type === 'PDCHit' &&
-      events[j].entityId === e.entityId &&
-      events[j].targetId === e.targetId &&
-      events[j].time <= windowEnd
-    ) {
-      totalHits += (events[j].data?.hits as number) ?? 0;
-      totalDamage += (events[j].data?.damage as number) ?? 0;
-      j++;
+    for (let j = i + 1; j < events.length; j++) {
+      const other = events[j];
+      if (other.time > windowEnd) break;
+      if (
+        other.type === 'PDCHit' &&
+        other.entityId === e.entityId &&
+        other.targetId === e.targetId
+      ) {
+        totalHits += (other.data?.hits as number) ?? 0;
+        totalDamage += (other.data?.damage as number) ?? 0;
+        skip.add(j);
+      }
     }
     result.push({ ...e, data: { ...e.data, hits: totalHits, damage: totalDamage } });
-    i = j;
   }
   return result;
 }
