@@ -21,8 +21,10 @@ const SAFE_RETREAT_DISTANCE_KM = 80_000; // once this far from threats, stop fle
 const MAX_LEAD_TIME = 600;
 /** Always velocity-match during engagement to prevent high-speed flybys. */
 const VELOCITY_MATCH_RANGE = Infinity;
-/** Desired closing speed (km/s) when velocity-matched. */
-const DESIRED_CLOSING_SPEED = 10;
+/** Desired closing speed (km/s) when velocity-matched and missiles available. */
+const DESIRED_CLOSING_SPEED = 30;
+/** Desired closing speed (km/s) when out of missiles — rush in for railgun range. */
+const DESIRED_CLOSING_SPEED_BRAWL = 60;
 
 /**
  * Fleet-level AI: sets objective (engage / disengage / hold), primary target,
@@ -217,11 +219,14 @@ export class AIStrategicSystem {
       intent.moveToX = safe ? safe.x : interceptX;
       intent.moveToY = safe ? safe.y : interceptY;
 
-      // Velocity matching: arrive at target's velocity + small closing component
-      // instead of decelerating to zero (which causes flyby overshooting).
+      // Velocity matching: arrive at target's velocity + closing component.
+      // Ships out of missiles rush in faster for railgun engagement.
+      const missilesEmpty = !world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher)
+        || (world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher)?.ammo ?? 0) <= 0;
+      const closingDesired = missilesEmpty ? DESIRED_CLOSING_SPEED_BRAWL : DESIRED_CLOSING_SPEED;
       if (dist <= VELOCITY_MATCH_RANGE) {
-        intent.matchVx = bestVx + ux * DESIRED_CLOSING_SPEED;
-        intent.matchVy = bestVy + uy * DESIRED_CLOSING_SPEED;
+        intent.matchVx = bestVx + ux * closingDesired;
+        intent.matchVy = bestVy + uy * closingDesired;
       } else {
         intent.matchVx = undefined;
         intent.matchVy = undefined;
