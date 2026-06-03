@@ -22,10 +22,20 @@ function eventSummary(e: GameEvent): string | null {
   const t = formatEventTime(e.time);
   const typeLabel = e.type.replace(/([A-Z])/g, ' $1').trim();
   switch (e.type) {
-    case 'MissileLaunched':
+    case 'MissileLaunched': {
+      const totalSalvos = e.data?.totalSalvos as number | undefined;
+      const totalMissiles = e.data?.totalMissiles as number | undefined;
+      if (totalSalvos && totalSalvos > 1) {
+        return `${t} ${totalSalvos} salvos launched (${totalMissiles} missiles)`;
+      }
       return `${t} Missile launched (salvo ${e.data?.salvoSize ?? '?'})`;
-    case 'MissileIntercepted':
-      return `${t} Missile intercepted`;
+    }
+    case 'MissileIntercepted': {
+      const count = e.data?.count as number | undefined;
+      return count && count > 1
+        ? `${t} ${count} missiles intercepted`
+        : `${t} Missile intercepted`;
+    }
     case 'MissileImpact':
       return `${t} Missile impact`;
     case 'RailgunFired':
@@ -43,8 +53,13 @@ function eventSummary(e: GameEvent): string | null {
       return `${t} Contact detected`;
     case 'ShipLostContact':
       return `${t} Contact lost`;
-    case 'SystemDamaged':
-      return `${t} System damaged`;
+    case 'SystemDamaged': {
+      const systems = e.data?.systems as string[] | undefined;
+      if (systems && systems.length > 0) {
+        return `${t} Systems damaged: ${systems.join(', ')}`;
+      }
+      return `${t} System damaged: ${(e.data?.system as string) ?? '?'}`;
+    }
     case 'ShipDestroyed':
     case 'ShipDisabled':
       return `${t} ${typeLabel}`;
@@ -71,6 +86,9 @@ function eventSummary(e: GameEvent): string | null {
 
 /** @internal exported for unit tests */
 export const _aggregatePDCHitsForTest = (events: GameEvent[]) => aggregatePDCHits(events);
+export const _aggregateSystemDamagedForTest = (events: GameEvent[]) => aggregateSystemDamaged(events);
+export const _aggregateMissileLaunchedForTest = (events: GameEvent[]) => aggregateMissileLaunched(events);
+export const _aggregateMissileInterceptedForTest = (events: GameEvent[]) => aggregateMissileIntercepted(events);
 
 /**
  * Collapses PDCHit events for the same attacker-target pair within a 5-second
@@ -106,6 +124,103 @@ function aggregatePDCHits(events: GameEvent[]): GameEvent[] {
       }
     }
     result.push({ ...e, data: { ...e.data, hits: totalHits, damage: totalDamage } });
+  }
+  return result;
+}
+
+/**
+ * Collapses MissileLaunched events with the same faction within a 3-second
+ * window into a single entry showing total salvos and missiles.
+ */
+function aggregateMissileLaunched(events: GameEvent[]): GameEvent[] {
+  const WINDOW = 3;
+  const result: GameEvent[] = [];
+  const skip = new Set<number>();
+
+  for (let i = 0; i < events.length; i++) {
+    if (skip.has(i)) continue;
+    const e = events[i];
+    if (e.type !== 'MissileLaunched') {
+      result.push(e);
+      continue;
+    }
+    let totalSalvos = 1;
+    let totalMissiles = (e.data?.salvoSize as number) ?? 0;
+    const faction = e.data?.faction;
+    const windowEnd = e.time + WINDOW;
+    for (let j = i + 1; j < events.length; j++) {
+      const other = events[j];
+      if (other.time > windowEnd) break;
+      if (other.type === 'MissileLaunched' && other.data?.faction === faction) {
+        totalSalvos++;
+        totalMissiles += (other.data?.salvoSize as number) ?? 0;
+        skip.add(j);
+      }
+    }
+    result.push({ ...e, data: { ...e.data, totalSalvos, totalMissiles } });
+  }
+  return result;
+}
+
+/**
+ * Collapses MissileIntercepted events within a 3-second window into a single
+ * entry showing total missiles killed.
+ */
+function aggregateMissileIntercepted(events: GameEvent[]): GameEvent[] {
+  const WINDOW = 3;
+  const result: GameEvent[] = [];
+  const skip = new Set<number>();
+
+  for (let i = 0; i < events.length; i++) {
+    if (skip.has(i)) continue;
+    const e = events[i];
+    if (e.type !== 'MissileIntercepted') {
+      result.push(e);
+      continue;
+    }
+    let count = 1;
+    const windowEnd = e.time + WINDOW;
+    for (let j = i + 1; j < events.length; j++) {
+      const other = events[j];
+      if (other.time > windowEnd) break;
+      if (other.type === 'MissileIntercepted') {
+        count++;
+        skip.add(j);
+      }
+    }
+    result.push({ ...e, data: { ...e.data, count } });
+  }
+  return result;
+}
+
+/**
+ * Collapses SystemDamaged events for the same ship within a 5-second window
+ * into a single entry showing the unique systems affected.
+ */
+function aggregateSystemDamaged(events: GameEvent[]): GameEvent[] {
+  const WINDOW = 5;
+  const result: GameEvent[] = [];
+  const skip = new Set<number>();
+
+  for (let i = 0; i < events.length; i++) {
+    if (skip.has(i)) continue;
+    const e = events[i];
+    if (e.type !== 'SystemDamaged') {
+      result.push(e);
+      continue;
+    }
+    const systems = new Set<string>();
+    if (e.data?.system) systems.add(e.data.system as string);
+    const windowEnd = e.time + WINDOW;
+    for (let j = i + 1; j < events.length; j++) {
+      const other = events[j];
+      if (other.time > windowEnd) break;
+      if (other.type === 'SystemDamaged' && other.entityId === e.entityId) {
+        if (other.data?.system) systems.add(other.data.system as string);
+        skip.add(j);
+      }
+    }
+    result.push({ ...e, data: { ...e.data, systems: Array.from(systems) } });
   }
   return result;
 }
@@ -172,7 +287,13 @@ export class CombatLog {
     this.lastCount = history.length;
 
     const visible = history.filter(e => !AI_INTERNAL_EVENTS.has(e.type));
-    const aggregated = aggregatePDCHits(visible);
+    const aggregated = aggregateSystemDamaged(
+      aggregateMissileIntercepted(
+        aggregateMissileLaunched(
+          aggregatePDCHits(visible)
+        )
+      )
+    );
     const toShow = aggregated.slice(-MAX_ENTRIES);
     this.list.textContent = '';
     for (const e of toShow) {
