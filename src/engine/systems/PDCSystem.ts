@@ -60,7 +60,9 @@ export class PDCSystem {
         if (!missile || missile.count <= 0) continue;
 
         const baseAccuracy = 0.55;
-        const closingSpeedPenalty = Math.min(0.3, closingSpeed / 100);
+        // Cap at 0.45 so fast missiles (>45 km/s) get ~10% hit chance rather than 25%.
+        // Realistic: intercepting a target moving at 100–200 km/s is extremely difficult.
+        const closingSpeedPenalty = Math.min(0.45, closingSpeed / 100);
         const hitChance = Math.max(0, baseAccuracy * integrityFactor - closingSpeedPenalty);
 
         const startedRoundsLeft = roundsLeft;

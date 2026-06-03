@@ -151,10 +151,10 @@ describe('PDCSystem', () => {
     }
 
     const avgKills = totalKills / trials;
-    // With 80 km/s closing speed: hitChance ≈ 0.55 - min(0.3, 80/100) = 0.55 - 0.3 = 0.25
-    // Expected: ~2.5 kills out of 10 rounds.
-    expect(avgKills).toBeGreaterThan(1);   // not zero — PDCs still work
-    expect(avgKills).toBeLessThan(5);      // noticeably below 100%
+    // With 80 km/s closing speed: hitChance ≈ 0.55 - min(0.45, 80/100) = 0.55 - 0.45 = 0.10
+    // Expected: ~1 kill out of 10 rounds — PDCs struggle against fast missiles.
+    expect(avgKills).toBeGreaterThan(0.5); // not zero — PDCs still fire
+    expect(avgKills).toBeLessThan(3);      // noticeably below slow-missile accuracy
   });
 
   it('has higher accuracy against slow-closing missiles', () => {
