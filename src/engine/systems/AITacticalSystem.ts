@@ -78,7 +78,12 @@ export class AITacticalSystem {
             const remaining = Math.sqrt(remainX * remainX + remainY * remainY);
             // Scale minimum drift threshold with distance: 5000 km at long range, 500 km at close range
             const minDrift = Math.max(500, Math.min(5000, remaining * 0.2));
-            if (drift > remaining * REROUTE_DRIFT_FRACTION && drift > minDrift) {
+            const positionDrifted = drift > remaining * REROUTE_DRIFT_FRACTION && drift > minDrift;
+            // Re-route when desired match velocity changes significantly (e.g. speed regime change on range crossing)
+            const matchDvx = (intent.matchVx ?? 0) - (nav.matchVx ?? 0);
+            const matchDvy = (intent.matchVy ?? 0) - (nav.matchVy ?? 0);
+            const velocityDrifted = Math.sqrt(matchDvx * matchDvx + matchDvy * matchDvy) > 5;
+            if (positionDrifted || velocityDrifted) {
               world.removeComponent(shipId, COMPONENT.NavigationOrder);
               this.emitMoveOrder(shipId, intent.moveToX, intent.moveToY, gameTime, intent.matchVx, intent.matchVy);
             }
