@@ -172,6 +172,16 @@ export class SpaceWarGame {
       },
     });
 
+    this.eventBus.subscribe('VictoryAchieved', () => {
+      this.gameTime.paused = true;
+      this.updatePauseUI();
+    });
+
+    this.eventBus.subscribe('DefeatSuffered', () => {
+      this.gameTime.paused = true;
+      this.updatePauseUI();
+    });
+
     this.eventBus.subscribe('RailgunFired', (e) => {
       const p = e.data?.hitProbability as number | undefined;
       const readout = this.timeControls?.getTargetingReadoutElement();
