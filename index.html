@@ -368,6 +368,64 @@
         padding: 4px 6px;
       }
 
+      /* Tactical Advisor panel */
+      .advisor-panel {
+        background: var(--panel-bg);
+        border: 1px solid var(--border-subtle);
+        border-radius: 4px;
+        padding: 6px 8px;
+        margin-bottom: 8px;
+        min-width: 220px;
+      }
+
+      .advisor-panel-header {
+        color: var(--accent-cyan);
+        font-weight: bold;
+        font-size: 11px;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+      }
+
+      .advisor-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        padding: 3px 0;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .advisor-row:last-child {
+        border-bottom: none;
+      }
+
+      .advisor-msg {
+        font-size: 10px;
+        color: var(--text-primary);
+        flex: 1;
+      }
+
+      .advisor-fire-btn {
+        font-size: 10px;
+        padding: 2px 8px;
+        background: rgba(60, 180, 120, 0.2);
+        border: 1px solid rgba(60, 180, 120, 0.5);
+        color: var(--status-green);
+        border-radius: 3px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .advisor-fire-btn:hover {
+        background: rgba(60, 180, 120, 0.35);
+      }
+
+      .advisor-empty {
+        font-size: 10px;
+        color: var(--text-muted);
+        padding: 2px 0;
+      }
+
       .fleet-panel-header,
       .ship-detail-header,
       .contacts-panel-header,

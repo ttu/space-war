@@ -5,10 +5,13 @@ import type { GameTime } from '../engine/core/GameTime';
  * Shows a modal alert when new threats are detected, auto-slowing the game to
  * 1× so the player has time to respond. Player dismisses to restore speed.
  */
+const COOLDOWN_MS = 20_000;
+
 export class ThreatAlert {
   private overlay: HTMLElement;
   private msgEl: HTMLElement;
   private isVisible = false;
+  private lastDismissedAt = 0;
 
   constructor(
     container: HTMLElement,
@@ -52,7 +55,8 @@ export class ThreatAlert {
   }
 
   trigger(message: string): void {
-    if (this.isVisible) return; // don't stack alerts
+    if (this.isVisible) return;
+    if (Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
     this.gameTime.slowToMin();
     this.msgEl.textContent = message;
     this.overlay.style.display = 'flex';
@@ -62,11 +66,13 @@ export class ThreatAlert {
   dismiss(): void {
     this.overlay.style.display = 'none';
     this.isVisible = false;
+    this.lastDismissedAt = Date.now();
     this.gameTime.restoreSpeed();
   }
 
   reset(): void {
     this.overlay.style.display = 'none';
     this.isVisible = false;
+    this.lastDismissedAt = 0;
   }
 }

@@ -47,6 +47,7 @@ import { OrderBar } from '../ui/OrderBar';
 import { CombatLog } from '../ui/CombatLog';
 import { ActionToast } from '../ui/ActionToast';
 import { ThreatAlert } from '../ui/ThreatAlert';
+import { AdvisorPanel } from '../ui/AdvisorPanel';
 import { ActiveMissilesPanel } from '../ui/ActiveMissilesPanel';
 import { IncomingThreatsPanel } from '../ui/IncomingThreatsPanel';
 import { PanelManager } from '../ui/PanelManager';
@@ -115,6 +116,7 @@ export class SpaceWarGame {
   private scenarioSelector!: ScenarioSelector;
   private playerInteraction!: PlayerInteractionHandler;
   private threatAlert: ThreatAlert | null = null;
+  private advisorPanel: AdvisorPanel | null = null;
   private pendingOrder: PendingOrderType = 'none';
   currentScenarioId = 'solarSystem';
 
@@ -162,6 +164,14 @@ export class SpaceWarGame {
     }
     this.cameraAnimator = new CameraAnimator(this.camera);
     this.commandHandler = new CommandHandler(this.world, this.eventBus);
+    const advisorContainer = document.getElementById('right-panel')!;
+    this.advisorPanel = new AdvisorPanel(
+      advisorContainer,
+      this.world,
+      this.commandHandler,
+      () => this.gameTime.elapsed,
+      () => this.getPlayerContacts(),
+    );
     this.aiTacticalSystem = new AITacticalSystem(this.eventBus);
     this.playerInteraction = new PlayerInteractionHandler({
       world: this.world,
@@ -877,6 +887,7 @@ export class SpaceWarGame {
       this.shipDetailPanel.update();
       this.activeMissilesPanel.update();
       this.incomingThreatsPanel.update();
+      this.advisorPanel?.update();
     }
     if (now - this.lastContactsPanelUpdate >= this.contactsPanelIntervalMs) {
       this.lastContactsPanelUpdate = now;
