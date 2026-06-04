@@ -1,3 +1,5 @@
+import type { EventBus } from '../engine/core/EventBus';
+
 export type PendingOrderType = 'none' | 'move' | 'fireMissile' | 'fireRailgun';
 
 export interface OrderBarCallbacks {
@@ -17,10 +19,12 @@ export class OrderBar {
   private shadowsEnabled = true;
   private pdcBtn!: HTMLButtonElement;
   private pdcEnabled = true;
+  private pdcFiringTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     container: HTMLElement,
     private callbacks: OrderBarCallbacks,
+    eventBus?: EventBus,
   ) {
     this.root = document.createElement('div');
     this.root.id = 'order-bar';
@@ -66,6 +70,19 @@ export class OrderBar {
     this.root.appendChild(this.shadowBtn);
 
     container.appendChild(this.root);
+
+    eventBus?.subscribe('PDCFiring', (e) => {
+      if (e.data?.faction === 'player') this.flashPdc();
+    });
+  }
+
+  private flashPdc(): void {
+    this.pdcBtn.classList.add('pdc-firing');
+    if (this.pdcFiringTimer !== null) clearTimeout(this.pdcFiringTimer);
+    this.pdcFiringTimer = setTimeout(() => {
+      this.pdcBtn.classList.remove('pdc-firing');
+      this.pdcFiringTimer = null;
+    }, 350);
   }
 
   private createOrderButton(

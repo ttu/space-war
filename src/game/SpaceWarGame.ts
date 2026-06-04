@@ -465,7 +465,7 @@ export class SpaceWarGame {
           pdc.enabled = enabled;
         }
       },
-    });
+    }, this.eventBus);
 
     // Combat log overlay (hidden by default, toggled with L)
     this.combatLog = new CombatLog(uiRoot, this.eventBus);
