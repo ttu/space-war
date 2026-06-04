@@ -49,6 +49,8 @@ export interface PDC extends Component {
   shipRange?: number;
   /** 0 = destroyed (weapon cannot fire). Omit or 100 = full. */
   integrity?: number;
+  /** false = manually disabled by player. Omit or true = active. */
+  enabled?: boolean;
 }
 
 export interface Railgun extends Component {

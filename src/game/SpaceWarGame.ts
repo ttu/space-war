@@ -61,6 +61,7 @@ import {
   CelestialBody,
   MissileLauncher,
   Railgun,
+  PDC,
   COMPONENT,
 } from '../engine/components';
 import { hitProbability } from '../engine/utils/FiringComputer';
@@ -452,6 +453,15 @@ export class SpaceWarGame {
       onShadowToggle: (enabled) => {
         this.shadowsEnabled = enabled;
       },
+      onPdcToggle: (enabled) => {
+        const ships = this.world.query(COMPONENT.Ship, COMPONENT.PDC);
+        for (const shipId of ships) {
+          const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship)!;
+          if (ship.faction !== 'player') continue;
+          const pdc = this.world.getComponent<PDC>(shipId, COMPONENT.PDC)!;
+          pdc.enabled = enabled;
+        }
+      },
     });
 
     // Combat log overlay (hidden by default, toggled with L)
@@ -555,6 +565,9 @@ export class SpaceWarGame {
           break;
         case 'toggleShadows':
           this.orderBar.toggleShadows();
+          break;
+        case 'togglePdc':
+          this.orderBar.togglePdc();
           break;
         case 'setOrder':
           this.orderBar.toggleOrder(event.order);

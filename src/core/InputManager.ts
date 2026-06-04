@@ -11,6 +11,7 @@ export type InputEvent =
   | { type: 'escape' }
   | { type: 'focusNearestEnemy' }
   | { type: 'toggleShadows' }
+  | { type: 'togglePdc' }
   | { type: 'setOrder'; order: 'move' | 'fireMissile' | 'fireRailgun' }
   | { type: 'deleteKey'; screenX: number; screenY: number }
   | { type: 'panelToggle'; code: string };
@@ -83,6 +84,10 @@ export class InputManager {
       if (e.code === 'KeyV') {
         e.preventDefault();
         this.emit({ type: 'toggleShadows' });
+      }
+      if (e.code === 'KeyP') {
+        e.preventDefault();
+        this.emit({ type: 'togglePdc' });
       }
       if (e.code === 'KeyM') {
         e.preventDefault();

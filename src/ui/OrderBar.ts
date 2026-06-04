@@ -3,6 +3,7 @@ export type PendingOrderType = 'none' | 'move' | 'fireMissile' | 'fireRailgun';
 export interface OrderBarCallbacks {
   onPendingOrderChange: (order: PendingOrderType) => void;
   onShadowToggle?: (enabled: boolean) => void;
+  onPdcToggle?: (enabled: boolean) => void;
 }
 
 /**
@@ -14,6 +15,8 @@ export class OrderBar {
   private buttons: Map<PendingOrderType, HTMLButtonElement> = new Map();
   private shadowBtn!: HTMLButtonElement;
   private shadowsEnabled = true;
+  private pdcBtn!: HTMLButtonElement;
+  private pdcEnabled = true;
 
   constructor(
     container: HTMLElement,
@@ -43,6 +46,14 @@ export class OrderBar {
     const separator = document.createElement('div');
     separator.className = 'order-bar-separator';
     this.root.appendChild(separator);
+
+    this.pdcBtn = document.createElement('button');
+    this.pdcBtn.type = 'button';
+    this.pdcBtn.className = 'order-bar-btn order-bar-toggle active';
+    this.pdcBtn.textContent = 'PDC (P)';
+    this.pdcBtn.title = 'Toggle point defense — automatically intercepts incoming missiles';
+    this.pdcBtn.addEventListener('click', () => this.togglePdc());
+    this.root.appendChild(this.pdcBtn);
 
     this.shadowBtn = document.createElement('button');
     this.shadowBtn.type = 'button';
@@ -101,5 +112,15 @@ export class OrderBar {
 
   getShadowsEnabled(): boolean {
     return this.shadowsEnabled;
+  }
+
+  togglePdc(): void {
+    this.pdcEnabled = !this.pdcEnabled;
+    this.pdcBtn.classList.toggle('active', this.pdcEnabled);
+    this.callbacks.onPdcToggle?.(this.pdcEnabled);
+  }
+
+  getPdcEnabled(): boolean {
+    return this.pdcEnabled;
   }
 }

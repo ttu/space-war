@@ -23,6 +23,7 @@ export class PDCSystem {
       const pdc = world.getComponent<PDC>(shipId, COMPONENT.PDC)!;
 
       if ((pdc.integrity ?? 100) <= 0) continue;
+      if ((pdc.enabled ?? true) === false) continue;
 
       const sx = pos.x;
       const sy = pos.y;
