@@ -15,7 +15,7 @@ import { getBodiesFromWorld, getSafeWaypoint } from '../utils/PlanetAvoidance';
 
 const STRATEGIC_INTERVAL = 3; // seconds between re-evaluation
 const DISENGAGE_HULL_RATIO = 0.35; // retreat when hull below this fraction
-const RETREAT_DISTANCE_KM = 5000; // how far to set retreat point from contact
+const RETREAT_DISTANCE_KM = 20_000; // how far to set retreat point from contact
 const SAFE_RETREAT_DISTANCE_KM = 80_000; // once this far from threats, stop fleeing
 /** Max lead time (seconds) to prevent wild extrapolation for distant targets. */
 const MAX_LEAD_TIME = 600;

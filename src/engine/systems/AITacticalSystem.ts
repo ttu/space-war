@@ -51,8 +51,16 @@ export class AITacticalSystem {
 
       if (intent.objective === 'disengage') {
         if (intent.moveToX != null && intent.moveToY != null) {
-          const hasNav = world.hasComponent(shipId, COMPONENT.NavigationOrder);
-          if (!hasNav) {
+          // Cancel nav if it's heading to a stale destination (e.g., old engage target).
+          // This prevents ships from continuing to fly toward the player/planet after
+          // switching from engage to disengage.
+          const staleThreshold = 2000; // km
+          const destinationStale = nav != null &&
+            Math.hypot(nav.destinationX - intent.moveToX, nav.destinationY - intent.moveToY) > staleThreshold;
+          if (destinationStale) {
+            world.removeComponent(shipId, COMPONENT.NavigationOrder);
+          }
+          if (!world.hasComponent(shipId, COMPONENT.NavigationOrder)) {
             this.emitMoveOrder(shipId, intent.moveToX, intent.moveToY, gameTime);
           }
         } else {
