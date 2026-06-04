@@ -23,6 +23,7 @@
         --status-green: #44cc66;
         --status-red: #cc4444;
         --status-yellow: #ccaa44;
+        --status-orange: #cc7722;
         --font-mono: 'Courier New', 'Consolas', monospace;
       }
 
@@ -439,6 +440,30 @@
         font-size: 10px;
         color: var(--text-muted);
         padding: 2px 0;
+      }
+
+      .advisor-divider {
+        border-top: 1px solid var(--border-subtle);
+        margin: 4px 0 2px;
+      }
+
+      .advisor-status {
+        font-size: 10px;
+        padding: 2px 0;
+        line-height: 1.4;
+      }
+
+      .advisor-status-warn {
+        color: var(--status-orange);
+      }
+
+      .advisor-status-info {
+        color: var(--accent-cyan);
+        opacity: 0.85;
+      }
+
+      .advisor-status-muted {
+        color: var(--text-muted);
       }
 
       .fleet-panel-header,

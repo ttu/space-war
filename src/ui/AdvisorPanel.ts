@@ -6,6 +6,7 @@ import {
   ContactTracker,
   MissileLauncher,
   Railgun,
+  ShipSystems,
   COMPONENT,
 } from '../engine/components';
 import { hitProbability } from '../engine/utils/FiringComputer';
@@ -15,6 +16,8 @@ const MIN_RAILGUN_PROB = 0.35;
 const MISSILE_RANGE_FRACTION = 0.9;
 const MAX_MISSILE_REL_SPEED = 40;
 const REFRESH_GAME_SECONDS = 3;
+/** Show approach ETA warning when contact enters range within this many game seconds. */
+const APPROACH_WARN_SECONDS = 300;
 
 interface Recommendation {
   key: string;
@@ -25,9 +28,33 @@ interface Recommendation {
   prob: number;
 }
 
+interface StatusItem {
+  text: string;
+  kind: 'warn' | 'info' | 'muted';
+}
+
+function formatDist(d: number): string {
+  if (d >= 1_000_000) return `${(d / 1_000_000).toFixed(1)}M km`;
+  if (d >= 1000) return `${Math.round(d / 1000)}k km`;
+  return `${Math.round(d)} km`;
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
+  return `${Math.round(seconds / 3600)}h`;
+}
+
 /**
  * Shows AI fire-order recommendations for player ships. Player can approve
  * each with "Fire" or ignore. Updated on a throttled game-time interval.
+ *
+ * When no fire opportunities exist, shows situational status:
+ * - Distance and approach rate to nearest contact with ETA to weapon range
+ * - Weapons expended / damaged summary
+ * - Ship system damage summary
+ *
+ * Urgent approach warnings also appear alongside active fire recommendations.
  */
 export class AdvisorPanel {
   private root: HTMLElement;
@@ -65,23 +92,15 @@ export class AdvisorPanel {
   }
 
   private rebuild(gameTime: number): void {
+    this.list.textContent = '';
+
     const tracker = this.getPlayerTracker();
-    if (!tracker || tracker.contacts.size === 0) {
-      this.list.textContent = '';
-      return;
-    }
+    if (!tracker || tracker.contacts.size === 0) return;
 
     const recs = this.computeRecommendations(tracker, gameTime);
+    const status = this.computeStatusItems(tracker, gameTime);
 
-    this.list.textContent = '';
-    if (recs.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'advisor-empty';
-      empty.textContent = 'No fire opportunities in range.';
-      this.list.appendChild(empty);
-      return;
-    }
-
+    // Fire recommendations
     for (const rec of recs) {
       const row = document.createElement('div');
       row.className = 'advisor-row';
@@ -101,6 +120,32 @@ export class AdvisorPanel {
 
       this.list.appendChild(row);
     }
+
+    // Status items: show all when no recs, only urgent warnings alongside recs
+    const statusToShow = recs.length === 0
+      ? status
+      : status.filter(s => s.kind === 'warn');
+
+    if (recs.length === 0 && statusToShow.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'advisor-empty';
+      empty.textContent = 'No fire opportunities in range.';
+      this.list.appendChild(empty);
+      return;
+    }
+
+    if (recs.length > 0 && statusToShow.length > 0) {
+      const div = document.createElement('div');
+      div.className = 'advisor-divider';
+      this.list.appendChild(div);
+    }
+
+    for (const item of statusToShow) {
+      const el = document.createElement('div');
+      el.className = `advisor-status advisor-status-${item.kind}`;
+      el.textContent = item.text;
+      this.list.appendChild(el);
+    }
   }
 
   private execute(rec: Recommendation, gameTime: number): void {
@@ -109,7 +154,6 @@ export class AdvisorPanel {
     } else {
       this.commandHandler.launchMissileFromShip(rec.shipId, rec.targetId, gameTime);
     }
-    // Force a refresh so the executed recommendation disappears
     this.lastRefreshTime = -999;
   }
 
@@ -166,8 +210,141 @@ export class AdvisorPanel {
       }
     }
 
-    // Sort by hit probability descending, cap at 6
     return recs.sort((a, b) => b.prob - a.prob).slice(0, 6);
+  }
+
+  private computeStatusItems(tracker: ContactTracker, _gameTime: number): StatusItem[] {
+    const items: StatusItem[] = [];
+
+    // Gather player ship data
+    const ships = this.world.query(COMPONENT.Ship, COMPONENT.Position, COMPONENT.Velocity);
+    const playerShips: {
+      name: string;
+      pos: Position;
+      vel: Velocity;
+      railgun: Railgun | undefined;
+      launcher: MissileLauncher | undefined;
+      systems: ShipSystems | undefined;
+    }[] = [];
+
+    for (const shipId of ships) {
+      const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship)!;
+      if (ship.faction !== 'player') continue;
+      playerShips.push({
+        name: ship.name,
+        pos: this.world.getComponent<Position>(shipId, COMPONENT.Position)!,
+        vel: this.world.getComponent<Velocity>(shipId, COMPONENT.Velocity)!,
+        railgun: this.world.getComponent<Railgun>(shipId, COMPONENT.Railgun) ?? undefined,
+        launcher: this.world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher) ?? undefined,
+        systems: this.world.getComponent<ShipSystems>(shipId, COMPONENT.ShipSystems) ?? undefined,
+      });
+    }
+
+    if (playerShips.length === 0) return items;
+
+    // Best available weapon ranges
+    let bestRailgunRange = 0;
+    let bestMissileRange = 0;
+    let hasAnyLauncher = false;
+    let missilesExpended = true;
+    const damagedRailguns: string[] = [];
+    const damagedSystems: string[] = [];
+
+    for (const ps of playerShips) {
+      if (ps.railgun) {
+        const integrity = ps.railgun.integrity ?? 100;
+        if (integrity <= 0) {
+          damagedRailguns.push(ps.name);
+        } else if (ps.railgun.ammo > 0) {
+          bestRailgunRange = Math.max(bestRailgunRange, ps.railgun.maxRange);
+        }
+      }
+      if (ps.launcher) {
+        hasAnyLauncher = true;
+        if ((ps.launcher.integrity ?? 100) > 0 && ps.launcher.ammo > 0) {
+          bestMissileRange = Math.max(bestMissileRange, ps.launcher.maxRange);
+          missilesExpended = false;
+        }
+      }
+      if (ps.systems) {
+        const parts: string[] = [];
+        const r = Math.round(ps.systems.reactor.current / ps.systems.reactor.max * 100);
+        const e = Math.round(ps.systems.engines.current / ps.systems.engines.max * 100);
+        const s = Math.round(ps.systems.sensors.current / ps.systems.sensors.max * 100);
+        if (r < 80) parts.push(`reactor ${r}%`);
+        if (e < 80) parts.push(`engines ${e}%`);
+        if (s < 80) parts.push(`sensors ${s}%`);
+        if (parts.length > 0) damagedSystems.push(`${ps.name}: ${parts.join(', ')}`);
+      }
+    }
+
+    const bestWeaponRange = Math.max(bestRailgunRange, bestMissileRange);
+    const weaponName = bestMissileRange >= bestRailgunRange ? 'missile' : 'railgun';
+
+    // Find nearest active contact and approach data
+    let nearestDist = Infinity;
+    let nearestName = '';
+    let nearestClosing = 0;
+
+    for (const [id, contact] of tracker.contacts) {
+      if (!this.world.hasComponent(id, COMPONENT.Position)) continue;
+      const name = this.getShipName(id) ?? 'Unknown';
+      for (const ps of playerShips) {
+        const dx = contact.lastKnownX - ps.pos.x;
+        const dy = contact.lastKnownY - ps.pos.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestName = name;
+          const relVx = ps.vel.vx - contact.lastKnownVx;
+          const relVy = ps.vel.vy - contact.lastKnownVy;
+          nearestClosing = dist > 0 ? (relVx * dx + relVy * dy) / dist : 0;
+        }
+      }
+    }
+
+    // --- Contact range status ---
+    if (nearestDist < Infinity && nearestDist > bestWeaponRange) {
+      const gap = nearestDist - bestWeaponRange;
+
+      if (nearestClosing > 0.5) {
+        // Closing — compute ETA to weapon range
+        const eta = gap / nearestClosing;
+        const urgent = eta < APPROACH_WARN_SECONDS;
+        items.push({
+          text: `${urgent ? '⚠ ' : ''}${nearestName}: ${formatDist(nearestDist)} — ${weaponName} range in ~${formatDuration(eta)}`,
+          kind: urgent ? 'warn' : 'info',
+        });
+      } else if (nearestClosing < -0.5) {
+        items.push({
+          text: `${nearestName}: ${formatDist(nearestDist)}, opening`,
+          kind: 'muted',
+        });
+      } else {
+        items.push({
+          text: `${nearestName}: ${formatDist(nearestDist)} — out of ${weaponName} range (${formatDist(bestWeaponRange)})`,
+          kind: 'info',
+        });
+      }
+    }
+
+    // --- Weapons status ---
+    if (bestRailgunRange === 0 && bestMissileRange === 0) {
+      items.push({ text: 'All weapons expended.', kind: 'muted' });
+    } else if (hasAnyLauncher && missilesExpended) {
+      items.push({ text: 'Missiles expended.', kind: 'muted' });
+    }
+
+    if (damagedRailguns.length > 0) {
+      items.push({ text: `Railgun destroyed: ${damagedRailguns.join(', ')}`, kind: 'warn' });
+    }
+
+    // --- Ship damage ---
+    for (const dmg of damagedSystems) {
+      items.push({ text: dmg, kind: 'muted' });
+    }
+
+    return items;
   }
 
   private findBestTarget(
