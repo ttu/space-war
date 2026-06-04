@@ -124,6 +124,8 @@ export class SpaceWarGame {
 
   private targetingReadoutTimeout: ReturnType<typeof setTimeout> | null = null;
   private currentMouseScreen = { x: 0, y: 0 };
+  private targetingLines!: THREE.LineSegments;
+  private targetingLabelContainer!: HTMLElement;
 
   private lastContactsPanelUpdate = 0;
   private readonly contactsPanelIntervalMs = 400;
@@ -332,6 +334,29 @@ export class SpaceWarGame {
 
     this.selectionBoxLine = this.createSelectionBoxLine();
     this.scene.add(this.selectionBoxLine);
+
+    // Targeting preview lines (player ship → enemy contacts when in fire mode)
+    {
+      const geo = new THREE.BufferGeometry();
+      // Pre-allocate for up to 10 ships × 10 contacts = 100 line segments = 200 vertices
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(200 * 3), 3));
+      const mat = new THREE.LineDashedMaterial({
+        color: 0xff8800,
+        linewidth: 1,
+        dashSize: 800,
+        gapSize: 400,
+        transparent: true,
+        opacity: 0.55,
+      });
+      this.targetingLines = new THREE.LineSegments(geo, mat);
+      this.targetingLines.visible = false;
+      this.scene.add(this.targetingLines);
+    }
+    this.targetingLabelContainer = document.createElement('div');
+    this.targetingLabelContainer.id = 'targeting-labels';
+    this.targetingLabelContainer.style.cssText =
+      'position:fixed;inset:0;pointer-events:none;z-index:80;';
+    document.body.appendChild(this.targetingLabelContainer);
 
     window.addEventListener('resize', () => {
       const w = window.innerWidth;
@@ -719,6 +744,124 @@ export class SpaceWarGame {
     }
   }
 
+  /**
+   * Draw lines and probability labels from selected player ships to all visible
+   * enemy contacts when a fire order is pending. Cleared otherwise.
+   */
+  private updateTargetingLines(): void {
+    const inFireMode =
+      this.pendingOrder === 'fireMissile' || this.pendingOrder === 'fireRailgun';
+
+    if (!inFireMode) {
+      this.targetingLines.visible = false;
+      this.targetingLabelContainer.textContent = '';
+      return;
+    }
+
+    const selectedIds = this.selectionManager.getSelectedPlayerIds();
+    const playerContacts = this.getPlayerContacts();
+
+    // Collect enemy contact positions
+    interface ContactEntry { id: EntityId; x: number; y: number; vx: number; vy: number; name: string }
+    const contacts: ContactEntry[] = [];
+    const ships = this.world.query(COMPONENT.Ship, COMPONENT.Position);
+    for (const id of ships) {
+      const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
+      if (ship.faction === 'player') continue;
+      const contact = playerContacts?.contacts.get(id);
+      if (!contact || contact.lost) continue;
+      contacts.push({
+        id,
+        x: contact.lastKnownX,
+        y: contact.lastKnownY,
+        vx: contact.lastKnownVx ?? 0,
+        vy: contact.lastKnownVy ?? 0,
+        name: ship.name,
+      });
+    }
+
+    if (contacts.length === 0 || selectedIds.length === 0) {
+      this.targetingLines.visible = false;
+      this.targetingLabelContainer.textContent = '';
+      return;
+    }
+
+    const isMissile = this.pendingOrder === 'fireMissile';
+
+    // Collect selected ships that have ammo for the relevant weapon
+    interface ArmedShip { id: EntityId; pos: Position; launcher?: MissileLauncher; railgun?: Railgun }
+    const armedShips: ArmedShip[] = [];
+    for (const shipId of selectedIds) {
+      const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position);
+      if (!pos) continue;
+      if (isMissile) {
+        const launcher = this.world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher);
+        if (launcher && (launcher.integrity ?? 100) > 0 && launcher.ammo > 0)
+          armedShips.push({ id: shipId, pos, launcher });
+      } else {
+        const railgun = this.world.getComponent<Railgun>(shipId, COMPONENT.Railgun);
+        if (railgun && (railgun.integrity ?? 100) > 0 && railgun.ammo > 0)
+          armedShips.push({ id: shipId, pos, railgun });
+      }
+    }
+
+    // Build line segments: one per (armedShip, contact) pair
+    const posAttr = this.targetingLines.geometry.getAttribute('position') as THREE.BufferAttribute;
+    let vertIdx = 0;
+    const MAX_VERTS = 200;
+
+    for (const s of armedShips) {
+      for (const c of contacts) {
+        if (vertIdx + 2 > MAX_VERTS) break;
+        posAttr.setXYZ(vertIdx, s.pos.x, s.pos.y, 1);
+        posAttr.setXYZ(vertIdx + 1, c.x, c.y, 1);
+        vertIdx += 2;
+      }
+    }
+    // Zero out remaining slots
+    for (let i = vertIdx; i < MAX_VERTS; i++) posAttr.setXYZ(i, 0, 0, 0);
+    posAttr.needsUpdate = true;
+    this.targetingLines.computeLineDistances();
+    this.targetingLines.visible = vertIdx > 0;
+
+    // CSS probability labels near each contact
+    this.targetingLabelContainer.textContent = '';
+    // Representative armed ship for probability estimate (first with ammo)
+    const rep = armedShips[0] ?? null;
+
+    for (const c of contacts) {
+      const screen = this.camera.worldToScreen(c.x, c.y, this.canvas);
+      // Skip labels that are far off-screen (>200px outside viewport)
+      if (screen.x < -200 || screen.x > window.innerWidth + 200 ||
+          screen.y < -200 || screen.y > window.innerHeight + 200) continue;
+
+      let probLine = '';
+      if (rep?.pos) {
+        const dx = c.x - rep.pos.x;
+        const dy = c.y - rep.pos.y;
+        const range = Math.sqrt(dx * dx + dy * dy);
+        const tSpeed = Math.sqrt(c.vx * c.vx + c.vy * c.vy);
+
+        if (isMissile && rep.launcher) {
+          const rangeFactor = Math.max(0, 1 - range / rep.launcher.maxRange);
+          const evasion = Math.min(1, tSpeed / 2);
+          const prob = rangeFactor * (1 - 0.35 * evasion);
+          probLine = `🚀 ${Math.round(Math.max(0, Math.min(1, prob)) * 100)}%`;
+        } else if (!isMissile && rep.railgun) {
+          const prob = hitProbability(range, tSpeed, rep.railgun.projectileSpeed, rep.railgun.maxRange);
+          probLine = `⚡ ${Math.round(prob * 100)}%`;
+        }
+      }
+
+      const label = document.createElement('div');
+      label.className = 'targeting-label';
+      label.style.left = `${screen.x + 14}px`;
+      label.style.top = `${screen.y - 8}px`;
+      label.textContent = probLine ? `${c.name}\n${probLine}` : c.name;
+      this.targetingLabelContainer.appendChild(label);
+    }
+  }
+
   private handleClick(screenX: number, screenY: number, shiftKey: boolean): void {
     if (this.playerInteraction.tryStartWaypointDrag(screenX, screenY)) return;
 
@@ -868,6 +1011,7 @@ export class SpaceWarGame {
     this.sensorOcclusionRenderer.update(this.world, this.shadowsEnabled);
 
     this.updateSelectionBoxVisual();
+    this.updateTargetingLines();
 
     this.timeControls.update();
     this.updateTargetingPreview();
