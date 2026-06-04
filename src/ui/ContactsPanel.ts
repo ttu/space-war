@@ -163,7 +163,7 @@ export class ContactsPanel {
         minAge = Math.min(minAge, info.minAgeSec);
         maxAge = Math.max(maxAge, info.maxAgeSec);
       }
-      summaryLoc = `Enemies at: ${parts.join(', ')}.`;
+      summaryLoc = parts.length > 0 ? `Enemies at: ${parts.join(', ')}.` : 'Enemies detected.';
       summaryAge =
         maxAge >= 60
           ? `Data ${Math.floor(minAge / 60)}–${Math.ceil(maxAge / 60)} min old (light delay).`
@@ -187,7 +187,16 @@ export class ContactsPanel {
     for (const id of contactIds) {
       const contact = tracker!.contacts.get(id)!;
       const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship);
-      if (!ship) continue;
+      // Entity destroyed: remove stale row so it doesn't show "0s ago" forever
+      if (!ship) {
+        const staleRow = this.contactRows.get(id);
+        if (staleRow) {
+          staleRow.remove();
+          this.contactRows.delete(id);
+          this.lastRowState.delete(id);
+        }
+        continue;
+      }
 
       let row = this.contactRows.get(id);
       if (!row) {

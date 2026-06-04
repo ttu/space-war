@@ -92,8 +92,8 @@ export class MissileSystem {
         }
       }
 
-      // Track ballistic timestamp for timeout removal
-      if (missile.guidanceMode === 'ballistic' && missile.fuel <= 0) {
+      // Track ballistic timestamp for timeout removal (covers both fuel-exhausted and target-lost cases)
+      if (missile.guidanceMode === 'ballistic') {
         if (!this.ballisticTimestamps.has(missileId)) {
           this.ballisticTimestamps.set(missileId, gameTime);
         }
