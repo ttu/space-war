@@ -80,12 +80,14 @@ export class OffScreenContactRenderer {
     const insetW = halfW * (1 - EDGE_INSET);
     const insetH = halfH * (1 - EDGE_INSET);
 
+    const markerScale = zoom * 0.015;
     for (let i = 0; i < offScreen.length; i++) {
       const { x, y, faction } = offScreen[i];
       const edge = this.clampToViewEdge(x, y, camX, camY, insetW, insetH);
       const marker = this.markers[i];
       marker.group.visible = true;
       marker.group.position.set(edge.x, edge.y, 2);
+      marker.group.scale.set(markerScale, markerScale, 1);
       (marker.mesh.material as THREE.MeshBasicMaterial).color.setHex(FACTION_COLORS[faction]);
     }
     for (let i = offScreen.length; i < this.markers.length; i++) {
@@ -143,8 +145,6 @@ export class OffScreenContactRenderer {
       const mesh = new THREE.Mesh(geometry, material);
       const group = new THREE.Group();
       group.add(mesh);
-      const scale = 800;
-      group.scale.set(scale, scale, 1);
       this.group.add(group);
       this.markers.push({ group, mesh });
     }
