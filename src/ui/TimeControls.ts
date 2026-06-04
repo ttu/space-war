@@ -24,6 +24,7 @@ function speedLabel(scale: TimeScale): string {
 export class TimeControls {
   private root: HTMLElement;
   private pausedLabel: HTMLElement;
+  private pauseBtn: HTMLButtonElement;
   private gameTimeLabel: HTMLElement;
   private speedButtons: HTMLButtonElement[] = [];
   private lockWrap: HTMLElement | null = null;
@@ -42,16 +43,17 @@ export class TimeControls {
     this.pausedLabel.className = 'paused-label';
     this.pausedLabel.id = 'paused-label';
     this.pausedLabel.setAttribute('aria-live', 'polite');
-    this.pausedLabel.textContent = 'PAUSED';
+    this.pausedLabel.textContent = '1x';
     this.root.appendChild(this.pausedLabel);
 
     const btnPause = document.createElement('button');
     btnPause.type = 'button';
     btnPause.id = 'btn-pause';
-    btnPause.title = 'Space';
-    btnPause.textContent = '⏸';
+    btnPause.title = 'Space — toggle 1x/fast';
+    btnPause.textContent = '▶';
     btnPause.addEventListener('click', () => callbacks.onPauseToggle());
     this.root.appendChild(btnPause);
+    this.pauseBtn = btnPause;
 
     SPEED_SCALES.forEach((scale, i) => {
       const btn = document.createElement('button');
@@ -105,10 +107,12 @@ export class TimeControls {
     container.appendChild(this.root);
   }
 
-  /** Call each frame or when time/pause changes. */
+  /** Call each frame or when time/speed changes. */
   update(): void {
     this.gameTimeLabel.textContent = this.gameTime.formatElapsed();
-    this.pausedLabel.classList.toggle('visible', this.gameTime.paused);
+    const atMin = this.gameTime.timeScale === 1;
+    this.pausedLabel.classList.toggle('visible', atMin);
+    this.pauseBtn.textContent = atMin ? '▶' : '⏸';
     this.speedButtons.forEach((btn, i) => {
       btn.classList.toggle('active', SPEED_SCALES[i] === this.gameTime.timeScale);
     });

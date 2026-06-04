@@ -46,6 +46,7 @@ import { ShipDetailPanel } from '../ui/ShipDetailPanel';
 import { OrderBar } from '../ui/OrderBar';
 import { CombatLog } from '../ui/CombatLog';
 import { ActionToast } from '../ui/ActionToast';
+import { ThreatAlert } from '../ui/ThreatAlert';
 import { ActiveMissilesPanel } from '../ui/ActiveMissilesPanel';
 import { IncomingThreatsPanel } from '../ui/IncomingThreatsPanel';
 import { PanelManager } from '../ui/PanelManager';
@@ -58,8 +59,11 @@ import {
   ContactTracker,
   NavigationOrder,
   CelestialBody,
+  MissileLauncher,
+  Railgun,
   COMPONENT,
 } from '../engine/components';
+import { hitProbability } from '../engine/utils/FiringComputer';
 
 export class SpaceWarGame {
   readonly world = new WorldImpl();
@@ -110,12 +114,14 @@ export class SpaceWarGame {
   private panelManager!: PanelManager;
   private scenarioSelector!: ScenarioSelector;
   private playerInteraction!: PlayerInteractionHandler;
+  private threatAlert: ThreatAlert | null = null;
   private pendingOrder: PendingOrderType = 'none';
   currentScenarioId = 'solarSystem';
 
   private cameraLockIndicator: HTMLElement | null = null;
 
   private targetingReadoutTimeout: ReturnType<typeof setTimeout> | null = null;
+  private currentMouseScreen = { x: 0, y: 0 };
 
   private lastContactsPanelUpdate = 0;
   private readonly contactsPanelIntervalMs = 400;
@@ -173,12 +179,12 @@ export class SpaceWarGame {
     });
 
     this.eventBus.subscribe('VictoryAchieved', () => {
-      this.gameTime.paused = true;
+      this.gameTime.slowToMin();
       this.updatePauseUI();
     });
 
     this.eventBus.subscribe('DefeatSuffered', () => {
-      this.gameTime.paused = true;
+      this.gameTime.slowToMin();
       this.updatePauseUI();
     });
 
@@ -434,8 +440,11 @@ export class SpaceWarGame {
 
     const infoOverlay = document.createElement('div');
     infoOverlay.id = 'info-overlay';
-    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: Pause | +/- or 1-9: Speed | E: Focus enemy | M/F/R: Orders | V: Shadows | F1-F5: Panels | L: Combat log';
+    infoOverlay.textContent = 'WASD: Pan | Scroll: Zoom | Space: 1x/fast | +/- or 1-9: Speed | E: Focus enemy | M/F/R: Orders | V: Shadows | F1-F5: Panels | L: Combat log';
     uiRoot.appendChild(infoOverlay);
+
+    // Threat alert modal — auto-slows game on new contacts/missile launches
+    this.threatAlert = new ThreatAlert(uiRoot, this.gameTime, this.eventBus);
 
     const cameraLockIndicator = document.createElement('div');
     cameraLockIndicator.id = 'camera-lock-indicator';
@@ -450,6 +459,11 @@ export class SpaceWarGame {
 
   private setupInput(): void {
     this.input = new InputManager(this.canvas);
+
+    // Track mouse position for targeting preview
+    this.canvas.addEventListener('mousemove', (e: MouseEvent) => {
+      this.currentMouseScreen = { x: e.clientX, y: e.clientY };
+    });
 
     this.input.onInput((event) => {
       switch (event.type) {
@@ -524,7 +538,7 @@ export class SpaceWarGame {
   }
 
   private togglePause(): void {
-    this.gameTime.togglePause();
+    this.gameTime.toggleSlowdown();
     this.updatePauseUI();
   }
 
@@ -551,6 +565,148 @@ export class SpaceWarGame {
 
   private updateSpeedUI(): void {
     this.timeControls?.update();
+  }
+
+  /**
+   * When a fire order is pending and mouse is over a contact, show hit probability
+   * in the targeting readout element.
+   */
+  private updateTargetingPreview(): void {
+    const readoutEl = this.timeControls?.getTargetingReadoutElement();
+    if (this.pendingOrder !== 'fireMissile' && this.pendingOrder !== 'fireRailgun') {
+      // Clear any lingering preview when no fire order is active
+      if (readoutEl && readoutEl.dataset.isPreview === '1') {
+        readoutEl.textContent = '';
+        readoutEl.classList.remove('visible');
+        readoutEl.dataset.isPreview = '0';
+      }
+      return;
+    }
+
+    if (!readoutEl) return;
+    const readout = readoutEl;
+
+    // Only update if no active fire-result timeout is showing
+    if (this.targetingReadoutTimeout != null) return;
+
+    const worldPos = this.camera.screenToWorld(
+      this.currentMouseScreen.x,
+      this.currentMouseScreen.y,
+      this.canvas,
+    );
+    const pickRadius = this.camera.getZoom() * 0.06;
+
+    // Find hovered contact
+    const playerContacts = this.getPlayerContacts();
+    let hoveredId: EntityId | null = null;
+    let hoveredName = '';
+    let hoveredDist = pickRadius;
+
+    const ships = this.world.query(COMPONENT.Position, COMPONENT.Ship);
+    for (const id of ships) {
+      const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
+      if (ship.faction === 'player') continue;
+
+      let cx: number, cy: number;
+      if (playerContacts) {
+        const contact = playerContacts.contacts.get(id);
+        if (!contact) continue;
+        cx = contact.lastKnownX;
+        cy = contact.lastKnownY;
+      } else {
+        const pos = this.world.getComponent<Position>(id, COMPONENT.Position)!;
+        cx = pos.x;
+        cy = pos.y;
+      }
+
+      const dx = cx - worldPos.x;
+      const dy = cy - worldPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < hoveredDist) {
+        hoveredDist = dist;
+        hoveredId = id;
+        hoveredName = ship.name;
+      }
+    }
+
+    if (!hoveredId) {
+      // No contact hovered — clear preview text but keep visible class off
+      if (!readout.classList.contains('visible') || readout.dataset.isPreview === '1') {
+        readout.textContent = '';
+        readout.classList.remove('visible');
+        readout.dataset.isPreview = '0';
+      }
+      return;
+    }
+
+    const selectedIds = this.selectionManager.getSelectedPlayerIds();
+    if (selectedIds.length === 0) return;
+
+    // Get contact velocity for hit probability
+    const contact = playerContacts?.contacts.get(hoveredId);
+    const targetVx = contact?.lastKnownVx ?? 0;
+    const targetVy = contact?.lastKnownVy ?? 0;
+    const targetSpeed = Math.sqrt(targetVx * targetVx + targetVy * targetVy);
+
+    if (this.pendingOrder === 'fireRailgun') {
+      // Compute average hit probability across selected ships with railguns
+      let totalProb = 0;
+      let railgunCount = 0;
+      for (const shipId of selectedIds) {
+        const railgun = this.world.getComponent<Railgun>(shipId, COMPONENT.Railgun);
+        if (!railgun) continue;
+        const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position)!;
+        const contactX = contact?.lastKnownX ?? pos.x;
+        const contactY = contact?.lastKnownY ?? pos.y;
+        const dx = contactX - pos.x;
+        const dy = contactY - pos.y;
+        const range = Math.sqrt(dx * dx + dy * dy);
+        const prob = hitProbability(range, targetSpeed, railgun.projectileSpeed, railgun.maxRange);
+        totalProb += prob;
+        railgunCount++;
+      }
+      if (railgunCount === 0) return;
+      const avgProb = totalProb / railgunCount;
+      const pct = Math.round(avgProb * 100);
+      readout.textContent = `→ ${hoveredName} | Railgun: ${pct}%`;
+      readout.classList.add('visible');
+      readout.dataset.isPreview = '1';
+    } else if (this.pendingOrder === 'fireMissile') {
+      // Count ships with missile launchers and ammo
+      let launcherCount = 0;
+      let totalAmmo = 0;
+      for (const shipId of selectedIds) {
+        const launcher = this.world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher);
+        if (!launcher || launcher.ammo === 0) continue;
+        launcherCount++;
+        totalAmmo += launcher.ammo;
+      }
+      if (launcherCount === 0) return;
+
+      // Simplified missile hit estimate based on range vs maxRange
+      // Use first launcher's maxRange as reference
+      let probPct = 0;
+      for (const shipId of selectedIds) {
+        const launcher = this.world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher);
+        if (!launcher || launcher.ammo === 0) continue;
+        const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position)!;
+        const contactX = contact?.lastKnownX ?? pos.x;
+        const contactY = contact?.lastKnownY ?? pos.y;
+        const dx = contactX - pos.x;
+        const dy = contactY - pos.y;
+        const range = Math.sqrt(dx * dx + dy * dy);
+        // Guided missiles: probability decreases with range vs max range
+        const rangeFactor = Math.max(0, 1 - (range / launcher.maxRange));
+        const evasion = Math.min(1, targetSpeed / 2); // rough evasion factor
+        const prob = rangeFactor * (1 - 0.35 * evasion);
+        probPct = Math.max(probPct, Math.round(Math.max(0, Math.min(1, prob)) * 100));
+        break; // first ship representative
+      }
+      const shipLabel = launcherCount > 1 ? `${launcherCount} ships` : '1 ship';
+      readout.textContent = `→ ${hoveredName} | ${shipLabel} | Missiles: ${probPct}%`;
+      readout.classList.add('visible');
+      readout.dataset.isPreview = '1';
+    }
   }
 
   private handleClick(screenX: number, screenY: number, shiftKey: boolean): void {
@@ -704,6 +860,7 @@ export class SpaceWarGame {
     this.updateSelectionBoxVisual();
 
     this.timeControls.update();
+    this.updateTargetingPreview();
     const lock = this.getCameraLock();
     if (this.cameraLockIndicator) {
       if (lock) {
@@ -747,10 +904,10 @@ export class SpaceWarGame {
     this.currentScenarioId = id;
     this.scenarioSelector.setScenario(id);
     this.gameTime.elapsed = 0;
-    this.gameTime.paused = true;
     this.gameTime.setTimeScale(1);
     this.referenceEntityId = null;
     this.combatLog.clear();
+    this.threatAlert?.reset();
 
     const builtIn: Record<string, () => void> = {
       demo: () => this.loadDemoScenario(),

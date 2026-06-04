@@ -665,6 +665,50 @@
         color: #ff8888;
       }
 
+      /* Threat alert modal overlay */
+      .threat-alert-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.65);
+        pointer-events: auto;
+      }
+
+      .threat-alert-message {
+        background: rgba(10, 14, 24, 0.97);
+        border: 2px solid var(--status-red);
+        border-radius: 6px;
+        padding: 20px 32px;
+        font-size: 16px;
+        font-weight: bold;
+        color: var(--status-red);
+        text-align: center;
+        margin-bottom: 16px;
+        max-width: 480px;
+        box-shadow: 0 4px 24px rgba(204, 68, 68, 0.35);
+      }
+
+      .threat-alert-ok {
+        background: rgba(204, 68, 68, 0.2);
+        border: 1px solid var(--status-red);
+        color: var(--text-primary);
+        padding: 10px 28px;
+        cursor: pointer;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        border-radius: 4px;
+        pointer-events: auto;
+      }
+
+      .threat-alert-ok:hover {
+        background: rgba(204, 68, 68, 0.4);
+        color: #fff;
+      }
+
       /* Camera lock on-screen indicator */
       .camera-lock-indicator {
         position: absolute;

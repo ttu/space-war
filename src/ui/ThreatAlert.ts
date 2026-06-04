@@ -1,0 +1,72 @@
+import type { EventBus } from '../engine/core/EventBus';
+import type { GameTime } from '../engine/core/GameTime';
+
+/**
+ * Shows a modal alert when new threats are detected, auto-slowing the game to
+ * 1× so the player has time to respond. Player dismisses to restore speed.
+ */
+export class ThreatAlert {
+  private overlay: HTMLElement;
+  private msgEl: HTMLElement;
+  private isVisible = false;
+
+  constructor(
+    container: HTMLElement,
+    private gameTime: GameTime,
+    eventBus: EventBus,
+  ) {
+    this.overlay = document.createElement('div');
+    this.overlay.id = 'threat-alert';
+    this.overlay.className = 'threat-alert-overlay';
+    this.overlay.style.display = 'none';
+
+    this.msgEl = document.createElement('div');
+    this.msgEl.className = 'threat-alert-message';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'threat-alert-ok';
+    btn.textContent = 'OK — Continue';
+    btn.addEventListener('click', () => this.dismiss());
+
+    this.overlay.appendChild(this.msgEl);
+    this.overlay.appendChild(btn);
+    container.appendChild(this.overlay);
+
+    // Alert when player sensors detect a new enemy ship
+    eventBus.subscribe('ShipDetected', (e) => {
+      const faction = e.data?.faction as string | undefined;
+      // faction is tracker.faction — 'player' means our sensors picked up a new contact
+      if (faction === 'player') {
+        this.trigger('⚠ New hostile contact detected');
+      }
+    });
+
+    // Alert on enemy missile launches
+    eventBus.subscribe('MissileLaunched', (e) => {
+      if (e.data?.faction === 'enemy') {
+        const size = e.data?.salvoSize as number | undefined;
+        this.trigger(`⚠ Hostile missile salvo inbound${size ? ` (${size} missiles)` : ''}`);
+      }
+    });
+  }
+
+  trigger(message: string): void {
+    if (this.isVisible) return; // don't stack alerts
+    this.gameTime.slowToMin();
+    this.msgEl.textContent = message;
+    this.overlay.style.display = 'flex';
+    this.isVisible = true;
+  }
+
+  dismiss(): void {
+    this.overlay.style.display = 'none';
+    this.isVisible = false;
+    this.gameTime.restoreSpeed();
+  }
+
+  reset(): void {
+    this.overlay.style.display = 'none';
+    this.isVisible = false;
+  }
+}
