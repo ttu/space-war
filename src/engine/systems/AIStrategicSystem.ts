@@ -23,8 +23,8 @@ const MAX_LEAD_TIME = 600;
 const VELOCITY_MATCH_RANGE = Infinity;
 /** Desired closing speed (km/s) when outside missile range — cover distance fast. */
 const DESIRED_CLOSING_SPEED = 30;
-/** Desired closing speed (km/s) inside missile range — must stay below MAX_MISSILE_REL_SPEED - 30. */
-const DESIRED_CLOSING_SPEED_MISSILE = 5;
+/** Desired closing speed (km/s) inside missile range. */
+const DESIRED_CLOSING_SPEED_MISSILE = 20;
 /** Desired closing speed (km/s) when out of missiles — rush in for railgun range. */
 const DESIRED_CLOSING_SPEED_BRAWL = 60;
 
