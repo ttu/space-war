@@ -25,6 +25,7 @@ import { TrailRenderer } from '../rendering/TrailRenderer';
 import { MissileRenderer } from '../rendering/MissileRenderer';
 import { ProjectileRenderer } from '../rendering/ProjectileRenderer';
 import { PDCRenderer } from '../rendering/PDCRenderer';
+import { ExplosionRenderer } from '../rendering/ExplosionRenderer';
 import { SensorOcclusionRenderer } from '../rendering/SensorOcclusionRenderer';
 import { OffScreenContactRenderer } from '../rendering/OffScreenContactRenderer';
 import { PlanetContactIndicatorsRenderer } from '../rendering/PlanetContactIndicatorsRenderer';
@@ -97,6 +98,7 @@ export class SpaceWarGame {
   private missileRenderer!: MissileRenderer;
   private projectileRenderer!: ProjectileRenderer;
   private pdcRenderer!: PDCRenderer;
+  private explosionRenderer!: ExplosionRenderer;
   private offScreenContactRenderer!: OffScreenContactRenderer;
   private planetContactIndicatorsRenderer!: PlanetContactIndicatorsRenderer;
   private sensorOcclusionRenderer!: SensorOcclusionRenderer;
@@ -327,6 +329,7 @@ export class SpaceWarGame {
     this.missileRenderer = new MissileRenderer(this.scene);
     this.projectileRenderer = new ProjectileRenderer(this.scene);
     this.pdcRenderer = new PDCRenderer(this.scene, this.eventBus);
+    this.explosionRenderer = new ExplosionRenderer(this.scene, this.eventBus);
     this.offScreenContactRenderer = new OffScreenContactRenderer(this.scene);
     this.planetContactIndicatorsRenderer = new PlanetContactIndicatorsRenderer(this.scene);
     this.sensorOcclusionRenderer = new SensorOcclusionRenderer(this.scene);
@@ -1003,6 +1006,7 @@ export class SpaceWarGame {
     this.missileRenderer.update(this.world, zoom, playerContacts);
     this.projectileRenderer.update(this.world, zoom);
     this.pdcRenderer.update(this.world, this.gameTime.elapsed);
+    this.explosionRenderer.update();
     this.offScreenContactRenderer.update(
       this.world,
       camPos.x,
