@@ -26,14 +26,27 @@ export class ThreatAlert {
     this.msgEl = document.createElement('div');
     this.msgEl.className = 'threat-alert-message';
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'threat-alert-ok';
-    btn.textContent = 'OK — Continue';
-    btn.addEventListener('click', () => this.dismiss());
+    const btnRow = document.createElement('div');
+    btnRow.className = 'threat-alert-btn-row';
 
+    const btnContinue = document.createElement('button');
+    btnContinue.type = 'button';
+    btnContinue.className = 'threat-alert-ok';
+    btnContinue.textContent = 'Continue';
+    btnContinue.title = 'Restore previous speed';
+    btnContinue.addEventListener('click', () => this.dismiss(true));
+
+    const btnStay = document.createElement('button');
+    btnStay.type = 'button';
+    btnStay.className = 'threat-alert-stay';
+    btnStay.textContent = 'Stay at 1×';
+    btnStay.title = 'Keep 1× speed';
+    btnStay.addEventListener('click', () => this.dismiss(false));
+
+    btnRow.appendChild(btnContinue);
+    btnRow.appendChild(btnStay);
     this.overlay.appendChild(this.msgEl);
-    this.overlay.appendChild(btn);
+    this.overlay.appendChild(btnRow);
     container.appendChild(this.overlay);
 
     // Alert when player sensors detect a new enemy ship
@@ -63,11 +76,12 @@ export class ThreatAlert {
     this.isVisible = true;
   }
 
-  dismiss(): void {
+  /** @param restore true = resume prior speed, false = stay at 1× */
+  dismiss(restore = true): void {
     this.overlay.style.display = 'none';
     this.isVisible = false;
     this.lastDismissedAt = Date.now();
-    this.gameTime.restoreSpeed();
+    if (restore) this.gameTime.restoreSpeed();
   }
 
   reset(): void {
