@@ -411,14 +411,18 @@ export class TrailRenderer {
       return;
     }
 
+    const pos = world.getComponent<Position>(entityId, COMPONENT.Position)!;
+    // Start from the ship's current position so the route line is always
+    // anchored to the ship rather than floating between distant waypoints.
     const allPoints = [
+      { x: pos.x, y: pos.y },
       { x: nav.destinationX, y: nav.destinationY },
       ...nav.waypoints,
     ];
 
     let line = this.waypointRouteLines.get(entityId);
     if (!line) {
-      const positions = new Float32Array(20 * 3);
+      const positions = new Float32Array(22 * 3);
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
       geo.setDrawRange(0, 0);
@@ -435,7 +439,7 @@ export class TrailRenderer {
     }
 
     const posAttr = line.geometry.getAttribute('position') as THREE.BufferAttribute;
-    const count = Math.min(allPoints.length, 20);
+    const count = Math.min(allPoints.length, 22);
     for (let i = 0; i < count; i++) {
       posAttr.setXYZ(i, allPoints[i].x, allPoints[i].y, 0.35);
     }
