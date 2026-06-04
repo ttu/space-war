@@ -16,7 +16,6 @@ import { RailgunSystem } from '../engine/systems/RailgunSystem';
 import { DamageSystem } from '../engine/systems/DamageSystem';
 import { AIStrategicSystem } from '../engine/systems/AIStrategicSystem';
 import { AITacticalSystem } from '../engine/systems/AITacticalSystem';
-import { PlayerAutoFireSystem } from '../engine/systems/PlayerAutoFireSystem';
 import { VictorySystem } from '../engine/systems/VictorySystem';
 import { CollisionSystem } from '../engine/systems/CollisionSystem';
 import { RadarRenderer } from '../rendering/RadarRenderer';
@@ -88,7 +87,6 @@ export class SpaceWarGame {
   private damageSystem = new DamageSystem(this.eventBus);
   private aiStrategicSystem = new AIStrategicSystem();
   private aiTacticalSystem!: AITacticalSystem;
-  private playerAutoFireSystem = new PlayerAutoFireSystem(this.eventBus);
   private victorySystem = new VictorySystem(this.eventBus);
   private commandHandler!: CommandHandler;
   private radarRenderer!: RadarRenderer;
@@ -945,7 +943,6 @@ export class SpaceWarGame {
     this.damageSystem.processHitEvents(this.world);
     this.aiStrategicSystem.update(this.world, dt, this.gameTime.elapsed);
     this.aiTacticalSystem.update(this.world, dt, this.gameTime.elapsed);
-    this.playerAutoFireSystem.update(this.world, dt, this.gameTime.elapsed);
     this.navigationSystem.update(this.world, dt, this.gameTime.elapsed);
     this.physicsSystem.update(this.world, dt);
     this.stationKeepingSystem.update(this.world, dt);
