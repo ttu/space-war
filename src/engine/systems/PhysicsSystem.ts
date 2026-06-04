@@ -1,5 +1,5 @@
 import { World, EntityId } from '../types';
-import { Position, Velocity, Thruster, CelestialBody, OrbitalPrimary, ShipSystems, COMPONENT } from '../components';
+import { Position, Velocity, Ship, Thruster, CelestialBody, OrbitalPrimary, ShipSystems, COMPONENT } from '../components';
 import { gravitationalAcceleration } from '../../utils/OrbitalMechanics';
 
 export class PhysicsSystem {
@@ -35,6 +35,12 @@ export class PhysicsSystem {
     // Save previous position for interpolation
     pos.prevX = pos.x;
     pos.prevY = pos.y;
+
+    // Dark mode: zero throttle so no thrust is applied
+    const ship = world.getComponent<Ship>(entityId, COMPONENT.Ship);
+    if (ship?.darkMode && thruster) {
+      thruster.throttle = 0;
+    }
 
     // Apply thrust acceleration (scaled by engines health if ShipSystems present)
     if (thruster && thruster.throttle > 0) {

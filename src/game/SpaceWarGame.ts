@@ -37,6 +37,7 @@ import { demoScenario } from '../engine/data/scenarios/demo';
 import { solarSystemScenario } from '../engine/data/scenarios/solarSystem';
 import { redDwarfScenario } from '../engine/data/scenarios/redDwarf';
 import { provingGroundsScenario } from '../engine/data/scenarios/provingGrounds';
+import { stealthScenario } from '../engine/data/scenarios/stealth';
 import { e2eScenario } from '../engine/data/scenarios/e2e';
 import { showShipConfigScreen } from '../ui/ShipConfigScreen';
 import { TimeControls } from '../ui/TimeControls';
@@ -174,6 +175,10 @@ export class SpaceWarGame {
       this.commandHandler,
       () => this.gameTime.elapsed,
       () => this.getPlayerContacts(),
+      () => {
+        this.gameTime.slowToMin();
+        this.updatePauseUI();
+      },
     );
     this.aiTacticalSystem = new AITacticalSystem(this.eventBus);
     this.playerInteraction = new PlayerInteractionHandler({
@@ -194,11 +199,13 @@ export class SpaceWarGame {
     this.eventBus.subscribe('VictoryAchieved', () => {
       this.gameTime.slowToMin();
       this.updatePauseUI();
+      this.advisorPanel?.reset();
     });
 
     this.eventBus.subscribe('DefeatSuffered', () => {
       this.gameTime.slowToMin();
       this.updatePauseUI();
+      this.advisorPanel?.reset();
     });
 
     this.eventBus.subscribe('RailgunFired', (e) => {
@@ -465,6 +472,16 @@ export class SpaceWarGame {
           pdc.enabled = enabled;
         }
       },
+      onDarkToggle: (enabled) => {
+        const ships = this.world.query(COMPONENT.Ship);
+        for (const id of ships) {
+          const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship)!;
+          if (ship.faction !== 'player') continue;
+          if (ship.darkMode !== enabled) {
+            this.commandHandler.toggleDarkMode(id);
+          }
+        }
+      },
     }, this.eventBus);
 
     // Combat log overlay (hidden by default, toggled with L)
@@ -571,6 +588,9 @@ export class SpaceWarGame {
           break;
         case 'togglePdc':
           this.orderBar.togglePdc();
+          break;
+        case 'toggleDark':
+          this.orderBar.toggleDark();
           break;
         case 'setOrder':
           this.orderBar.toggleOrder(event.order);
@@ -1028,6 +1048,7 @@ export class SpaceWarGame {
     this.updateTargetingLines();
 
     this.timeControls.update();
+    this.updateDarkModeUI();
     this.updateTargetingPreview();
     const lock = this.getCameraLock();
     if (this.cameraLockIndicator) {
@@ -1077,12 +1098,14 @@ export class SpaceWarGame {
     this.referenceEntityId = null;
     this.combatLog.clear();
     this.threatAlert?.reset();
+    this.advisorPanel?.reset();
 
     const builtIn: Record<string, () => void> = {
       demo: () => this.loadDemoScenario(),
       solarSystem: () => this.loadSolarSystemScenario(),
       redDwarf: () => this.loadRedDwarfScenario(),
       provingGrounds: () => this.loadProvingGroundsScenario(),
+      stealth: () => this.loadStealthScenario(),
     };
 
     if (builtIn[id]) {
@@ -1180,6 +1203,22 @@ export class SpaceWarGame {
     this.victorySystem.reset();
     this.centerCameraOnFlagship();
     this.camera.zoomToFit(400_000, 400_000);
+  }
+
+  private loadStealthScenario(): void {
+    loadScenario(this.world, stealthScenario);
+    this.victorySystem.reset();
+    this.centerCameraOnFlagship();
+    this.camera.zoomToFit(200_000, 200_000);
+  }
+
+  private updateDarkModeUI(): void {
+    const ships = this.world.query(COMPONENT.Ship);
+    const anyDark = ships.some(id => {
+      const s = this.world.getComponent<Ship>(id, COMPONENT.Ship);
+      return s?.faction === 'player' && s?.darkMode;
+    });
+    this.orderBar.setDarkMode(anyDark);
   }
 
   loadE2eScenario(): void {

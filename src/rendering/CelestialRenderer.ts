@@ -4,6 +4,7 @@ import { Position, CelestialBody, COMPONENT } from '../engine/components';
 import { DANGER_ZONE_MULTIPLIER } from '../engine/constants';
 
 interface BodyVisual {
+  bodyName: string;
   group: THREE.Group;
   bodyMesh: THREE.Mesh;
   gravityRings: THREE.LineLoop[];
@@ -44,7 +45,8 @@ export class CelestialRenderer {
       const body = world.getComponent<CelestialBody>(entityId, COMPONENT.CelestialBody)!;
 
       let visual = this.visuals.get(entityId);
-      if (!visual) {
+      if (!visual || visual.bodyName !== body.name) {
+        if (visual) this.group.remove(visual.group);
         visual = this.createBodyVisual(body);
         this.visuals.set(entityId, visual);
         this.group.add(visual.group);
@@ -134,7 +136,7 @@ export class CelestialRenderer {
     const label = this.createLabel(body.name);
     group.add(label);
 
-    return { group, bodyMesh, gravityRings, dangerRing, label };
+    return { bodyName: body.name, group, bodyMesh, gravityRings, dangerRing, label };
   }
 
   private createLabel(text: string): THREE.Sprite {

@@ -98,7 +98,8 @@ export class PDCSystem {
       // Anti-ship strafe with leftover rounds. Picks the nearest hostile
       // ship inside shipRange — close-range chip damage to harass disabled
       // or hull-stripped enemies, never the primary kill weapon.
-      if (roundsLeft > 0 && (pdc.shipRange ?? 0) > 0) {
+      // Disabled in dark mode — firing would reveal position.
+      if (roundsLeft > 0 && (pdc.shipRange ?? 0) > 0 && !ship.darkMode) {
         const shipRangeSq = pdc.shipRange! * pdc.shipRange!;
         const allShips = world.query(COMPONENT.Position, COMPONENT.Ship);
         let nearestEnemy: { id: EntityId; dist: number; closingSpeed: number } | null = null;

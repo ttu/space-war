@@ -37,6 +37,15 @@ export interface Ship extends Component {
   hullClass: string;
   faction: Faction;
   flagship: boolean;
+  darkMode?: boolean;
+}
+
+/** A zone that triggers victory when enough ships of a faction enter it. */
+export interface ObjectiveZone extends Component {
+  type: 'ObjectiveZone';
+  faction: Faction;
+  requiredCount: number;
+  radius: number; // km
 }
 
 export interface Thruster extends Component {
@@ -200,4 +209,5 @@ export const COMPONENT = {
   Projectile: 'Projectile',
   ShipSystems: 'ShipSystems',
   AIStrategicIntent: 'AIStrategicIntent',
+  ObjectiveZone: 'ObjectiveZone',
 } as const;

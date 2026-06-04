@@ -6,6 +6,7 @@ export interface OrderBarCallbacks {
   onPendingOrderChange: (order: PendingOrderType) => void;
   onShadowToggle?: (enabled: boolean) => void;
   onPdcToggle?: (enabled: boolean) => void;
+  onDarkToggle?: (enabled: boolean) => void;
 }
 
 /**
@@ -20,6 +21,8 @@ export class OrderBar {
   private pdcBtn!: HTMLButtonElement;
   private pdcEnabled = true;
   private pdcFiringTimer: ReturnType<typeof setTimeout> | null = null;
+  private darkBtn!: HTMLButtonElement;
+  private darkMode = false;
 
   constructor(
     container: HTMLElement,
@@ -50,6 +53,14 @@ export class OrderBar {
     const separator = document.createElement('div');
     separator.className = 'order-bar-separator';
     this.root.appendChild(separator);
+
+    this.darkBtn = document.createElement('button');
+    this.darkBtn.type = 'button';
+    this.darkBtn.className = 'order-bar-btn order-bar-toggle';
+    this.darkBtn.textContent = 'Go Dark (G)';
+    this.darkBtn.title = 'Cut all emissions — undetectable but cannot maneuver or fire';
+    this.darkBtn.addEventListener('click', () => this.toggleDark());
+    this.root.appendChild(this.darkBtn);
 
     this.pdcBtn = document.createElement('button');
     this.pdcBtn.type = 'button';
@@ -119,6 +130,21 @@ export class OrderBar {
 
   getPendingOrder(): PendingOrderType {
     return this.pendingOrder;
+  }
+
+  toggleDark(): void {
+    this.darkMode = !this.darkMode;
+    this.darkBtn.classList.toggle('active', this.darkMode);
+    this.callbacks.onDarkToggle?.(this.darkMode);
+  }
+
+  setDarkMode(enabled: boolean): void {
+    this.darkMode = enabled;
+    this.darkBtn.classList.toggle('active', this.darkMode);
+  }
+
+  getDarkMode(): boolean {
+    return this.darkMode;
   }
 
   toggleShadows(): void {

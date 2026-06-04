@@ -5,7 +5,7 @@
 
 import { World } from '../types';
 import { EventBus } from '../core/EventBus';
-import { Ship, COMPONENT } from '../components';
+import { Ship, Position, ObjectiveZone, COMPONENT } from '../components';
 
 export class VictorySystem {
   private victoryEmitted = false;
@@ -47,6 +47,31 @@ export class VictorySystem {
         time: gameTime,
         data: {},
       });
+      return;
+    }
+
+    // Check objective zones
+    if (!this.victoryEmitted) {
+      const zoneIds = world.query(COMPONENT.ObjectiveZone, COMPONENT.Position);
+      for (const zoneId of zoneIds) {
+        const zone = world.getComponent<ObjectiveZone>(zoneId, COMPONENT.ObjectiveZone)!;
+        const zonePos = world.getComponent<Position>(zoneId, COMPONENT.Position)!;
+        const shipIds2 = world.query(COMPONENT.Ship, COMPONENT.Position);
+        let count = 0;
+        for (const sid of shipIds2) {
+          const s = world.getComponent<Ship>(sid, COMPONENT.Ship)!;
+          if (s.faction !== zone.faction) continue;
+          const sp = world.getComponent<Position>(sid, COMPONENT.Position)!;
+          const dx = sp.x - zonePos.x;
+          const dy = sp.y - zonePos.y;
+          if (dx * dx + dy * dy <= zone.radius * zone.radius) count++;
+        }
+        if (count >= zone.requiredCount) {
+          this.victoryEmitted = true;
+          this.eventBus.emit({ type: 'VictoryAchieved', time: gameTime, data: {} });
+          return;
+        }
+      }
     }
   }
 }

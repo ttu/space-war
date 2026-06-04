@@ -138,7 +138,7 @@ export class SensorSystem {
         ay = Math.sin(thruster.thrustAngle) * accel;
       }
 
-      result.push({ entityId, pos, vel, thermal, throttle, ax, ay });
+      result.push({ entityId, pos, vel, thermal, throttle, ax, ay, darkMode: ship.darkMode ?? false });
     }
     return result;
   }
@@ -148,8 +148,8 @@ export class SensorSystem {
     target: TargetShipData,
     occludingBodies: OccludingBody[],
   ): { signalStrength: number; distance: number } | null {
-    const effectiveSignature = target.thermal.baseSignature +
-      target.throttle * target.thermal.thrustMultiplier;
+    const effectiveSignature = (target.darkMode ? target.thermal.baseSignature * 0.1 : target.thermal.baseSignature)
+      + target.throttle * target.thermal.thrustMultiplier;
 
     let bestSignal: { signalStrength: number; distance: number } | null = null;
 
@@ -248,6 +248,7 @@ interface TargetShipData {
   throttle: number;
   ax: number;  // current acceleration x (km/s²) for light-delay velocity correction
   ay: number;  // current acceleration y (km/s²)
+  darkMode: boolean;
 }
 
 interface OccludingBody {

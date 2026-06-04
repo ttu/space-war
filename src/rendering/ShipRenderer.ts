@@ -86,6 +86,10 @@ export class ShipRenderer {
       }
       visual.group.visible = true;
 
+      // Update icon color: dimmed grey when going dark
+      const iconMaterial = visual.icon.material as THREE.MeshBasicMaterial;
+      iconMaterial.color.setHex(ship.darkMode ? 0x555555 : FACTION_COLORS[ship.faction]);
+
       // Position: use velocity-extrapolated position for enemy contacts
       if (contact && gameTime !== undefined) {
         const age = gameTime - contact.receivedTime;

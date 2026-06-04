@@ -14,7 +14,8 @@ export type InputEvent =
   | { type: 'togglePdc' }
   | { type: 'setOrder'; order: 'move' | 'fireMissile' | 'fireRailgun' }
   | { type: 'deleteKey'; screenX: number; screenY: number }
-  | { type: 'panelToggle'; code: string };
+  | { type: 'panelToggle'; code: string }
+  | { type: 'toggleDark' };
 
 type InputEventCallback = (event: InputEvent) => void;
 
@@ -88,6 +89,10 @@ export class InputManager {
       if (e.code === 'KeyP') {
         e.preventDefault();
         this.emit({ type: 'togglePdc' });
+      }
+      if (e.code === 'KeyG') {
+        e.preventDefault();
+        this.emit({ type: 'toggleDark' });
       }
       if (e.code === 'KeyM') {
         e.preventDefault();

@@ -14,7 +14,7 @@ import type { CommandHandler } from '../game/CommandHandler';
 
 const MIN_RAILGUN_PROB = 0.35;
 const MISSILE_RANGE_FRACTION = 0.9;
-const MAX_MISSILE_REL_SPEED = 40;
+const MAX_MISSILE_REL_SPEED = 100;
 const REFRESH_GAME_SECONDS = 3;
 /** Show approach ETA warning when contact enters range within this many game seconds. */
 const APPROACH_WARN_SECONDS = 300;
@@ -60,6 +60,7 @@ export class AdvisorPanel {
   private root: HTMLElement;
   private list: HTMLElement;
   private lastRefreshTime = -999;
+  private hadRecsLastUpdate = false;
 
   constructor(
     container: HTMLElement,
@@ -67,6 +68,7 @@ export class AdvisorPanel {
     private commandHandler: CommandHandler,
     private getGameTime: () => number,
     private getPlayerTracker: () => ContactTracker | undefined,
+    private onFireOpportunity?: () => void,
   ) {
     this.root = document.createElement('div');
     this.root.id = 'advisor-panel';
@@ -84,6 +86,12 @@ export class AdvisorPanel {
     container.appendChild(this.root);
   }
 
+  reset(): void {
+    this.lastRefreshTime = -999;
+    this.hadRecsLastUpdate = false;
+    this.list.textContent = '';
+  }
+
   update(): void {
     const t = this.getGameTime();
     if (t - this.lastRefreshTime < REFRESH_GAME_SECONDS) return;
@@ -99,6 +107,11 @@ export class AdvisorPanel {
 
     const recs = this.computeRecommendations(tracker, gameTime);
     const status = this.computeStatusItems(tracker, gameTime);
+
+    if (recs.length > 0 && !this.hadRecsLastUpdate) {
+      this.onFireOpportunity?.();
+    }
+    this.hadRecsLastUpdate = recs.length > 0;
 
     // Fire recommendations
     for (const rec of recs) {
@@ -195,7 +208,7 @@ export class AdvisorPanel {
       const launcher = this.world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher);
       if (launcher && (launcher.integrity ?? 100) > 0 && launcher.ammo > 0) {
         const effectiveRange = launcher.maxRange * MISSILE_RANGE_FRACTION;
-        if (best.dist <= effectiveRange && best.relSpeed <= MAX_MISSILE_REL_SPEED && best.closing >= 0) {
+        if (best.dist <= effectiveRange && best.relSpeed <= MAX_MISSILE_REL_SPEED) {
           const rangePct = Math.round((1 - best.dist / effectiveRange) * 80 + 20);
           const ready = gameTime - launcher.lastFiredTime >= launcher.reloadTime;
           recs.push({

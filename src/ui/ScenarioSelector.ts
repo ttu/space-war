@@ -12,6 +12,7 @@ const SCENARIOS: ScenarioEntry[] = [
   { id: 'solarSystem', label: 'Inner Solar System' },
   { id: 'redDwarf', label: 'Red Dwarf System' },
   { id: 'provingGrounds', label: '1v1 Proving Grounds' },
+  { id: 'stealth', label: 'Into the Dark' },
   { id: 'tutorial', label: 'Tutorial' },
   { id: 'patrol', label: 'Patrol' },
   { id: 'fleet-action', label: 'Fleet Action' },

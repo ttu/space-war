@@ -9,6 +9,7 @@ import {
   AIStrategicIntent,
   DetectedContact,
   COMPONENT,
+  MissileLauncher,
 } from '../../../src/engine/components';
 import { EntityId } from '../../../src/engine/types';
 
@@ -46,6 +47,18 @@ function createEnemyShip(
     objective: 'hold',
     nextStrategicUpdate: 0,
   });
+  world.addComponent(id, {
+    type: 'MissileLauncher',
+    ammo: 12,
+    maxAmmo: 12,
+    salvoSize: 3,
+    reloadTime: 60,
+    lastFiredTime: -999,
+    maxRange: 35000,
+    projectileSpeed: 50,
+    guidanceMode: 'sensor',
+    integrity: 100,
+  } as MissileLauncher);
   return id;
 }
 

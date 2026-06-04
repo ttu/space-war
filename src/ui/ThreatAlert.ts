@@ -7,11 +7,14 @@ import type { GameTime } from '../engine/core/GameTime';
  */
 const COOLDOWN_MS = 20_000;
 
+const AUTO_DISMISS_MS = 8_000;
+
 export class ThreatAlert {
   private overlay: HTMLElement;
   private msgEl: HTMLElement;
   private isVisible = false;
   private lastDismissedAt = 0;
+  private autoDismissTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     container: HTMLElement,
@@ -74,10 +77,15 @@ export class ThreatAlert {
     this.msgEl.textContent = message;
     this.overlay.style.display = 'flex';
     this.isVisible = true;
+    this.autoDismissTimer = setTimeout(() => this.dismiss(true), AUTO_DISMISS_MS);
   }
 
   /** @param restore true = resume prior speed, false = stay at 1× */
   dismiss(restore = true): void {
+    if (this.autoDismissTimer !== null) {
+      clearTimeout(this.autoDismissTimer);
+      this.autoDismissTimer = null;
+    }
     this.overlay.style.display = 'none';
     this.isVisible = false;
     this.lastDismissedAt = Date.now();

@@ -132,6 +132,8 @@ const sensors: SensorModule[] = [
   { id: 'sensor_medium', name: 'Sensor Medium', kind: 'sensor', maxRange: 10_000_000, sensitivity: 5e-13 },
   { id: 'sensor_heavy', name: 'Sensor Heavy', kind: 'sensor', maxRange: 50_000_000, sensitivity: 2e-14 },
   { id: 'sensor_carrier', name: 'Sensor Carrier', kind: 'sensor', maxRange: 150_000_000, sensitivity: 5e-16 },
+  // Short-range patrol sensor for stealth scenario
+  { id: 'sensor_stealth_patrol', name: 'Patrol Sensor', kind: 'sensor', maxRange: 200_000, sensitivity: 3e-9 },
 ];
 
 const byId = new Map<string, ModuleTemplate>();

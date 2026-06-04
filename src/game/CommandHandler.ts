@@ -239,6 +239,22 @@ export class CommandHandler {
   }
 
   /**
+   * Toggle dark mode for a single ship. When going dark, removes nav order and zeros throttle.
+   */
+  toggleDarkMode(shipId: EntityId): void {
+    const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship);
+    if (!ship) return;
+    ship.darkMode = !ship.darkMode;
+    if (ship.darkMode) {
+      if (this.world.hasComponent(shipId, COMPONENT.NavigationOrder)) {
+        this.world.removeComponent(shipId, COMPONENT.NavigationOrder);
+      }
+      const thruster = this.world.getComponent<Thruster>(shipId, COMPONENT.Thruster);
+      if (thruster) thruster.throttle = 0;
+    }
+  }
+
+  /**
    * Issue a move-to order for a single ship (used by AI). No faction or selection check.
    */
   issueMoveToForShip(shipId: EntityId, targetX: number, targetY: number, matchVx?: number, matchVy?: number): void {
@@ -246,6 +262,10 @@ export class CommandHandler {
     const vel = this.world.getComponent<Velocity>(shipId, COMPONENT.Velocity);
     const thruster = this.world.getComponent<Thruster>(shipId, COMPONENT.Thruster);
     if (!pos || !vel || !thruster) return;
+
+    // Exit dark mode when issuing a move order
+    const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship);
+    if (ship?.darkMode) ship.darkMode = false;
 
     const bodies = getBodiesFromWorld(this.world);
     const avoidanceWaypoints = getSafeWaypoints(pos.x, pos.y, targetX, targetY, bodies);
@@ -406,6 +426,7 @@ export class CommandHandler {
     const launcher = this.world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher);
     const targetPos = this.world.getComponent<Position>(targetId, COMPONENT.Position);
     if (!ship || !launcher || !targetPos) return false;
+    if (ship.darkMode) ship.darkMode = false;
     if ((launcher.integrity ?? 100) <= 0) return false;
     if (launcher.lastFiredTime > 0 && gameTime - launcher.lastFiredTime < launcher.reloadTime) return false;
     const salvoSize = Math.min(launcher.salvoSize, launcher.ammo);
@@ -485,6 +506,7 @@ export class CommandHandler {
     const targetPos = this.world.getComponent<Position>(targetId, COMPONENT.Position);
     const targetVel = this.world.getComponent<Velocity>(targetId, COMPONENT.Velocity);
     if (!ship || !railgun || !targetPos) return false;
+    if (ship.darkMode) ship.darkMode = false;
     if ((railgun.integrity ?? 100) <= 0) return false;
     if (railgun.ammo <= 0) return false;
     if (gameTime - railgun.lastFiredTime < railgun.reloadTime) return false;

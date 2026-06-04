@@ -30,6 +30,7 @@ import {
   Railgun,
   AIStrategicIntent,
   StationKeeping,
+  ObjectiveZone,
   type Faction,
 } from '../components';
 
@@ -56,11 +57,21 @@ export interface ScenarioShip {
   vx?: number;
   vy?: number;
   loadout?: ShipLoadout;
+  stationKeeping?: boolean;
+}
+
+export interface ScenarioZone {
+  x: number;
+  y: number;
+  faction: Faction;
+  requiredCount: number;
+  radius: number;
 }
 
 export interface Scenario {
   celestials?: ScenarioCelestial[];
   ships: ScenarioShip[];
+  zones?: ScenarioZone[];
 }
 
 function isFaction(s: string): s is Faction {
@@ -167,7 +178,7 @@ export function loadScenario(world: World, scenario: Scenario): void {
     } as RotationState);
     world.addComponent(id, {
       type: 'StationKeeping',
-      enabled: true,
+      enabled: s.stationKeeping ?? true,
     } as StationKeeping);
     world.addComponent(id, {
       type: 'ThermalSignature',
@@ -230,6 +241,12 @@ export function loadScenario(world: World, scenario: Scenario): void {
         nextStrategicUpdate: 0,
       } as AIStrategicIntent);
     }
+  }
+
+  for (const z of (scenario.zones ?? [])) {
+    const zId = world.createEntity();
+    world.addComponent(zId, { type: 'Position', x: z.x, y: z.y, prevX: z.x, prevY: z.y } as Position);
+    world.addComponent(zId, { type: 'ObjectiveZone', faction: z.faction, requiredCount: z.requiredCount, radius: z.radius } as ObjectiveZone);
   }
 
   for (const faction of factionsSeen) {
