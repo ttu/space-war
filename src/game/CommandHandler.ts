@@ -6,7 +6,7 @@ import {
   CelestialBody, COMPONENT,
 } from '../engine/components';
 import { computeBurnPlan, angleBetweenPoints } from '../engine/utils/TrajectoryCalculator';
-import { computeLeadSolution, hitProbability } from '../engine/utils/FiringComputer';
+import { computeLeadSolution, hitProbability, missileHitProbability } from '../engine/utils/FiringComputer';
 import { getBodiesFromWorld, getSafeWaypoints } from '../engine/utils/PlanetAvoidance';
 import { DANGER_ZONE_MULTIPLIER } from '../engine/constants';
 
@@ -424,10 +424,10 @@ export class CommandHandler {
     this.world.addComponent<Position>(missileId, {
       type: 'Position', x: pos.x, y: pos.y, prevX: pos.x, prevY: pos.y,
     });
+    const missileVx = vel.vx + dirX * launchBoost;
+    const missileVy = vel.vy + dirY * launchBoost;
     this.world.addComponent<Velocity>(missileId, {
-      type: 'Velocity',
-      vx: vel.vx + dirX * launchBoost,
-      vy: vel.vy + dirY * launchBoost,
+      type: 'Velocity', vx: missileVx, vy: missileVy,
     });
     this.world.addComponent<Facing>(missileId, {
       type: 'Facing', angle: Math.atan2(dirY, dirX),
@@ -436,6 +436,12 @@ export class CommandHandler {
       type: 'ThermalSignature', baseSignature: 100, thrustMultiplier: 500,
     });
     const missileFuel = launcher.maxRange / (launcher.missileAccel * 100);
+    const targetVel = this.world.getComponent<Velocity>(targetId, COMPONENT.Velocity);
+    const initialHitProb = missileHitProbability(
+      pos.x, pos.y, missileVx, missileVy,
+      launcher.missileAccel, missileFuel, launcher.seekerRange,
+      targetPos.x, targetPos.y, targetVel?.vx ?? 0, targetVel?.vy ?? 0,
+    );
     this.world.addComponent<Missile>(missileId, {
       type: 'Missile',
       targetId,
@@ -452,7 +458,7 @@ export class CommandHandler {
       armingDistance: 5,
       launchX: pos.x,
       launchY: pos.y,
-      hitProbability: 0,
+      hitProbability: initialHitProb,
     });
     this.world.addComponent<Selectable>(missileId, {
       type: 'Selectable', selected: false,
@@ -597,10 +603,10 @@ export class CommandHandler {
       this.world.addComponent<Position>(missileId, {
         type: 'Position', x: pos.x, y: pos.y, prevX: pos.x, prevY: pos.y,
       });
+      const missileVx = vel.vx + dirX * launchBoost;
+      const missileVy = vel.vy + dirY * launchBoost;
       this.world.addComponent<Velocity>(missileId, {
-        type: 'Velocity',
-        vx: vel.vx + dirX * launchBoost,
-        vy: vel.vy + dirY * launchBoost,
+        type: 'Velocity', vx: missileVx, vy: missileVy,
       });
       this.world.addComponent<Facing>(missileId, {
         type: 'Facing', angle: Math.atan2(dirY, dirX),
@@ -609,6 +615,12 @@ export class CommandHandler {
         type: 'ThermalSignature', baseSignature: 100, thrustMultiplier: 500,
       });
       const missileFuel = launcher.maxRange / (launcher.missileAccel * 100);
+      const targetVel = this.world.getComponent<Velocity>(targetId, COMPONENT.Velocity);
+      const initialHitProb = missileHitProbability(
+        pos.x, pos.y, missileVx, missileVy,
+        launcher.missileAccel, missileFuel, launcher.seekerRange,
+        targetPos.x, targetPos.y, targetVel?.vx ?? 0, targetVel?.vy ?? 0,
+      );
       this.world.addComponent<Missile>(missileId, {
         type: 'Missile',
         targetId,
@@ -625,7 +637,7 @@ export class CommandHandler {
         armingDistance: 5,
         launchX: pos.x,
         launchY: pos.y,
-        hitProbability: 0,
+        hitProbability: initialHitProb,
       });
       this.world.addComponent<Selectable>(missileId, {
         type: 'Selectable', selected: false,
