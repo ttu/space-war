@@ -36,7 +36,7 @@ export class PDCSystem {
       const svy = shipVel?.vy ?? 0;
       const integrityFactor = (pdc.integrity ?? 100) / 100;
 
-      const hostileMissiles: { id: EntityId; distSq: number; closingSpeed: number }[] = [];
+      const hostileMissiles: { id: EntityId; distSq: number; closingSpeed: number; x: number; y: number }[] = [];
       for (const missileId of missiles) {
         const missile = world.getComponent<Missile>(missileId, COMPONENT.Missile)!;
         if (missile.launcherFaction === faction) continue;
@@ -49,13 +49,13 @@ export class PDCSystem {
           const rvx = (mvel?.vx ?? 0) - svx;
           const rvy = (mvel?.vy ?? 0) - svy;
           const closingSpeed = Math.sqrt(rvx * rvx + rvy * rvy);
-          hostileMissiles.push({ id: missileId, distSq, closingSpeed });
+          hostileMissiles.push({ id: missileId, distSq, closingSpeed, x: mpos.x, y: mpos.y });
         }
       }
       hostileMissiles.sort((a, b) => a.distSq - b.distSq);
 
       let roundsLeft = roundsThisTick;
-      for (const { id: missileId, closingSpeed } of hostileMissiles) {
+      for (const { id: missileId, closingSpeed, x: mx, y: my } of hostileMissiles) {
         if (roundsLeft <= 0) break;
         const missile = world.getComponent<Missile>(missileId, COMPONENT.Missile);
         if (!missile || missile.count <= 0) continue;
@@ -77,7 +77,7 @@ export class PDCSystem {
               time: gameTime,
               entityId: shipId,
               targetId: missileId,
-              data: { faction },
+              data: { faction, x: mx, y: my },
             });
           }
         }

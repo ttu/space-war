@@ -15,8 +15,20 @@ const RING_COLOR = new THREE.Color(0xff8844);
 const FLASH_COLOR = new THREE.Color(0xffffff);
 const DEBRIS_COLOR = new THREE.Color(0xff6622);
 
+// Intercept burst (PDC kills missile) — smaller and faster than ship explosion
+const INTERCEPT_DURATION_MS = 450;
+const INTERCEPT_RING_RADIUS = 500;
+const INTERCEPT_PARTICLE_COUNT = 8;
+const INTERCEPT_PARTICLE_SPEED = (INTERCEPT_RING_RADIUS * 0.7) / INTERCEPT_DURATION_MS;
+const INTERCEPT_RING_COLOR = new THREE.Color(0x44ffff);
+const INTERCEPT_FLASH_COLOR = new THREE.Color(0xffffff);
+const INTERCEPT_DEBRIS_COLOR = new THREE.Color(0x88ffff);
+
 interface ExplosionEffect {
   startMs: number;
+  duration: number;
+  maxRingRadius: number;
+  particleCount: number;
   ring: THREE.LineLoop;
   ringMat: THREE.LineBasicMaterial;
   ringGeom: THREE.BufferGeometry;
@@ -62,6 +74,13 @@ export class ExplosionRenderer {
       const y = e.data?.y as number | undefined ?? 0;
       this.spawn(x, y);
     });
+    eventBus.subscribe('MissileIntercepted', (e) => {
+      const x = e.data?.x as number | undefined;
+      const y = e.data?.y as number | undefined;
+      if (x !== undefined && y !== undefined) {
+        this.spawnIntercept(x, y);
+      }
+    });
   }
 
   private spawn(x: number, y: number): void {
@@ -103,6 +122,58 @@ export class ExplosionRenderer {
 
     this.effects.push({
       startMs: performance.now(),
+      duration: DURATION_MS,
+      maxRingRadius: MAX_RING_RADIUS,
+      particleCount: PARTICLE_COUNT,
+      ring, ringMat, ringGeom,
+      flash, flashMat, flashGeom,
+      particles, particleMat, particleGeom,
+      velocities, x, y,
+    });
+  }
+
+  private spawnIntercept(x: number, y: number): void {
+    const ringGeom = buildRingGeometry(RING_SEGMENTS);
+    const ringMat = new THREE.LineBasicMaterial({ color: INTERCEPT_RING_COLOR, transparent: true, opacity: 1 });
+    const ring = new THREE.LineLoop(ringGeom, ringMat);
+    ring.position.set(x, y, 0.1);
+
+    const flashGeom = buildRingGeometry(RING_SEGMENTS);
+    const flashMat = new THREE.LineBasicMaterial({ color: INTERCEPT_FLASH_COLOR, transparent: true, opacity: 1 });
+    const flash = new THREE.LineLoop(flashGeom, flashMat);
+    flash.position.set(x, y, 0.11);
+
+    const particlePositions = new Float32Array(INTERCEPT_PARTICLE_COUNT * 3);
+    const velocities = new Float32Array(INTERCEPT_PARTICLE_COUNT * 2);
+    for (let i = 0; i < INTERCEPT_PARTICLE_COUNT; i++) {
+      const angle = (i / INTERCEPT_PARTICLE_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+      const speed = INTERCEPT_PARTICLE_SPEED * (0.5 + Math.random() * 0.5);
+      velocities[i * 2] = Math.cos(angle) * speed;
+      velocities[i * 2 + 1] = Math.sin(angle) * speed;
+      particlePositions[i * 3] = x;
+      particlePositions[i * 3 + 1] = y;
+      particlePositions[i * 3 + 2] = 0.05;
+    }
+    const particleGeom = new THREE.BufferGeometry();
+    particleGeom.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particleMat = new THREE.PointsMaterial({
+      color: INTERCEPT_DEBRIS_COLOR,
+      size: 3,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 1,
+    });
+    const particles = new THREE.Points(particleGeom, particleMat);
+
+    this.group.add(ring);
+    this.group.add(flash);
+    this.group.add(particles);
+
+    this.effects.push({
+      startMs: performance.now(),
+      duration: INTERCEPT_DURATION_MS,
+      maxRingRadius: INTERCEPT_RING_RADIUS,
+      particleCount: INTERCEPT_PARTICLE_COUNT,
       ring, ringMat, ringGeom,
       flash, flashMat, flashGeom,
       particles, particleMat, particleGeom,
@@ -114,7 +185,7 @@ export class ExplosionRenderer {
     const now = performance.now();
     this.effects = this.effects.filter((eff) => {
       const elapsed = now - eff.startMs;
-      const t = Math.min(1, elapsed / DURATION_MS);
+      const t = Math.min(1, elapsed / eff.duration);
 
       if (t >= 1) {
         this.group.remove(eff.ring);
@@ -130,20 +201,20 @@ export class ExplosionRenderer {
       }
 
       // Expanding ring: grows and fades
-      const ringRadius = t * MAX_RING_RADIUS;
+      const ringRadius = t * eff.maxRingRadius;
       eff.ring.scale.set(ringRadius, ringRadius, 1);
       eff.ringMat.opacity = 1 - t;
 
       // Flash: quick bright burst in first 20% then gone
       const flashT = Math.min(1, t / 0.2);
-      const flashRadius = flashT * MAX_RING_RADIUS * 0.3;
+      const flashRadius = flashT * eff.maxRingRadius * 0.3;
       eff.flash.scale.set(flashRadius, flashRadius, 1);
       eff.flashMat.opacity = Math.max(0, 1 - flashT * 1.5);
 
       // Debris particles: spread outward, fade out in second half
       const posAttr = eff.particleGeom.attributes['position'] as THREE.BufferAttribute;
       const pos = posAttr.array as Float32Array;
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
+      for (let i = 0; i < eff.particleCount; i++) {
         pos[i * 3] = eff.x + eff.velocities[i * 2] * elapsed;
         pos[i * 3 + 1] = eff.y + eff.velocities[i * 2 + 1] * elapsed;
       }
