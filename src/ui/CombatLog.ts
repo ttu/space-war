@@ -51,7 +51,9 @@ function eventSummary(e: GameEvent): string | null {
     }
     case 'ShipDetected': {
       const n = e.data?.count as number | undefined;
-      return n && n > 1 ? `${t} ${n} contacts detected` : `${t} Contact detected`;
+      if (n && n > 1) return `${t} ${n} contacts detected`;
+      const name = e.data?.shipName as string | undefined;
+      return name ? `${t} Contact: ${name}` : `${t} Contact detected`;
     }
     case 'ShipLostContact': {
       const n = e.data?.count as number | undefined;

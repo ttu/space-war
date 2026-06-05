@@ -63,11 +63,12 @@ export class SensorSystem {
         tracker.contacts.set(target.entityId, contact);
 
         if (isNew && this.eventBus) {
+          const ship = world.getComponent<Ship>(target.entityId, COMPONENT.Ship);
           this.eventBus.emit({
             type: 'ShipDetected',
             time: gameTime,
             entityId: target.entityId,
-            data: { faction: tracker.faction },
+            data: { faction: tracker.faction, shipName: ship?.name },
           });
         }
       }
