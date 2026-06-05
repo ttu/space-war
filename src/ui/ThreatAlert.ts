@@ -89,7 +89,7 @@ export class ThreatAlert {
     this.overlay.style.display = 'none';
     this.isVisible = false;
     this.lastDismissedAt = Date.now();
-    if (restore) this.gameTime.restoreSpeed();
+    if (restore && !this.gameTime.isPaused) this.gameTime.restoreSpeed();
   }
 
   reset(): void {
