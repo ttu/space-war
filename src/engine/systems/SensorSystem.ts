@@ -75,7 +75,7 @@ export class SensorSystem {
 
     // Mark undetected contacts as lost (persist indefinitely for estimation)
     // Cooldown prevents event spam when contacts oscillate at sensor boundary
-    const LOST_EVENT_COOLDOWN = 60; // sim seconds between ShipLostContact events per contact
+    const LOST_EVENT_COOLDOWN = 600; // sim seconds between ShipLostContact events per contact
     for (const [entityId, contact] of tracker.contacts) {
       if (!detectedThisTick.has(entityId)) {
         if (!contact.lost) {
