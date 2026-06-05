@@ -8,7 +8,10 @@ import type { Scenario } from "../ScenarioLoader";
 import { circularOrbitSpeed } from "../../../utils/OrbitalMechanics";
 
 // --- Central body: a dim red dwarf ---
-const STAR_MASS = 2.0e29; // ~0.1 solar mass
+// Mass reduced to ~1 Jupiter mass so planets orbit at 17–27 km/s (vs 170–270 km/s
+// for a 0.1 solar mass body). Enemy ships approaching at 3 km/s can now actually
+// intercept a planet-anchored player rather than being outrun indefinitely.
+const STAR_MASS = 2.0e27; // ~1 Jupiter mass (brown dwarf)
 const STAR_RADIUS = 30_000; // km (visual radius, compact for gameplay)
 
 // --- Planets (small rocky worlds) ---
@@ -307,8 +310,8 @@ export const redDwarfScenario: Scenario = {
       flagship: true,
       x: calyx.x + 15_000,
       y: calyx.y,
-      vx: 0,
-      vy: shipOrbitalSpeedCalyx,
+      vx: calyx.vx,
+      vy: calyx.vy + shipOrbitalSpeedCalyx,
     },
     {
       templateId: "destroyer",
@@ -316,8 +319,8 @@ export const redDwarfScenario: Scenario = {
       faction: "enemy",
       x: calyx.x + 15_500,
       y: calyx.y + 600,
-      vx: 0,
-      vy: shipOrbitalSpeedCalyx * 0.98,
+      vx: calyx.vx,
+      vy: calyx.vy + shipOrbitalSpeedCalyx * 0.98,
     },
     {
       templateId: "frigate",
@@ -325,8 +328,8 @@ export const redDwarfScenario: Scenario = {
       faction: "enemy",
       x: calyx.x + 14_500,
       y: calyx.y - 500,
-      vx: 0,
-      vy: shipOrbitalSpeedCalyx * 1.02,
+      vx: calyx.vx,
+      vy: calyx.vy + shipOrbitalSpeedCalyx * 1.02,
     },
     {
       templateId: "corvette",
@@ -334,8 +337,8 @@ export const redDwarfScenario: Scenario = {
       faction: "enemy",
       x: calyx.x + 16_000,
       y: calyx.y + 1_200,
-      vx: 0,
-      vy: shipOrbitalSpeedCalyx * 0.97,
+      vx: calyx.vx,
+      vy: calyx.vy + shipOrbitalSpeedCalyx * 0.97,
     },
 
     // ============================
