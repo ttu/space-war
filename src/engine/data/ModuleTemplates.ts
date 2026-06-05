@@ -12,6 +12,8 @@ export interface MissileLauncherModule {
   reloadTime: number;
   maxRange: number;
   missileAccel: number;
+  /** Explicit burn time (seconds). Omit to derive from maxRange / (accel * 100). */
+  fuelTime?: number;
   ammo: number;
   seekerRange: number;
   seekerSensitivity: number;
@@ -107,6 +109,19 @@ const missileLaunchers: MissileLauncherModule[] = [
     seekerRange: 15_000,
     seekerSensitivity: 1e-8,
   },
+  {
+    id: 'ml_longrange',
+    name: 'Long Range Launcher',
+    kind: 'missile_launcher',
+    salvoSize: 4,
+    reloadTime: 90,
+    maxRange: 1_000_000,
+    missileAccel: 0.15,
+    fuelTime: 3_000,        // 3000 s burn → peak ~450 km/s; reaches 1M km in ~4500 s
+    ammo: 16,
+    seekerRange: 80_000,    // large seeker to acquire despite dead-reckoning drift
+    seekerSensitivity: 5e-9,
+  },
 ];
 
 const pdcs: PDCModule[] = [
@@ -127,10 +142,11 @@ const railguns: RailgunModule[] = [
 ];
 
 const sensors: SensorModule[] = [
-  // Earth–Moon ~384k km: easy detection. Ranges set for light-delay realism (8 min ≈ 144M km).
-  { id: 'sensor_light', name: 'Sensor Light', kind: 'sensor', maxRange: 1_000_000, sensitivity: 3e-12 },
-  { id: 'sensor_medium', name: 'Sensor Medium', kind: 'sensor', maxRange: 10_000_000, sensitivity: 5e-13 },
-  { id: 'sensor_heavy', name: 'Sensor Heavy', kind: 'sensor', maxRange: 50_000_000, sensitivity: 2e-14 },
+  // Sensitivity supports detection well beyond caps; caps set for playability.
+  // Corvette/destroyer idle at 1M km: signal 2.5e-11 >> 3e-12 → comfortably detected.
+  { id: 'sensor_light', name: 'Sensor Light', kind: 'sensor', maxRange: 3_000_000, sensitivity: 3e-12 },
+  { id: 'sensor_medium', name: 'Sensor Medium', kind: 'sensor', maxRange: 20_000_000, sensitivity: 5e-13 },
+  { id: 'sensor_heavy', name: 'Sensor Heavy', kind: 'sensor', maxRange: 100_000_000, sensitivity: 2e-14 },
   { id: 'sensor_carrier', name: 'Sensor Carrier', kind: 'sensor', maxRange: 150_000_000, sensitivity: 5e-16 },
   // Short-range patrol sensor for stealth scenario
   { id: 'sensor_stealth_patrol', name: 'Patrol Sensor', kind: 'sensor', maxRange: 200_000, sensitivity: 3e-9 },

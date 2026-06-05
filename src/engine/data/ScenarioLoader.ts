@@ -206,6 +206,7 @@ export function loadScenario(world: World, scenario: Scenario): void {
         lastFiredTime: 0,
         maxRange: mod.maxRange,
         missileAccel: mod.missileAccel,
+        fuelTime: mod.fuelTime,
         ammo: mod.ammo,
         seekerRange: mod.seekerRange,
         seekerSensitivity: mod.seekerSensitivity,

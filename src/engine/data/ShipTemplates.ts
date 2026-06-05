@@ -127,7 +127,7 @@ const templates: ShipTemplate[] = [
     baseSignature: 70,
     thrustMultiplier: 250,
     defaultLoadout: {
-      missileLauncher: 'ml_battleship_8',
+      missileLauncher: 'ml_longrange',
       pdc: 'pdc_battleship',
       railgun: 'rg_battleship',
       sensor: 'sensor_heavy',
@@ -146,7 +146,7 @@ const templates: ShipTemplate[] = [
     baseSignature: 80,
     thrustMultiplier: 220,
     defaultLoadout: {
-      missileLauncher: 'ml_heavy_6',
+      missileLauncher: 'ml_longrange',
       pdc: 'pdc_heavy',
       railgun: 'rg_medium',
       sensor: 'sensor_carrier',

@@ -37,7 +37,7 @@ describe('ModuleTemplates', () => {
     const m = getModuleById('sensor_heavy');
     expect(m).toBeDefined();
     expect(m!.kind).toBe('sensor');
-    expect((m as SensorModule).maxRange).toBe(50_000_000);
+    expect((m as SensorModule).maxRange).toBe(100_000_000);
   });
 
   it('returns undefined for unknown id', () => {
@@ -52,7 +52,7 @@ describe('ModuleTemplates', () => {
 
   it('getModulesByKind returns only matching kind', () => {
     const launchers = getModulesByKind('missile_launcher');
-    expect(launchers.length).toBe(4);
+    expect(launchers.length).toBe(5);
     expect(launchers.every((m) => m.kind === 'missile_launcher')).toBe(true);
   });
 

@@ -6,8 +6,10 @@ export interface MissileLauncher extends Component {
   salvoSize: number;      // missiles per salvo
   reloadTime: number;     // seconds between salvos
   lastFiredTime: number;  // game time of last launch
-  maxRange: number;       // km — fuel-limited max distance
+  maxRange: number;       // km — max engagement range (UI / targeting limit)
   missileAccel: number;   // km/s² — missile thrust
+  /** Seconds of engine burn. If omitted, derived from maxRange / (accel * 100). */
+  fuelTime?: number;
   ammo: number;           // total missiles remaining
   seekerRange: number;    // km — onboard seeker detection range
   seekerSensitivity: number; // onboard seeker threshold

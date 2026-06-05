@@ -491,7 +491,7 @@ export class CommandHandler {
     world.addComponent<ThermalSignature>(missileId, {
       type: 'ThermalSignature', baseSignature: 100, thrustMultiplier: 500,
     });
-    const missileFuel = launcher.maxRange / (launcher.missileAccel * 100);
+    const missileFuel = launcher.fuelTime ?? (launcher.maxRange / (launcher.missileAccel * 100));
     const targetVel = world.getComponent<Velocity>(targetId, COMPONENT.Velocity);
     const initialHitProb = missileHitProbability(
       pos.x, pos.y, missileVx, missileVy,
