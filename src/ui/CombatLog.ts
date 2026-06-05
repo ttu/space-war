@@ -233,7 +233,7 @@ export class CombatLog {
   private root: HTMLElement;
   private list: HTMLElement;
   readonly header: HTMLElement;
-  private lastCount = 0;
+  private lastEvent: GameEvent | undefined;
 
   constructor(
     container: HTMLElement,
@@ -271,7 +271,7 @@ export class CombatLog {
 
   clear(): void {
     this.list.textContent = '';
-    this.lastCount = 0;
+    this.lastEvent = undefined;
     this.eventBus.clearHistory();
   }
 
@@ -283,8 +283,9 @@ export class CombatLog {
   /** Call when rendering or on a timer to refresh from event history. */
   update(): void {
     const history = this.eventBus.getHistory();
-    if (history.length === this.lastCount) return;
-    this.lastCount = history.length;
+    const lastEvent = history[history.length - 1];
+    if (lastEvent === this.lastEvent) return;
+    this.lastEvent = lastEvent;
 
     const visible = history.filter(e => !AI_INTERNAL_EVENTS.has(e.type));
     const aggregated = aggregateSystemDamaged(
