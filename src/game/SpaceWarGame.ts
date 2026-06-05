@@ -120,6 +120,7 @@ export class SpaceWarGame {
   private threatAlert: ThreatAlert | null = null;
   private advisorPanel: AdvisorPanel | null = null;
   private pendingOrder: PendingOrderType = 'none';
+  private viewShadowsBtn!: HTMLButtonElement;
   currentScenarioId = 'solarSystem';
   private stealthUnsub?: () => void;
 
@@ -195,6 +196,7 @@ export class SpaceWarGame {
         this.orderBar.setPendingOrder('none');
         this.pendingOrder = 'none';
       },
+      getMissileVolley: () => this.orderBar.getMissileVolley(),
     });
 
     this.eventBus.subscribe('VictoryAchieved', () => {
@@ -461,9 +463,6 @@ export class SpaceWarGame {
       onPendingOrderChange: (order) => {
         this.pendingOrder = order;
       },
-      onShadowToggle: (enabled) => {
-        this.shadowsEnabled = enabled;
-      },
       onPdcToggle: (enabled) => {
         const ships = this.world.query(COMPONENT.Ship, COMPONENT.PDC);
         for (const shipId of ships) {
@@ -484,6 +483,18 @@ export class SpaceWarGame {
         }
       },
     }, this.eventBus);
+
+    // View controls — display toggles that are not combat orders
+    const viewWrap = document.createElement('div');
+    viewWrap.className = 'view-controls-wrap';
+    uiRoot.appendChild(viewWrap);
+    this.viewShadowsBtn = document.createElement('button');
+    this.viewShadowsBtn.type = 'button';
+    this.viewShadowsBtn.className = 'view-controls-btn active';
+    this.viewShadowsBtn.textContent = 'Shadows (V)';
+    this.viewShadowsBtn.title = 'Toggle sensor shadow zones for selected ships';
+    this.viewShadowsBtn.addEventListener('click', () => this.toggleShadows());
+    viewWrap.appendChild(this.viewShadowsBtn);
 
     // Combat log overlay (hidden by default, toggled with L)
     this.combatLog = new CombatLog(uiRoot, this.eventBus);
@@ -585,7 +596,7 @@ export class SpaceWarGame {
           this.focusNearestEnemy();
           break;
         case 'toggleShadows':
-          this.orderBar.toggleShadows();
+          this.toggleShadows();
           break;
         case 'togglePdc':
           this.orderBar.togglePdc();
@@ -605,6 +616,11 @@ export class SpaceWarGame {
           break;
       }
     });
+  }
+
+  private toggleShadows(): void {
+    this.shadowsEnabled = !this.shadowsEnabled;
+    this.viewShadowsBtn.classList.toggle('active', this.shadowsEnabled);
   }
 
   private togglePause(): void {
@@ -974,6 +990,7 @@ export class SpaceWarGame {
   // --- Simulation ---
 
   private fixedUpdate(dt: number): void {
+    this.commandHandler.processPendingMissileLaunches(this.world, this.gameTime.elapsed);
     this.commandHandler.processPendingRailgunBursts(this.world, this.gameTime.elapsed);
     this.sensorSystem.update(this.world, dt, this.gameTime.elapsed);
     this.railgunSystem.update(this.world, dt, this.gameTime.elapsed);

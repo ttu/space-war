@@ -4,10 +4,12 @@ export type PendingOrderType = 'none' | 'move' | 'fireMissile' | 'fireRailgun';
 
 export interface OrderBarCallbacks {
   onPendingOrderChange: (order: PendingOrderType) => void;
-  onShadowToggle?: (enabled: boolean) => void;
   onPdcToggle?: (enabled: boolean) => void;
   onDarkToggle?: (enabled: boolean) => void;
 }
+
+const VOLLEY_OPTIONS = [1, 2, 4] as const;
+type VolleyCount = typeof VOLLEY_OPTIONS[number];
 
 /**
  * Context-sensitive command buttons. Sets a pending order; the game uses it on next right-click.
@@ -16,13 +18,13 @@ export class OrderBar {
   private root: HTMLElement;
   private pendingOrder: PendingOrderType = 'none';
   private buttons: Map<PendingOrderType, HTMLButtonElement> = new Map();
-  private shadowBtn!: HTMLButtonElement;
-  private shadowsEnabled = true;
   private pdcBtn!: HTMLButtonElement;
   private pdcEnabled = true;
   private pdcFiringTimer: ReturnType<typeof setTimeout> | null = null;
   private darkBtn!: HTMLButtonElement;
   private darkMode = false;
+  private missileVolley: VolleyCount = 1;
+  private volleyBtns: Map<VolleyCount, HTMLButtonElement> = new Map();
 
   constructor(
     container: HTMLElement,
@@ -50,6 +52,27 @@ export class OrderBar {
     this.root.appendChild(btnMissile);
     this.root.appendChild(btnRailgun);
 
+    // Missile volley selector
+    const volleyRow = document.createElement('div');
+    volleyRow.className = 'order-bar-volley-row';
+
+    const volleyLabel = document.createElement('span');
+    volleyLabel.className = 'order-bar-volley-label';
+    volleyLabel.textContent = 'Salvo:';
+    volleyRow.appendChild(volleyLabel);
+
+    for (const n of VOLLEY_OPTIONS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'order-bar-btn order-bar-volley-btn' + (n === 1 ? ' active' : '');
+      btn.textContent = `×${n}`;
+      btn.title = `Fire ${n} missile${n > 1 ? `s, ${n * 4}s total` : ''}`;
+      btn.addEventListener('click', () => this.setMissileVolley(n));
+      this.volleyBtns.set(n, btn);
+      volleyRow.appendChild(btn);
+    }
+    this.root.appendChild(volleyRow);
+
     const separator = document.createElement('div');
     separator.className = 'order-bar-separator';
     this.root.appendChild(separator);
@@ -69,16 +92,6 @@ export class OrderBar {
     this.pdcBtn.title = 'Toggle point defense — automatically intercepts incoming missiles';
     this.pdcBtn.addEventListener('click', () => this.togglePdc());
     this.root.appendChild(this.pdcBtn);
-
-    this.shadowBtn = document.createElement('button');
-    this.shadowBtn.type = 'button';
-    this.shadowBtn.className = 'order-bar-btn order-bar-toggle active';
-    this.shadowBtn.textContent = 'Shadows (V)';
-    this.shadowBtn.title = 'Toggle sensor shadow zones for selected ships';
-    this.shadowBtn.addEventListener('click', () => {
-      this.toggleShadows();
-    });
-    this.root.appendChild(this.shadowBtn);
 
     container.appendChild(this.root);
 
@@ -132,6 +145,17 @@ export class OrderBar {
     return this.pendingOrder;
   }
 
+  private setMissileVolley(n: VolleyCount): void {
+    this.missileVolley = n;
+    this.volleyBtns.forEach((btn, key) => {
+      btn.classList.toggle('active', key === n);
+    });
+  }
+
+  getMissileVolley(): number {
+    return this.missileVolley;
+  }
+
   toggleDark(): void {
     this.darkMode = !this.darkMode;
     this.darkBtn.classList.toggle('active', this.darkMode);
@@ -145,16 +169,6 @@ export class OrderBar {
 
   getDarkMode(): boolean {
     return this.darkMode;
-  }
-
-  toggleShadows(): void {
-    this.shadowsEnabled = !this.shadowsEnabled;
-    this.shadowBtn.classList.toggle('active', this.shadowsEnabled);
-    this.callbacks.onShadowToggle?.(this.shadowsEnabled);
-  }
-
-  getShadowsEnabled(): boolean {
-    return this.shadowsEnabled;
   }
 
   togglePdc(): void {

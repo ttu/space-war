@@ -19,6 +19,7 @@ export interface InteractionDeps {
   getPlayerContacts: () => ContactTracker | undefined;
   getPendingOrder: () => PendingOrderType;
   clearPendingOrder: () => void;
+  getMissileVolley: () => number;
 }
 
 /**
@@ -157,7 +158,7 @@ export class PlayerInteractionHandler {
         : null;
 
     if (order === 'fireMissile' && clickedEnemy) {
-      commandHandler.launchMissile(clickedEnemy, gameTime.elapsed);
+      commandHandler.launchMissile(clickedEnemy, gameTime.elapsed, this.deps.getMissileVolley());
       clearPendingOrder();
     } else if (order === 'fireRailgun' && railgunTarget) {
       commandHandler.fireRailgun(railgunTarget, gameTime.elapsed);
