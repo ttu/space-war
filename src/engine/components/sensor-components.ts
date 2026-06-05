@@ -18,6 +18,7 @@ export interface DetectedContact {
   signalStrength: number; // detection strength for rendering confidence
   lost: boolean;          // true when contact dropped off sensors
   lostTime: number;       // game time when contact was lost
+  lastLostEventTime?: number; // game time of last ShipLostContact emission (for cooldown)
 }
 
 export interface ContactTracker extends Component {

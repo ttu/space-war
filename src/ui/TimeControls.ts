@@ -110,11 +110,14 @@ export class TimeControls {
   /** Call each frame or when time/speed changes. */
   update(): void {
     this.gameTimeLabel.textContent = this.gameTime.formatElapsed();
-    const atMin = this.gameTime.isPaused || this.gameTime.timeScale === 1;
+    const isGameOver = this.gameTime.isGameOver;
+    const atMin = isGameOver || this.gameTime.isPaused || this.gameTime.timeScale === 1;
     this.pausedLabel.classList.toggle('visible', atMin);
     this.pauseBtn.textContent = atMin ? '▶' : '⏸';
+    this.pauseBtn.disabled = isGameOver;
     this.speedButtons.forEach((btn, i) => {
-      btn.classList.toggle('active', SPEED_SCALES[i] === this.gameTime.timeScale);
+      btn.classList.toggle('active', !isGameOver && SPEED_SCALES[i] === this.gameTime.timeScale);
+      btn.disabled = isGameOver;
     });
     const lock = this.callbacks.getCameraLock?.() ?? null;
     if (this.lockWrap && this.lockLabel) {

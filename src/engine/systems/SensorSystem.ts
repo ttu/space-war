@@ -36,6 +36,7 @@ export class SensorSystem {
         detectedThisTick.add(target.entityId);
 
         const isNew = !tracker.contacts.has(target.entityId);
+        const existing = tracker.contacts.get(target.entityId);
 
         const lightDelay = bestDetection.distance / LIGHT_SPEED;
         const delayedX = target.pos.x - target.vel.vx * lightDelay;
@@ -56,6 +57,7 @@ export class SensorSystem {
           signalStrength: bestDetection.signalStrength,
           lost: false,
           lostTime: 0,
+          lastLostEventTime: existing?.lastLostEventTime, // preserve cooldown across re-detections
         };
 
         tracker.contacts.set(target.entityId, contact);
@@ -72,12 +74,18 @@ export class SensorSystem {
     }
 
     // Mark undetected contacts as lost (persist indefinitely for estimation)
+    // Cooldown prevents event spam when contacts oscillate at sensor boundary
+    const LOST_EVENT_COOLDOWN = 60; // sim seconds between ShipLostContact events per contact
     for (const [entityId, contact] of tracker.contacts) {
       if (!detectedThisTick.has(entityId)) {
         if (!contact.lost) {
           contact.lost = true;
           contact.lostTime = gameTime;
-          if (this.eventBus) {
+          const timeSinceLastLost = contact.lastLostEventTime !== undefined
+            ? gameTime - contact.lastLostEventTime
+            : Infinity; // first loss for this contact — always emit
+          if (this.eventBus && timeSinceLastLost >= LOST_EVENT_COOLDOWN) {
+            contact.lastLostEventTime = gameTime;
             this.eventBus.emit({
               type: 'ShipLostContact',
               time: gameTime,
