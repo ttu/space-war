@@ -72,6 +72,7 @@ export class ThreatAlert {
 
   trigger(message: string): void {
     if (this.isVisible) return;
+    if (this.gameTime.isPaused) return;
     if (Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
     this.gameTime.slowToMin();
     this.msgEl.textContent = message;
