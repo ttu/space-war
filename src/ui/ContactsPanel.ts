@@ -163,13 +163,20 @@ export class ContactsPanel {
         minAge = Math.min(minAge, info.minAgeSec);
         maxAge = Math.max(maxAge, info.maxAgeSec);
       }
-      summaryLoc = parts.length > 0 ? `Enemies at: ${parts.join(', ')}.` : 'Enemies detected.';
-      summaryAge =
-        maxAge >= 60
-          ? `Data ${Math.floor(minAge / 60)}–${Math.ceil(maxAge / 60)} min old (light delay).`
-          : maxAge > 0
-            ? `Data ${minAge.toFixed(0)}–${maxAge.toFixed(0)} s old.`
-            : `Data 0–0 s old.`;
+      if (parts.length > 0) {
+        summaryLoc = `Enemies at: ${parts.join(', ')}.`;
+        summaryAge =
+          maxAge >= 60
+            ? `Data ${Math.floor(minAge / 60)}–${Math.ceil(maxAge / 60)} min old (light delay).`
+            : maxAge > 0
+              ? `Data ${minAge.toFixed(0)}–${maxAge.toFixed(0)} s old.`
+              : `Data 0–0 s old.`;
+      } else {
+        // All contacts are lost — nothing actively tracked
+        const lostCount = contactIds.length;
+        summaryLoc = lostCount === 1 ? 'Contact lost.' : `${lostCount} contacts lost.`;
+        summaryAge = 'No active tracking.';
+      }
     }
     if (this.lastSummaryLoc !== summaryLoc) {
       this.lastSummaryLoc = summaryLoc;
