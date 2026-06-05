@@ -419,8 +419,8 @@ export const demoScenario: Scenario = {
       flagship: true,
       x: aridus.x + 10_000,
       y: aridus.y,
-      vx: 0,
-      vy: shipOrbitalSpeedAridus,
+      vx: aridus.vx,
+      vy: aridus.vy + shipOrbitalSpeedAridus,
     },
     {
       templateId: "destroyer",
@@ -428,8 +428,8 @@ export const demoScenario: Scenario = {
       faction: "player",
       x: aridus.x + 10_500,
       y: aridus.y + 800,
-      vx: 0,
-      vy: shipOrbitalSpeedAridus * 0.99,
+      vx: aridus.vx,
+      vy: aridus.vy + shipOrbitalSpeedAridus * 0.99,
     },
 
     // ============================
@@ -474,8 +474,8 @@ export const demoScenario: Scenario = {
       flagship: true,
       x: tundra.x + 15_000,
       y: tundra.y,
-      vx: 0,
-      vy: shipOrbitalSpeedTundra,
+      vx: tundra.vx,
+      vy: tundra.vy + shipOrbitalSpeedTundra,
     },
     {
       templateId: "destroyer",
@@ -483,8 +483,8 @@ export const demoScenario: Scenario = {
       faction: "enemy",
       x: tundra.x + 15_500,
       y: tundra.y + 600,
-      vx: 0,
-      vy: shipOrbitalSpeedTundra * 0.98,
+      vx: tundra.vx,
+      vy: tundra.vy + shipOrbitalSpeedTundra * 0.98,
     },
     {
       templateId: "frigate",
@@ -492,8 +492,8 @@ export const demoScenario: Scenario = {
       faction: "enemy",
       x: tundra.x + 14_500,
       y: tundra.y - 500,
-      vx: 0,
-      vy: shipOrbitalSpeedTundra * 1.02,
+      vx: tundra.vx,
+      vy: tundra.vy + shipOrbitalSpeedTundra * 1.02,
     },
     {
       templateId: "corvette",
@@ -501,8 +501,8 @@ export const demoScenario: Scenario = {
       faction: "enemy",
       x: tundra.x + 16_000,
       y: tundra.y + 1_200,
-      vx: 0,
-      vy: shipOrbitalSpeedTundra * 0.97,
+      vx: tundra.vx,
+      vy: tundra.vy + shipOrbitalSpeedTundra * 0.97,
     },
 
     // ============================

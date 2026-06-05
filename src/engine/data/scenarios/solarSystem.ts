@@ -147,12 +147,12 @@ export const solarSystemScenario: Scenario = {
     {
       templateId: 'cruiser', name: 'TCS Resolute', faction: 'player', flagship: true,
       x: TERRA_X + 42000, y: TERRA_Y,
-      vx: 0, vy: shipOrbitalSpeedTerra,
+      vx: 0, vy: terraOrbitalSpeed + shipOrbitalSpeedTerra,
     },
     {
       templateId: 'destroyer', name: 'TCS Vigilant', faction: 'player',
       x: TERRA_X + 42500, y: TERRA_Y + 1000,
-      vx: 0, vy: shipOrbitalSpeedTerra * 0.99,
+      vx: 0, vy: terraOrbitalSpeed + shipOrbitalSpeedTerra * 0.99,
     },
     // --- Enemy fleet near Terra (lower left of Earth) ---
     {
@@ -169,17 +169,17 @@ export const solarSystemScenario: Scenario = {
     {
       templateId: 'cruiser', name: 'UES Vanguard', faction: 'enemy',
       x: VENUS_X + 18000, y: VENUS_Y,
-      vx: 0, vy: shipOrbitalSpeedVenus,
+      vx: VENUS_VX, vy: VENUS_VY + shipOrbitalSpeedVenus,
     },
     {
       templateId: 'destroyer', name: 'UES Serpent', faction: 'enemy',
       x: VENUS_X + 18500, y: VENUS_Y + 800,
-      vx: 0, vy: shipOrbitalSpeedVenus * 0.98,
+      vx: VENUS_VX, vy: VENUS_VY + shipOrbitalSpeedVenus * 0.98,
     },
     {
       templateId: 'frigate', name: 'UES Viper', faction: 'enemy',
       x: VENUS_X + 17500, y: VENUS_Y - 600,
-      vx: 0, vy: shipOrbitalSpeedVenus * 1.02,
+      vx: VENUS_VX, vy: VENUS_VY + shipOrbitalSpeedVenus * 1.02,
     },
     // --- Enemy ships in transit Venus → Terra ---
     {
@@ -201,17 +201,17 @@ export const solarSystemScenario: Scenario = {
     {
       templateId: 'cruiser', name: 'UES Warhammer', faction: 'enemy',
       x: MARS_X, y: MARS_Y + 20000,
-      vx: -shipOrbitalSpeedMars, vy: 0,
+      vx: -marsOrbitalSpeed - shipOrbitalSpeedMars, vy: 0,
     },
     {
       templateId: 'destroyer', name: 'UES Stalker', faction: 'enemy',
       x: MARS_X, y: MARS_Y + 21000,
-      vx: -shipOrbitalSpeedMars * 0.98, vy: 0,
+      vx: -(marsOrbitalSpeed + shipOrbitalSpeedMars * 0.98), vy: 0,
     },
     {
       templateId: 'frigate', name: 'UES Fang', faction: 'enemy',
       x: MARS_X - 1000, y: MARS_Y + 19500,
-      vx: -shipOrbitalSpeedMars * 1.01, vy: 0,
+      vx: -(marsOrbitalSpeed + shipOrbitalSpeedMars * 1.01), vy: 0,
     },
   ],
 };
