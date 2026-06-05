@@ -453,3 +453,56 @@ describe('SensorSystem', () => {
     expect(tracker.contacts.size).toBe(1);
   });
 });
+
+describe('SensorSystem - stealth detection', () => {
+  // Stealth patrol sensor: sensitivity=3e-9, maxRange=200k km
+  // Corvette: baseSignature=25, dark mode reduces to 2.5
+  // At ~42k km (UES Sentinel position relative to player at T+09:36):
+  //   active: signal = 25/42438² = 1.39e-8  > 3e-9 → DETECTED
+  //   dark:   signal = 2.5/42438² = 1.39e-9 < 3e-9 → safe
+
+  it('detects player ship in active mode at 42k km with stealth patrol sensor', () => {
+    const world = new WorldImpl();
+    const events = new EventBusImpl();
+    const system = new SensorSystem(events);
+
+    createShip(world, { x: -92_400, y: 2_000, faction: 'player', baseSignature: 25, thrustMultiplier: 120 });
+    createShip(world, {
+      x: -49_963, y: 1_934, faction: 'enemy',
+      sensorMaxRange: 200_000, sensorSensitivity: 3e-9,
+    });
+    createContactTracker(world, 'enemy');
+
+    const detected: GameEvent[] = [];
+    events.subscribe('ShipDetected', e => detected.push(e));
+
+    system.update(world, 0.1, 576.0);
+
+    expect(detected.length).toBe(1);
+    expect(detected[0].data?.faction).toBe('enemy');
+  });
+
+  it('does NOT detect player ship in dark mode at 42k km with stealth patrol sensor', () => {
+    const world = new WorldImpl();
+    const events = new EventBusImpl();
+    const system = new SensorSystem(events);
+
+    const playerId = createShip(world, { x: -92_400, y: 2_000, faction: 'player', baseSignature: 25, thrustMultiplier: 120 });
+    createShip(world, {
+      x: -49_963, y: 1_934, faction: 'enemy',
+      sensorMaxRange: 200_000, sensorSensitivity: 3e-9,
+    });
+    createContactTracker(world, 'enemy');
+
+    // Enable dark mode on the player ship
+    const playerShip = world.getComponent<Ship>(playerId, COMPONENT.Ship)!;
+    playerShip.darkMode = true;
+
+    const detected: GameEvent[] = [];
+    events.subscribe('ShipDetected', e => detected.push(e));
+
+    system.update(world, 0.1, 576.0);
+
+    expect(detected.length).toBe(0);
+  });
+});
