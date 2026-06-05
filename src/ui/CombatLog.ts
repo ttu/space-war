@@ -48,10 +48,14 @@ function eventSummary(e: GameEvent): string | null {
       const dmg = e.data?.damage as number | undefined;
       return `${t} PDC burst: ${hits ?? '?'} hits, ${dmg ?? '?'} dmg`;
     }
-    case 'ShipDetected':
-      return `${t} Contact detected`;
-    case 'ShipLostContact':
-      return `${t} Contact lost`;
+    case 'ShipDetected': {
+      const n = e.data?.count as number | undefined;
+      return n && n > 1 ? `${t} ${n} contacts detected` : `${t} Contact detected`;
+    }
+    case 'ShipLostContact': {
+      const n = e.data?.count as number | undefined;
+      return n && n > 1 ? `${t} ${n} contacts lost` : `${t} Contact lost`;
+    }
     case 'SystemDamaged': {
       const systems = e.data?.systems as string[] | undefined;
       if (systems && systems.length > 0) {
@@ -88,6 +92,7 @@ export const _aggregatePDCHitsForTest = (events: GameEvent[]) => aggregatePDCHit
 export const _aggregateSystemDamagedForTest = (events: GameEvent[]) => aggregateSystemDamaged(events);
 export const _aggregateMissileLaunchedForTest = (events: GameEvent[]) => aggregateMissileLaunched(events);
 export const _aggregateMissileInterceptedForTest = (events: GameEvent[]) => aggregateMissileIntercepted(events);
+export const _aggregateContactEventsForTest = (events: GameEvent[]) => aggregateContactEvents(events);
 
 /**
  * Collapses PDCHit events for the same attacker-target pair within a 5-second
@@ -223,6 +228,37 @@ function aggregateSystemDamaged(events: GameEvent[]): GameEvent[] {
 }
 
 /**
+ * Collapses bursts of ShipDetected / ShipLostContact events within a 2-second
+ * window into a single entry so simultaneous detections don't flood the log.
+ */
+function aggregateContactEvents(events: GameEvent[]): GameEvent[] {
+  const WINDOW = 2;
+  const result: GameEvent[] = [];
+  const skip = new Set<number>();
+
+  for (let i = 0; i < events.length; i++) {
+    if (skip.has(i)) continue;
+    const e = events[i];
+    if (e.type !== 'ShipDetected' && e.type !== 'ShipLostContact') {
+      result.push(e);
+      continue;
+    }
+    let count = 1;
+    const windowEnd = e.time + WINDOW;
+    for (let j = i + 1; j < events.length; j++) {
+      const other = events[j];
+      if (other.time > windowEnd) break;
+      if (other.type === e.type) {
+        count++;
+        skip.add(j);
+      }
+    }
+    result.push({ ...e, data: { ...e.data, count } });
+  }
+  return result;
+}
+
+/**
  * Scrollable combat/event log fed from EventBus history.
  */
 export class CombatLog {
@@ -285,10 +321,12 @@ export class CombatLog {
     this.lastEvent = lastEvent;
 
     const visible = history.filter(e => !AI_INTERNAL_EVENTS.has(e.type));
-    const aggregated = aggregateSystemDamaged(
-      aggregateMissileIntercepted(
-        aggregateMissileLaunched(
-          aggregatePDCHits(visible)
+    const aggregated = aggregateContactEvents(
+      aggregateSystemDamaged(
+        aggregateMissileIntercepted(
+          aggregateMissileLaunched(
+            aggregatePDCHits(visible)
+          )
         )
       )
     );

@@ -321,13 +321,21 @@ export class AdvisorPanel {
       const gap = nearestDist - bestWeaponRange;
 
       if (nearestClosing > 0.5) {
-        // Closing — compute ETA to weapon range
+        // Closing — compute ETA to weapon range; skip if impractically far
         const eta = gap / nearestClosing;
         const urgent = eta < APPROACH_WARN_SECONDS;
-        items.push({
-          text: `${urgent ? '⚠ ' : ''}${nearestName}: ${formatDist(nearestDist)} — ${weaponName} range in ~${formatDuration(eta)}`,
-          kind: urgent ? 'warn' : 'info',
-        });
+        if (eta > 6 * 3600) {
+          // More than 6 hours away — just show distance, skip useless ETA
+          items.push({
+            text: `${nearestName}: ${formatDist(nearestDist)} — out of ${weaponName} range`,
+            kind: 'muted',
+          });
+        } else {
+          items.push({
+            text: `${urgent ? '⚠ ' : ''}${nearestName}: ${formatDist(nearestDist)} — ${weaponName} range in ~${formatDuration(eta)}`,
+            kind: urgent ? 'warn' : 'info',
+          });
+        }
       } else if (nearestClosing < -0.5) {
         items.push({
           text: `${nearestName}: ${formatDist(nearestDist)}, opening`,
