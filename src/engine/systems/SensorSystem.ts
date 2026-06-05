@@ -86,11 +86,12 @@ export class SensorSystem {
             : Infinity; // first loss for this contact — always emit
           if (this.eventBus && timeSinceLastLost >= LOST_EVENT_COOLDOWN) {
             contact.lastLostEventTime = gameTime;
+            const shipName = world.getComponent<Ship>(entityId, COMPONENT.Ship)?.name;
             this.eventBus.emit({
               type: 'ShipLostContact',
               time: gameTime,
               entityId,
-              data: { faction: tracker.faction },
+              data: { faction: tracker.faction, shipName },
             });
           }
         }
