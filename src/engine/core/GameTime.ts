@@ -9,11 +9,14 @@ export class GameTime {
   private savedScale: TimeScale = 4;
   /** When true, simulation is fully frozen (game over, manual pause). */
   private _paused = false;
+  /** When true, scenario has ended — no speed changes allowed until reset. */
+  private _gameOver = false;
 
   /** Fixed timestep for simulation (seconds per tick) */
   readonly fixedDt = 0.1; // 10 ticks per second
 
   get isPaused(): boolean { return this._paused; }
+  get isGameOver(): boolean { return this._gameOver; }
 
   tick(realDeltaSeconds: number): number {
     if (this._paused) return 0;
@@ -25,11 +28,23 @@ export class GameTime {
   pause(): void { this._paused = true; }
   resume(): void { this._paused = false; }
 
+  /** Mark scenario as over — freezes simulation and blocks all speed changes. */
+  setGameOver(): void {
+    this._paused = true;
+    this._gameOver = true;
+  }
+
+  /** Clear game-over state when loading a new scenario. */
+  clearGameOver(): void {
+    this._gameOver = false;
+  }
+
   /**
    * Toggle between paused and 1x (or last saved speed above 1x).
    * Used by the Space / pause button.
    */
   toggleSlowdown(): void {
+    if (this._gameOver) return;
     if (this._paused) {
       this._paused = false;
       return;
@@ -44,6 +59,7 @@ export class GameTime {
 
   /** Slow to 1x, saving current speed (if > 1) for later restore. */
   slowToMin(): void {
+    if (this._gameOver) return;
     this._paused = false;
     if (this.timeScale > 1) {
       this.savedScale = this.timeScale;
@@ -53,11 +69,13 @@ export class GameTime {
 
   /** Restore speed to the last saved scale (above 1x). */
   restoreSpeed(): void {
+    if (this._gameOver) return;
     this._paused = false;
     this.timeScale = this.savedScale;
   }
 
   setTimeScale(scale: TimeScale): void {
+    if (this._gameOver) return;
     this._paused = false;
     this.timeScale = scale;
     if (scale > 1) {

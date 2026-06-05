@@ -72,7 +72,7 @@ export class ThreatAlert {
 
   trigger(message: string): void {
     if (this.isVisible) return;
-    if (this.gameTime.isPaused) return;
+    if (this.gameTime.isGameOver) return;
     if (Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
     this.gameTime.slowToMin();
     this.msgEl.textContent = message;
@@ -90,7 +90,7 @@ export class ThreatAlert {
     this.overlay.style.display = 'none';
     this.isVisible = false;
     this.lastDismissedAt = Date.now();
-    if (restore && !this.gameTime.isPaused) this.gameTime.restoreSpeed();
+    if (restore) this.gameTime.restoreSpeed();
   }
 
   reset(): void {

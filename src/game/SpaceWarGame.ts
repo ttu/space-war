@@ -200,13 +200,13 @@ export class SpaceWarGame {
     });
 
     this.eventBus.subscribe('VictoryAchieved', () => {
-      this.gameTime.pause();
+      this.gameTime.setGameOver();
       this.updatePauseUI();
       this.advisorPanel?.reset();
     });
 
     this.eventBus.subscribe('DefeatSuffered', () => {
-      this.gameTime.pause();
+      this.gameTime.setGameOver();
       this.updatePauseUI();
       this.advisorPanel?.reset();
     });
@@ -1114,6 +1114,7 @@ export class SpaceWarGame {
     this.currentScenarioId = id;
     this.scenarioSelector.setScenario(id);
     this.gameTime.elapsed = 0;
+    this.gameTime.clearGameOver();
     this.gameTime.setTimeScale(1);
     this.referenceEntityId = null;
     this.combatLog.clear();
