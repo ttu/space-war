@@ -20,6 +20,15 @@ const AI_RAILGUN_BURST_SIZE = 4;
  *  the tactical map. 5 s ≈ 500 km between tracers at 100 km/s. */
 const RAILGUN_BURST_INTERVAL_SEC = 5.0;
 
+/** Seconds between consecutive missiles in a player-ordered staggered salvo. */
+const MISSILE_SALVO_INTERVAL_SEC = 4.0;
+
+interface PendingMissileLaunch {
+  shipId: EntityId;
+  targetId: EntityId;
+  scheduledTime: number;
+}
+
 interface PendingRailgunBurst {
   shipId: EntityId;
   targetId: EntityId;
@@ -64,6 +73,7 @@ function getTargetAcceleration(
 
 export class CommandHandler {
   private pendingRailgunBursts: PendingRailgunBurst[] = [];
+  private pendingMissileLaunches: PendingMissileLaunch[] = [];
 
   constructor(private world: World, private eventBus?: EventBus) {
     this.subscribeToAICommands();
@@ -86,6 +96,23 @@ export class CommandHandler {
     this.eventBus.subscribe('AIFireRailgun', (event) => {
       this.fireRailgunFromShip(event.entityId!, event.targetId!, event.time);
     });
+  }
+
+  /**
+   * Call each fixed update to fire any queued staggered-salvo missiles whose time has come.
+   * Bypasses the reload-cooldown check because the salvo was already committed at fire time.
+   */
+  processPendingMissileLaunches(world: World, gameTime: number): void {
+    for (let i = this.pendingMissileLaunches.length - 1; i >= 0; i--) {
+      const m = this.pendingMissileLaunches[i];
+      if (gameTime < m.scheduledTime) continue;
+      this.pendingMissileLaunches.splice(i, 1);
+
+      const launcher = world.getComponent<MissileLauncher>(m.shipId, COMPONENT.MissileLauncher);
+      if (!launcher || (launcher.integrity ?? 100) <= 0 || launcher.ammo <= 0) continue;
+
+      this.spawnMissileEntity(world, m.shipId, m.targetId, gameTime);
+    }
   }
 
   /**
@@ -419,50 +446,59 @@ export class CommandHandler {
   }
 
   /**
-   * Launch one salvo from a single ship at target (used by AI). Returns true if launched.
+   * Launch one missile from a single ship at target (used by AI). Returns true if launched.
    */
   launchMissileFromShip(shipId: EntityId, targetId: EntityId, gameTime: number): boolean {
     const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship);
     const launcher = this.world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher);
-    const targetPos = this.world.getComponent<Position>(targetId, COMPONENT.Position);
-    if (!ship || !launcher || !targetPos) return false;
+    if (!ship || !launcher) return false;
     if (ship.darkMode) ship.darkMode = false;
     if ((launcher.integrity ?? 100) <= 0) return false;
     if (launcher.lastFiredTime > 0 && gameTime - launcher.lastFiredTime < launcher.reloadTime) return false;
     if (launcher.ammo <= 0) return false;
+    return this.spawnMissileEntity(this.world, shipId, targetId, gameTime);
+  }
 
-    const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position)!;
-    const vel = this.world.getComponent<Velocity>(shipId, COMPONENT.Velocity)!;
+  /** Spawn one missile entity and decrement ammo. Used by both launchMissileFromShip and
+   *  processPendingMissileLaunches (queued staggered-salvo shots). */
+  private spawnMissileEntity(world: World, shipId: EntityId, targetId: EntityId, gameTime: number): boolean {
+    const ship = world.getComponent<Ship>(shipId, COMPONENT.Ship);
+    const launcher = world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher);
+    const targetPos = world.getComponent<Position>(targetId, COMPONENT.Position);
+    if (!ship || !launcher || !targetPos) return false;
+
+    const pos = world.getComponent<Position>(shipId, COMPONENT.Position)!;
+    const vel = world.getComponent<Velocity>(shipId, COMPONENT.Velocity)!;
     const dx = targetPos.x - pos.x;
     const dy = targetPos.y - pos.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     const dirX = dist > 0 ? dx / dist : 1;
     const dirY = dist > 0 ? dy / dist : 0;
 
-    const missileId = this.world.createEntity();
+    const missileId = world.createEntity();
     const launchBoost = 0.5;
-    this.world.addComponent<Position>(missileId, {
+    world.addComponent<Position>(missileId, {
       type: 'Position', x: pos.x, y: pos.y, prevX: pos.x, prevY: pos.y,
     });
     const missileVx = vel.vx + dirX * launchBoost;
     const missileVy = vel.vy + dirY * launchBoost;
-    this.world.addComponent<Velocity>(missileId, {
+    world.addComponent<Velocity>(missileId, {
       type: 'Velocity', vx: missileVx, vy: missileVy,
     });
-    this.world.addComponent<Facing>(missileId, {
+    world.addComponent<Facing>(missileId, {
       type: 'Facing', angle: Math.atan2(dirY, dirX),
     });
-    this.world.addComponent<ThermalSignature>(missileId, {
+    world.addComponent<ThermalSignature>(missileId, {
       type: 'ThermalSignature', baseSignature: 100, thrustMultiplier: 500,
     });
     const missileFuel = launcher.maxRange / (launcher.missileAccel * 100);
-    const targetVel = this.world.getComponent<Velocity>(targetId, COMPONENT.Velocity);
+    const targetVel = world.getComponent<Velocity>(targetId, COMPONENT.Velocity);
     const initialHitProb = missileHitProbability(
       pos.x, pos.y, missileVx, missileVy,
       launcher.missileAccel, missileFuel, launcher.seekerRange,
       targetPos.x, targetPos.y, targetVel?.vx ?? 0, targetVel?.vy ?? 0,
     );
-    this.world.addComponent<Missile>(missileId, {
+    world.addComponent<Missile>(missileId, {
       type: 'Missile',
       targetId,
       launcherFaction: ship.faction,
@@ -480,7 +516,7 @@ export class CommandHandler {
       launchY: pos.y,
       hitProbability: initialHitProb,
     });
-    this.world.addComponent<Selectable>(missileId, {
+    world.addComponent<Selectable>(missileId, {
       type: 'Selectable', selected: false,
     });
 
@@ -560,9 +596,10 @@ export class CommandHandler {
     return true;
   }
 
-  /** Launch missile salvos from selected player ships at the target entity.
+  /** Launch a staggered missile volley from selected player ships at the target entity.
+   * volleyCount missiles per ship, fired MISSILE_SALVO_INTERVAL_SEC apart.
    * If none selected, uses flagship or all player ships with launcher (same fallback as move). */
-  launchMissile(targetId: EntityId, gameTime: number): void {
+  launchMissile(targetId: EntityId, gameTime: number, volleyCount = 1): void {
     const candidates = this.world.query(
       COMPONENT.Position, COMPONENT.Velocity, COMPONENT.Ship,
       COMPONENT.Selectable, COMPONENT.MissileLauncher,
@@ -586,94 +623,32 @@ export class CommandHandler {
       else if (playerWithMl.length > 0) toLaunch.push(...playerWithMl);
     }
 
-    const targetPos = this.world.getComponent<Position>(targetId, COMPONENT.Position);
-    if (!targetPos) return;
+    if (!this.world.getComponent<Position>(targetId, COMPONENT.Position)) return;
 
     let launched = 0;
     let blockedReason: string | null = null;
     for (const shipId of toLaunch) {
-      const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship)!;
-
       const launcher = this.world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher)!;
 
       if ((launcher.integrity ?? 100) <= 0) { blockedReason = 'launcher destroyed'; continue; }
-
-      // Check reload cooldown
       if (launcher.lastFiredTime > 0 && gameTime - launcher.lastFiredTime < launcher.reloadTime) {
-        blockedReason = 'reloading';
-        continue;
+        blockedReason = 'reloading'; continue;
       }
-
       if (launcher.ammo <= 0) { blockedReason = 'no missiles'; continue; }
+
+      // Fire the first missile immediately
+      this.spawnMissileEntity(this.world, shipId, targetId, gameTime);
       launched += 1;
 
-      const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position)!;
-      const vel = this.world.getComponent<Velocity>(shipId, COMPONENT.Velocity)!;
-
-      // Direction to target
-      const dx = targetPos.x - pos.x;
-      const dy = targetPos.y - pos.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const dirX = dist > 0 ? dx / dist : 1;
-      const dirY = dist > 0 ? dy / dist : 0;
-
-      // Create a single missile entity
-      const missileId = this.world.createEntity();
-      const launchBoost = 0.5; // km/s initial kick
-      this.world.addComponent<Position>(missileId, {
-        type: 'Position', x: pos.x, y: pos.y, prevX: pos.x, prevY: pos.y,
-      });
-      const missileVx = vel.vx + dirX * launchBoost;
-      const missileVy = vel.vy + dirY * launchBoost;
-      this.world.addComponent<Velocity>(missileId, {
-        type: 'Velocity', vx: missileVx, vy: missileVy,
-      });
-      this.world.addComponent<Facing>(missileId, {
-        type: 'Facing', angle: Math.atan2(dirY, dirX),
-      });
-      this.world.addComponent<ThermalSignature>(missileId, {
-        type: 'ThermalSignature', baseSignature: 100, thrustMultiplier: 500,
-      });
-      const missileFuel = launcher.maxRange / (launcher.missileAccel * 100);
-      const targetVel = this.world.getComponent<Velocity>(targetId, COMPONENT.Velocity);
-      const initialHitProb = missileHitProbability(
-        pos.x, pos.y, missileVx, missileVy,
-        launcher.missileAccel, missileFuel, launcher.seekerRange,
-        targetPos.x, targetPos.y, targetVel?.vx ?? 0, targetVel?.vy ?? 0,
-      );
-      this.world.addComponent<Missile>(missileId, {
-        type: 'Missile',
-        targetId,
-        launcherFaction: ship.faction,
-        count: 1,
-        fuel: missileFuel,
-        totalFuel: missileFuel,
-        accel: launcher.missileAccel,
-        seekerRange: launcher.seekerRange,
-        seekerSensitivity: launcher.seekerSensitivity,
-        guidanceMode: 'sensor',
-        phase: 'boost',
-        armed: false,
-        armingDistance: 5,
-        launchX: pos.x,
-        launchY: pos.y,
-        hitProbability: initialHitProb,
-      });
-      this.world.addComponent<Selectable>(missileId, {
-        type: 'Selectable', selected: false,
-      });
-
-      // Decrement ammo by 1, update fire time
-      launcher.ammo -= 1;
-      launcher.lastFiredTime = gameTime;
-
-      this.eventBus?.emit({
-        type: 'MissileLaunched',
-        time: gameTime,
-        entityId: shipId,
-        targetId,
-        data: { salvoSize: 1, faction: ship.faction },
-      });
+      // Queue the remaining missiles, each MISSILE_SALVO_INTERVAL_SEC apart
+      const extra = Math.min(volleyCount - 1, launcher.ammo);
+      for (let i = 1; i <= extra; i++) {
+        this.pendingMissileLaunches.push({
+          shipId,
+          targetId,
+          scheduledTime: gameTime + i * MISSILE_SALVO_INTERVAL_SEC,
+        });
+      }
     }
 
     if (launched === 0 && this.eventBus) {
