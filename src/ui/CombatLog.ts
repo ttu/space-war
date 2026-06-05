@@ -64,9 +64,14 @@ function eventSummary(e: GameEvent): string | null {
       }
       return `${t} System damaged: ${(e.data?.system as string) ?? '?'}`;
     }
-    case 'ShipDestroyed':
-    case 'ShipDisabled':
-      return `${t} ${typeLabel}`;
+    case 'ShipDestroyed': {
+      const name = e.data?.shipName as string | undefined;
+      return name ? `${t} ${name} destroyed` : `${t} Ship Destroyed`;
+    }
+    case 'ShipDisabled': {
+      const name = e.data?.shipName as string | undefined;
+      return name ? `${t} ${name} disabled` : `${t} Ship Disabled`;
+    }
     case 'ThrustStarted':
       return `${t} Thrust started`;
     case 'ThrustStopped':

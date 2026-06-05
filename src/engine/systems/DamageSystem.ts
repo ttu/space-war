@@ -1,7 +1,7 @@
 import { World, EntityId, GameEvent } from '../types';
 import { EventBus } from '../core/EventBus';
 import {
-  Hull, ShipSystems, PDC, Railgun, MissileLauncher, Missile, Position,
+  Hull, ShipSystems, PDC, Railgun, MissileLauncher, Missile, Position, Ship,
   COMPONENT,
 } from '../components';
 
@@ -114,11 +114,12 @@ export class DamageSystem {
 
     if (hull.current <= 0) {
       const pos = world.getComponent<Position>(targetId, COMPONENT.Position);
+      const ship = world.getComponent<Ship>(targetId, COMPONENT.Ship);
       this.eventBus.emit({
         type: 'ShipDestroyed',
         time: gameTime,
         targetId,
-        data: { x: pos?.x ?? 0, y: pos?.y ?? 0 },
+        data: { x: pos?.x ?? 0, y: pos?.y ?? 0, shipName: ship?.name, faction: ship?.faction },
       });
       world.removeEntity(targetId);
     }
