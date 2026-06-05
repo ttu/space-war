@@ -287,7 +287,9 @@ export class ContactsPanel {
 
       const distChanged = cached?.distance !== distText || cached?.distanceClass !== distClass;
 
-      if ((shouldUpdateContent || isNewRow) && (nameChanged || metaChanged || locationChanged || distChanged)) {
+      // Always update immediately when lost state changes (don't wait for throttle)
+      const lostStateChanged = cached !== undefined && (cached.meta === 'Lost') !== contact.lost;
+      if ((shouldUpdateContent || isNewRow || lostStateChanged) && (nameChanged || metaChanged || locationChanged || distChanged)) {
         if (nameChanged) nameEl.textContent = ship.name;
         if (metaChanged) {
           metaEl.textContent = metaText;
