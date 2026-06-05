@@ -110,7 +110,7 @@ export class TimeControls {
   /** Call each frame or when time/speed changes. */
   update(): void {
     this.gameTimeLabel.textContent = this.gameTime.formatElapsed();
-    const atMin = this.gameTime.timeScale === 1;
+    const atMin = this.gameTime.isPaused || this.gameTime.timeScale === 1;
     this.pausedLabel.classList.toggle('visible', atMin);
     this.pauseBtn.textContent = atMin ? '▶' : '⏸';
     this.speedButtons.forEach((btn, i) => {

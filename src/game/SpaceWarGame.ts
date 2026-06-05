@@ -200,13 +200,13 @@ export class SpaceWarGame {
     });
 
     this.eventBus.subscribe('VictoryAchieved', () => {
-      this.gameTime.slowToMin();
+      this.gameTime.pause();
       this.updatePauseUI();
       this.advisorPanel?.reset();
     });
 
     this.eventBus.subscribe('DefeatSuffered', () => {
-      this.gameTime.slowToMin();
+      this.gameTime.pause();
       this.updatePauseUI();
       this.advisorPanel?.reset();
     });
