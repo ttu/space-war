@@ -123,14 +123,16 @@ export class PDCSystem {
           };
         }
         if (nearestEnemy) {
-          // Drop-off with range and target speed; PDCs aren't precision weapons
-          // at km-scale ranges. Roughly 25–60% per round at typical ranges.
+          // Chip damage only — cap rounds and hit chance to prevent PDC from
+          // being a primary kill weapon. Should take ~60s to kill a full-health
+          // destroyer at close range.
+          const antiShipRounds = Math.min(roundsLeft, 2);
+          roundsLeft -= antiShipRounds;
           const rangeFactor = 1 - nearestEnemy.dist / pdc.shipRange!;
-          const speedPenalty = Math.min(0.4, nearestEnemy.closingSpeed / 200);
-          const hitChance = Math.max(0.05, 0.6 * integrityFactor * rangeFactor - speedPenalty);
+          const speedPenalty = Math.min(0.2, nearestEnemy.closingSpeed / 200);
+          const hitChance = Math.max(0.02, 0.15 * integrityFactor * rangeFactor - speedPenalty);
           let hits = 0;
-          while (roundsLeft > 0) {
-            roundsLeft -= 1;
+          for (let r = 0; r < antiShipRounds; r++) {
             if (Math.random() < hitChance) hits += 1;
           }
           if (hits > 0) {
