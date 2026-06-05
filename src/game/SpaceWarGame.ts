@@ -1114,8 +1114,7 @@ export class SpaceWarGame {
     this.currentScenarioId = id;
     this.scenarioSelector.setScenario(id);
     this.gameTime.elapsed = 0;
-    this.gameTime.clearGameOver();
-    this.gameTime.setTimeScale(1);
+    this.gameTime.resetForScenario();
     this.referenceEntityId = null;
     this.combatLog.clear();
     this.threatAlert?.reset();

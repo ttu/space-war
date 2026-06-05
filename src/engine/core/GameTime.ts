@@ -34,6 +34,14 @@ export class GameTime {
     this._gameOver = true;
   }
 
+  /** Reset speed state for a new scenario: clears game-over, returns to 1x, resets saved scale to 4x. */
+  resetForScenario(): void {
+    this._gameOver = false;
+    this._paused = false;
+    this.timeScale = 1;
+    this.savedScale = 4;
+  }
+
   /** Clear game-over state when loading a new scenario. */
   clearGameOver(): void {
     this._gameOver = false;
