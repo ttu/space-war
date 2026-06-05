@@ -70,20 +70,21 @@ describe('DamageSystem', () => {
     const eventBus = new EventBusImpl();
     const system = new DamageSystem(eventBus);
 
-    const targetId = createShipWithHull(world, { x: 0, y: 0, faction: 'enemy', hullCurrent: 100, hullMax: 100 });
+    // Use a tanky ship (500 hp) so a single missile doesn't destroy it outright
+    const targetId = createShipWithHull(world, { x: 0, y: 0, faction: 'enemy', hullCurrent: 500, hullMax: 500 });
 
     eventBus.emit({
       type: 'MissileImpact',
       time: 1,
       entityId: 'missile_1',
       targetId,
-      data: { missileCount: 4, faction: 'player' as const },
+      data: { missileCount: 1, faction: 'player' as const },
     });
     system.processHitEvents(world);
 
     const hull = world.getComponent<Hull>(targetId, COMPONENT.Hull)!;
-    // 4 missiles * 15 = 60 damage, armor 5 => 55 effective, 100 - 55 = 45
-    expect(hull.current).toBe(45);
+    // 1 missile * 80 = 80 damage, armor 5 => 75 effective, 500 - 75 = 425
+    expect(hull.current).toBe(425);
   });
 
   it('emits ShipDestroyed and removes entity when Hull reaches zero', () => {

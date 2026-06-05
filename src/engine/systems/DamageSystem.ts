@@ -5,7 +5,7 @@ import {
   COMPONENT,
 } from '../components';
 
-const DAMAGE_PER_MISSILE = 15;
+const DAMAGE_PER_MISSILE = 80;
 
 interface PendingRailgunHit {
   targetId: EntityId;
