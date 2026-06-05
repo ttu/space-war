@@ -65,7 +65,7 @@ export class ThreatAlert {
     eventBus.subscribe('MissileLaunched', (e) => {
       if (e.data?.faction === 'enemy') {
         const size = e.data?.salvoSize as number | undefined;
-        this.trigger(`⚠ Hostile missile salvo inbound${size ? ` (${size} missiles)` : ''}`);
+        this.trigger(`⚠ Hostile missile salvo inbound${size ? ` (${size} ${size === 1 ? 'missile' : 'missiles'})` : ''}`);
       }
     });
   }

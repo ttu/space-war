@@ -46,7 +46,8 @@ function eventSummary(e: GameEvent): string | null {
     case 'PDCHit': {
       const hits = e.data?.hits as number | undefined;
       const dmg = e.data?.damage as number | undefined;
-      return `${t} PDC burst: ${hits ?? '?'} hits, ${dmg ?? '?'} dmg`;
+      const hitWord = hits === 1 ? 'hit' : 'hits';
+      return `${t} PDC burst: ${hits ?? '?'} ${hitWord}, ${dmg ?? '?'} dmg`;
     }
     case 'ShipDetected': {
       const n = e.data?.count as number | undefined;
