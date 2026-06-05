@@ -240,8 +240,10 @@ export class MissileSystem {
       if (tracker.faction !== missile.launcherFaction) continue;
 
       const contact = tracker.contacts.get(missile.targetId);
-      if (contact && !contact.lost) {
-        // Extrapolate position from last known state using time since detection
+      if (contact) {
+        // Extrapolate position from last known state — works for active and lost contacts alike.
+        // Lost contacts use dead-reckoning: missile navigates to estimated position and
+        // acquires via onboard seeker if the target is within seekerRange on arrival.
         const timeSinceDetection = gameTime - contact.detectionTime;
         result.source = 'sensor';
         result.position = {
