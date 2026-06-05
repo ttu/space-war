@@ -72,6 +72,8 @@ export interface Scenario {
   celestials?: ScenarioCelestial[];
   ships: ScenarioShip[];
   zones?: ScenarioZone[];
+  /** If true, being detected by any enemy sensor ends the mission in defeat. */
+  stealthMode?: boolean;
 }
 
 function isFaction(s: string): s is Faction {
@@ -234,7 +236,8 @@ export function loadScenario(world: World, scenario: Scenario): void {
       } as Railgun);
     }
 
-    if (s.faction === 'enemy') {
+    const hasWeapon = !!(resolved.missileLauncher || resolved.railgun);
+    if (s.faction === 'enemy' && hasWeapon) {
       world.addComponent(id, {
         type: 'AIStrategicIntent',
         objective: 'hold',

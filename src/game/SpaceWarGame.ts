@@ -121,6 +121,7 @@ export class SpaceWarGame {
   private advisorPanel: AdvisorPanel | null = null;
   private pendingOrder: PendingOrderType = 'none';
   currentScenarioId = 'solarSystem';
+  private stealthUnsub?: () => void;
 
   private cameraLockIndicator: HTMLElement | null = null;
 
@@ -1091,6 +1092,8 @@ export class SpaceWarGame {
   // --- Scenario switching ---
 
   async switchScenario(id: string): Promise<void> {
+    this.stealthUnsub?.();
+    this.stealthUnsub = undefined;
     this.currentScenarioId = id;
     this.scenarioSelector.setScenario(id);
     this.gameTime.elapsed = 0;
@@ -1210,6 +1213,26 @@ export class SpaceWarGame {
     this.victorySystem.reset();
     this.centerCameraOnFlagship();
     this.camera.zoomToFit(200_000, 200_000);
+
+    // Briefing
+    const t = this.gameTime.elapsed;
+    this.eventBus.emit({ type: 'OrderFeedback', time: t, data: { message: 'MISSION: Reach the Exile zone at (150k, 0) undetected.' } });
+    this.eventBus.emit({ type: 'OrderFeedback', time: t, data: { message: 'Press G to Go Dark — cuts thermal signature 90%.' } });
+    this.eventBus.emit({ type: 'OrderFeedback', time: t, data: { message: 'WARNING: Thrusting in dark mode still raises signature. Coast through.' } });
+    this.eventBus.emit({ type: 'OrderFeedback', time: t, data: { message: 'Patrol detection range: 91k km active / 29k km dark. Gap half-width: 43k km.' } });
+
+    // Detection = defeat; clean up all three subs together on next scenario switch
+    let gameOver = false;
+    const unsubDetect = this.eventBus.subscribe('ShipDetected', (e) => {
+      if (gameOver) return;
+      if ((e.data?.faction as string) === 'enemy') {
+        gameOver = true;
+        this.eventBus.emit({ type: 'DefeatSuffered', time: this.gameTime.elapsed, data: { reason: 'DETECTED — patrol sensors acquired your ship.' } });
+      }
+    });
+    const unsubVictory = this.eventBus.subscribe('VictoryAchieved', () => { gameOver = true; });
+    const unsubDefeat = this.eventBus.subscribe('DefeatSuffered', () => { gameOver = true; });
+    this.stealthUnsub = () => { unsubDetect(); unsubVictory(); unsubDefeat(); };
   }
 
   private updateDarkModeUI(): void {
