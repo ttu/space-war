@@ -105,9 +105,10 @@ export class DamageSystem {
     const effective = Math.max(1, Math.floor(damage - hull.armor));
     hull.current = Math.max(0, hull.current - effective);
 
-    // Optional subsystem damage (e.g. 30% chance to also hit a system)
+    // Subsystem damage only from significant hits; PDC chip rounds (1 dmg)
+    // can't breach reactor rooms or engine compartments.
     const systems = world.getComponent<ShipSystems>(targetId, COMPONENT.ShipSystems);
-    if (systems && Math.random() < 0.3) {
+    if (systems && effective >= 5 && Math.random() < 0.3) {
       this.applySubsystemDamage(world, targetId, systems, effective, gameTime);
     }
 
