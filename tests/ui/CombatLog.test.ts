@@ -116,27 +116,26 @@ describe('CombatLog SystemDamaged aggregation', () => {
   });
 });
 
-function missileLaunched(faction: string, salvoSize: number, time: number): GameEvent {
-  return { type: 'MissileLaunched', time, entityId: `ship-${faction}`, data: { salvoSize, faction } };
+function missileLaunched(faction: string, time: number): GameEvent {
+  return { type: 'MissileLaunched', time, entityId: `ship-${faction}`, data: { salvoSize: 1, faction } };
 }
 
 describe('CombatLog MissileLaunched aggregation', () => {
   it('merges same-faction launches within 3-second window', () => {
     const events = [
-      missileLaunched('enemy', 3, 0),
-      missileLaunched('enemy', 3, 0.5),
-      missileLaunched('enemy', 4, 1.0),
+      missileLaunched('enemy', 0),
+      missileLaunched('enemy', 0.5),
+      missileLaunched('enemy', 1.0),
     ];
     const result = aggregateLaunched(events);
     expect(result).toHaveLength(1);
-    expect(result[0].data?.totalSalvos).toBe(3);
-    expect(result[0].data?.totalMissiles).toBe(10);
+    expect(result[0].data?.totalMissiles).toBe(3);
   });
 
   it('does not merge launches from different factions', () => {
     const events = [
-      missileLaunched('enemy', 3, 0),
-      missileLaunched('player', 4, 0.5),
+      missileLaunched('enemy', 0),
+      missileLaunched('player', 0.5),
     ];
     const result = aggregateLaunched(events);
     expect(result).toHaveLength(2);
@@ -144,8 +143,8 @@ describe('CombatLog MissileLaunched aggregation', () => {
 
   it('does not merge launches outside 3-second window', () => {
     const events = [
-      missileLaunched('enemy', 3, 0),
-      missileLaunched('enemy', 3, 3.1),
+      missileLaunched('enemy', 0),
+      missileLaunched('enemy', 3.1),
     ];
     const result = aggregateLaunched(events);
     expect(result).toHaveLength(2);

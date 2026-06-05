@@ -23,12 +23,11 @@ function eventSummary(e: GameEvent): string | null {
   const typeLabel = e.type.replace(/([A-Z])/g, ' $1').trim();
   switch (e.type) {
     case 'MissileLaunched': {
-      const totalSalvos = e.data?.totalSalvos as number | undefined;
       const totalMissiles = e.data?.totalMissiles as number | undefined;
-      if (totalSalvos && totalSalvos > 1) {
-        return `${t} ${totalSalvos} salvos launched (${totalMissiles} missiles)`;
+      if (totalMissiles && totalMissiles > 1) {
+        return `${t} ${totalMissiles} missiles launched`;
       }
-      return `${t} Missile launched (salvo ${e.data?.salvoSize ?? '?'})`;
+      return `${t} Missile launched`;
     }
     case 'MissileIntercepted': {
       const count = e.data?.count as number | undefined;
@@ -144,20 +143,18 @@ function aggregateMissileLaunched(events: GameEvent[]): GameEvent[] {
       result.push(e);
       continue;
     }
-    let totalSalvos = 1;
-    let totalMissiles = (e.data?.salvoSize as number) ?? 0;
+    let totalMissiles = 1;
     const faction = e.data?.faction;
     const windowEnd = e.time + WINDOW;
     for (let j = i + 1; j < events.length; j++) {
       const other = events[j];
       if (other.time > windowEnd) break;
       if (other.type === 'MissileLaunched' && other.data?.faction === faction) {
-        totalSalvos++;
-        totalMissiles += (other.data?.salvoSize as number) ?? 0;
+        totalMissiles++;
         skip.add(j);
       }
     }
-    result.push({ ...e, data: { ...e.data, totalSalvos, totalMissiles } });
+    result.push({ ...e, data: { ...e.data, totalMissiles } });
   }
   return result;
 }

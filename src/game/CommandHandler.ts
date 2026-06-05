@@ -429,8 +429,7 @@ export class CommandHandler {
     if (ship.darkMode) ship.darkMode = false;
     if ((launcher.integrity ?? 100) <= 0) return false;
     if (launcher.lastFiredTime > 0 && gameTime - launcher.lastFiredTime < launcher.reloadTime) return false;
-    const salvoSize = Math.min(launcher.salvoSize, launcher.ammo);
-    if (salvoSize <= 0) return false;
+    if (launcher.ammo <= 0) return false;
 
     const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position)!;
     const vel = this.world.getComponent<Velocity>(shipId, COMPONENT.Velocity)!;
@@ -467,7 +466,7 @@ export class CommandHandler {
       type: 'Missile',
       targetId,
       launcherFaction: ship.faction,
-      count: salvoSize,
+      count: 1,
       fuel: missileFuel,
       totalFuel: missileFuel,
       accel: launcher.missileAccel,
@@ -485,14 +484,14 @@ export class CommandHandler {
       type: 'Selectable', selected: false,
     });
 
-    launcher.ammo -= salvoSize;
+    launcher.ammo -= 1;
     launcher.lastFiredTime = gameTime;
     this.eventBus?.emit({
       type: 'MissileLaunched',
       time: gameTime,
       entityId: shipId,
       targetId,
-      data: { salvoSize, faction: ship.faction },
+      data: { salvoSize: 1, faction: ship.faction },
     });
     return true;
   }
@@ -605,8 +604,7 @@ export class CommandHandler {
         continue;
       }
 
-      const salvoSize = Math.min(launcher.salvoSize, launcher.ammo);
-      if (salvoSize <= 0) { blockedReason = 'no missiles'; continue; }
+      if (launcher.ammo <= 0) { blockedReason = 'no missiles'; continue; }
       launched += 1;
 
       const pos = this.world.getComponent<Position>(shipId, COMPONENT.Position)!;
@@ -619,7 +617,7 @@ export class CommandHandler {
       const dirX = dist > 0 ? dx / dist : 1;
       const dirY = dist > 0 ? dy / dist : 0;
 
-      // Create missile entity — inherits ship velocity + small initial boost
+      // Create a single missile entity
       const missileId = this.world.createEntity();
       const launchBoost = 0.5; // km/s initial kick
       this.world.addComponent<Position>(missileId, {
@@ -647,7 +645,7 @@ export class CommandHandler {
         type: 'Missile',
         targetId,
         launcherFaction: ship.faction,
-        count: salvoSize,
+        count: 1,
         fuel: missileFuel,
         totalFuel: missileFuel,
         accel: launcher.missileAccel,
@@ -665,8 +663,8 @@ export class CommandHandler {
         type: 'Selectable', selected: false,
       });
 
-      // Decrement ammo, update fire time
-      launcher.ammo -= salvoSize;
+      // Decrement ammo by 1, update fire time
+      launcher.ammo -= 1;
       launcher.lastFiredTime = gameTime;
 
       this.eventBus?.emit({
@@ -674,7 +672,7 @@ export class CommandHandler {
         time: gameTime,
         entityId: shipId,
         targetId,
-        data: { salvoSize, faction: ship.faction },
+        data: { salvoSize: 1, faction: ship.faction },
       });
     }
 

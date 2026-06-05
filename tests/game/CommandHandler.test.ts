@@ -234,11 +234,11 @@ describe('CommandHandler - Missile Launch', () => {
 
     const missile = world.getComponent<Missile>(missiles[0], COMPONENT.Missile)!;
     expect(missile.targetId).toBe(targetId);
-    expect(missile.count).toBe(6);
+    expect(missile.count).toBe(1);
     expect(missile.launcherFaction).toBe('player');
 
     const launcher = world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher)!;
-    expect(launcher.ammo).toBe(18);
+    expect(launcher.ammo).toBe(23);
     expect(launcher.lastFiredTime).toBe(10.0);
   });
 
