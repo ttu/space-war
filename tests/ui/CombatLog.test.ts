@@ -7,16 +7,16 @@ import {
 } from '../../src/ui/CombatLog';
 import type { GameEvent } from '../../src/engine/types';
 
-function pdcHit(entityId: string, targetId: string, time: number, hits: number): GameEvent {
-  return { type: 'PDCHit', time, entityId, targetId, data: { hits, damage: hits } };
+function pdcHit(entityId: string, targetId: string, time: number, hits: number, faction = 'player'): GameEvent {
+  return { type: 'PDCHit', time, entityId, targetId, data: { hits, damage: hits, faction } };
 }
 
 describe('CombatLog PDC aggregation', () => {
-  it('merges consecutive same-pair events within window', () => {
+  it('merges same-faction events within 30-second window', () => {
     const events = [
-      pdcHit('A', 'X', 0, 2),
-      pdcHit('A', 'X', 1, 3),
-      pdcHit('A', 'X', 4.9, 1),
+      pdcHit('A', 'X', 0, 2, 'player'),
+      pdcHit('B', 'Y', 5, 3, 'player'),
+      pdcHit('C', 'Z', 29.9, 1, 'player'),
     ];
     const result = aggregate(events);
     expect(result).toHaveLength(1);
@@ -24,26 +24,26 @@ describe('CombatLog PDC aggregation', () => {
     expect(result[0].data?.damage).toBe(6);
   });
 
-  it('merges non-consecutive same-pair events when another pair interleaves', () => {
+  it('does not merge events from different factions', () => {
     const events = [
-      pdcHit('A', 'X', 0, 2),
-      pdcHit('B', 'Y', 0.1, 1),   // different pair — breaks consecutive run
-      pdcHit('A', 'X', 2.0, 3),
-      pdcHit('B', 'Y', 2.5, 2),
+      pdcHit('A', 'X', 0, 2, 'player'),
+      pdcHit('B', 'Y', 0.1, 1, 'enemy'),
+      pdcHit('A', 'X', 2.0, 3, 'player'),
+      pdcHit('B', 'Y', 2.5, 2, 'enemy'),
     ];
     const result = aggregate(events);
-    // Expect two entries: A→X (5 hits) and B→Y (3 hits)
+    // Expect two entries: player (5 hits) and enemy (3 hits)
     expect(result).toHaveLength(2);
-    const ax = result.find(e => e.entityId === 'A');
-    const by = result.find(e => e.entityId === 'B');
-    expect(ax?.data?.hits).toBe(5);
-    expect(by?.data?.hits).toBe(3);
+    const player = result.find(e => e.data?.faction === 'player');
+    const enemy = result.find(e => e.data?.faction === 'enemy');
+    expect(player?.data?.hits).toBe(5);
+    expect(enemy?.data?.hits).toBe(3);
   });
 
-  it('does not merge events outside the 5-second window', () => {
+  it('does not merge events outside the 30-second window', () => {
     const events = [
-      pdcHit('A', 'X', 0, 2),
-      pdcHit('A', 'X', 5.1, 3),
+      pdcHit('A', 'X', 0, 2, 'player'),
+      pdcHit('A', 'X', 30.1, 3, 'player'),
     ];
     const result = aggregate(events);
     expect(result).toHaveLength(2);
@@ -53,12 +53,12 @@ describe('CombatLog PDC aggregation', () => {
 
   it('keeps non-PDCHit events in place and preserves order relative to others', () => {
     const events: GameEvent[] = [
-      pdcHit('A', 'X', 0, 1),
+      pdcHit('A', 'X', 0, 1, 'player'),
       { type: 'ShipDestroyed', time: 1, entityId: 'X', data: {} },
-      pdcHit('A', 'X', 1.5, 2),
+      pdcHit('A', 'X', 1.5, 2, 'player'),
     ];
     const result = aggregate(events);
-    // First PDCHit and the later one are within 5s window and same pair — merged
+    // Both PDCHit events are same faction within window — merged; ShipDestroyed preserved
     expect(result).toHaveLength(2); // merged PDCHit + ShipDestroyed
     const destroyed = result.find(e => e.type === 'ShipDestroyed');
     expect(destroyed).toBeDefined();

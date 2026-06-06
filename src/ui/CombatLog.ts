@@ -113,12 +113,13 @@ export const _aggregateMissileInterceptedForTest = (events: GameEvent[]) => aggr
 export const _aggregateContactEventsForTest = (events: GameEvent[]) => aggregateContactEvents(events);
 
 /**
- * Collapses PDCHit events for the same attacker-target pair within a 5-second
- * window into a single synthetic event with aggregated hit counts. Uses a
- * skip-set so interleaved events from other pairs don't break aggregation.
+ * Collapses PDCHit events of the same faction within a 30-second window into
+ * a single synthetic event with aggregated hit counts. Groups by faction rather
+ * than attacker-target pair to prevent log flooding during sustained close-range
+ * engagements with multiple ships.
  */
 function aggregatePDCHits(events: GameEvent[]): GameEvent[] {
-  const PDC_WINDOW = 5;
+  const PDC_WINDOW = 30;
   const result: GameEvent[] = [];
   const skip = new Set<number>();
 
@@ -131,15 +132,12 @@ function aggregatePDCHits(events: GameEvent[]): GameEvent[] {
     }
     let totalHits = (e.data?.hits as number) ?? 0;
     let totalDamage = (e.data?.damage as number) ?? 0;
+    const faction = e.data?.faction as string | undefined;
     const windowEnd = e.time + PDC_WINDOW;
     for (let j = i + 1; j < events.length; j++) {
       const other = events[j];
       if (other.time > windowEnd) break;
-      if (
-        other.type === 'PDCHit' &&
-        other.entityId === e.entityId &&
-        other.targetId === e.targetId
-      ) {
+      if (other.type === 'PDCHit' && (other.data?.faction as string | undefined) === faction) {
         totalHits += (other.data?.hits as number) ?? 0;
         totalDamage += (other.data?.damage as number) ?? 0;
         skip.add(j);
