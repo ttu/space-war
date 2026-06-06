@@ -302,6 +302,7 @@ export class AdvisorPanel {
     let nearestClosing = 0;
 
     for (const [id, contact] of tracker.contacts) {
+      if (contact.lost) continue;
       if (!this.world.hasComponent(id, COMPONENT.Position)) continue;
       const name = this.getShipName(id) ?? 'Unknown';
       for (const ps of playerShips) {
