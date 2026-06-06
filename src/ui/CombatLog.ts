@@ -353,12 +353,14 @@ export class CombatLog {
     if (lastEvent === this.lastEvent) return;
     this.lastEvent = lastEvent;
 
-    const visible = history.filter(e => {
-      if (AI_INTERNAL_EVENTS.has(e.type)) return false;
-      // Only show the player's own sensor detections, not enemy sensor events
-      if ((e.type === 'ShipDetected' || e.type === 'ShipLostContact') && e.data?.faction !== 'player') return false;
-      return true;
-    });
+    const visible = history
+      .filter(e => {
+        if (AI_INTERNAL_EVENTS.has(e.type)) return false;
+        // Only show the player's own sensor detections, not enemy sensor events
+        if ((e.type === 'ShipDetected' || e.type === 'ShipLostContact') && e.data?.faction !== 'player') return false;
+        return true;
+      })
+      .sort((a, b) => a.time - b.time);
     const aggregated = aggregateContactEvents(
       aggregateSystemDamaged(
         aggregateMissileIntercepted(
