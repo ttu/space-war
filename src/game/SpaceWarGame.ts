@@ -181,6 +181,7 @@ export class SpaceWarGame {
         this.gameTime.slowToMin();
         this.updatePauseUI();
       },
+      () => this.orderBar.getMissileVolley(),
     );
     this.aiTacticalSystem = new AITacticalSystem(this.eventBus);
     this.playerInteraction = new PlayerInteractionHandler({

@@ -448,7 +448,7 @@ export class CommandHandler {
   /**
    * Launch one missile from a single ship at target (used by AI). Returns true if launched.
    */
-  launchMissileFromShip(shipId: EntityId, targetId: EntityId, gameTime: number): boolean {
+  launchMissileFromShip(shipId: EntityId, targetId: EntityId, gameTime: number, volleyCount = 1): boolean {
     const ship = this.world.getComponent<Ship>(shipId, COMPONENT.Ship);
     const launcher = this.world.getComponent<MissileLauncher>(shipId, COMPONENT.MissileLauncher);
     if (!ship || !launcher) return false;
@@ -456,7 +456,18 @@ export class CommandHandler {
     if ((launcher.integrity ?? 100) <= 0) return false;
     if (launcher.lastFiredTime > 0 && gameTime - launcher.lastFiredTime < launcher.reloadTime) return false;
     if (launcher.ammo <= 0) return false;
-    return this.spawnMissileEntity(this.world, shipId, targetId, gameTime);
+    const success = this.spawnMissileEntity(this.world, shipId, targetId, gameTime);
+    if (success && volleyCount > 1) {
+      const extra = Math.min(volleyCount - 1, launcher.ammo);
+      for (let i = 1; i <= extra; i++) {
+        this.pendingMissileLaunches.push({
+          shipId,
+          targetId,
+          scheduledTime: gameTime + i * MISSILE_SALVO_INTERVAL_SEC,
+        });
+      }
+    }
+    return success;
   }
 
   /** Spawn one missile entity and decrement ammo. Used by both launchMissileFromShip and

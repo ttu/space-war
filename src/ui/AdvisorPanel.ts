@@ -69,6 +69,7 @@ export class AdvisorPanel {
     private getGameTime: () => number,
     private getPlayerTracker: () => ContactTracker | undefined,
     private onFireOpportunity?: () => void,
+    private getMissileVolley?: () => number,
   ) {
     this.root = document.createElement('div');
     this.root.id = 'advisor-panel';
@@ -165,7 +166,8 @@ export class AdvisorPanel {
     if (rec.type === 'railgun') {
       this.commandHandler.fireRailgunFromShip(rec.shipId, rec.targetId, gameTime);
     } else {
-      this.commandHandler.launchMissileFromShip(rec.shipId, rec.targetId, gameTime);
+      const volleyCount = this.getMissileVolley?.() ?? 1;
+      this.commandHandler.launchMissileFromShip(rec.shipId, rec.targetId, gameTime, volleyCount);
     }
     this.lastRefreshTime = -999;
   }
