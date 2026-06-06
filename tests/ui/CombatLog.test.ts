@@ -151,20 +151,26 @@ describe('CombatLog MissileLaunched aggregation', () => {
   });
 });
 
-function intercepted(time: number): GameEvent {
-  return { type: 'MissileIntercepted', time, entityId: 'ship-a', data: {} };
+function intercepted(time: number, faction = 'player'): GameEvent {
+  return { type: 'MissileIntercepted', time, entityId: 'ship-a', data: { faction } };
 }
 
 describe('CombatLog MissileIntercepted aggregation', () => {
-  it('merges multiple interceptions within 3-second window', () => {
-    const events = [intercepted(0), intercepted(0.5), intercepted(2.9)];
+  it('merges same-faction interceptions within 3-second window', () => {
+    const events = [intercepted(0, 'player'), intercepted(0.5, 'player'), intercepted(2.9, 'player')];
     const result = aggregateIntercepted(events);
     expect(result).toHaveLength(1);
     expect(result[0].data?.count).toBe(3);
   });
 
+  it('does not merge interceptions from different factions', () => {
+    const events = [intercepted(0, 'player'), intercepted(0.5, 'enemy')];
+    const result = aggregateIntercepted(events);
+    expect(result).toHaveLength(2);
+  });
+
   it('does not merge interceptions outside 3-second window', () => {
-    const events = [intercepted(0), intercepted(3.1)];
+    const events = [intercepted(0, 'player'), intercepted(3.1, 'player')];
     const result = aggregateIntercepted(events);
     expect(result).toHaveLength(2);
   });

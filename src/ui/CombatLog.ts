@@ -28,16 +28,24 @@ function eventSummary(e: GameEvent): string | null {
   switch (e.type) {
     case 'MissileLaunched': {
       const totalMissiles = e.data?.totalMissiles as number | undefined;
+      const launchFaction = e.data?.faction as string | undefined;
+      const prefix = launchFaction === 'player' ? '' : 'Enemy ';
       if (totalMissiles && totalMissiles > 1) {
-        return `${t} ${totalMissiles} missiles launched`;
+        return `${t} ${prefix}${totalMissiles} missiles launched`;
       }
-      return `${t} Missile launched`;
+      return `${t} ${prefix}Missile launched`;
     }
     case 'MissileIntercepted': {
       const count = e.data?.count as number | undefined;
+      const interceptFaction = e.data?.faction as string | undefined;
+      if (interceptFaction === 'player') {
+        return count && count > 1
+          ? `${t} ${count} enemy missiles intercepted`
+          : `${t} Enemy missile intercepted`;
+      }
       return count && count > 1
-        ? `${t} ${count} missiles intercepted`
-        : `${t} Missile intercepted`;
+        ? `${t} ${count} missiles lost to enemy PDC`
+        : `${t} Missile lost to enemy PDC`;
     }
     case 'MissileImpact':
       return `${t} Missile impact`;
@@ -197,11 +205,12 @@ function aggregateMissileIntercepted(events: GameEvent[]): GameEvent[] {
       continue;
     }
     let count = 1;
+    const faction = e.data?.faction as string | undefined;
     const windowEnd = e.time + WINDOW;
     for (let j = i + 1; j < events.length; j++) {
       const other = events[j];
       if (other.time > windowEnd) break;
-      if (other.type === 'MissileIntercepted') {
+      if (other.type === 'MissileIntercepted' && (other.data?.faction as string | undefined) === faction) {
         count++;
         skip.add(j);
       }
