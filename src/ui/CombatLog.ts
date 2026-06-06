@@ -29,11 +29,13 @@ function eventSummary(e: GameEvent): string | null {
     case 'MissileLaunched': {
       const totalMissiles = e.data?.totalMissiles as number | undefined;
       const launchFaction = e.data?.faction as string | undefined;
-      const prefix = launchFaction === 'player' ? '' : 'Enemy ';
+      const isEnemy = launchFaction !== 'player';
       if (totalMissiles && totalMissiles > 1) {
-        return `${t} ${prefix}${totalMissiles} missiles launched`;
+        return isEnemy
+          ? `${t} ${totalMissiles} enemy missiles launched`
+          : `${t} ${totalMissiles} missiles launched`;
       }
-      return `${t} ${prefix}Missile launched`;
+      return isEnemy ? `${t} Enemy missile launched` : `${t} Missile launched`;
     }
     case 'MissileIntercepted': {
       const count = e.data?.count as number | undefined;
