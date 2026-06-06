@@ -32,7 +32,7 @@ import { PlanetContactIndicatorsRenderer } from '../rendering/PlanetContactIndic
 import { CommandHandler } from './CommandHandler';
 import { SelectionManager } from './SelectionManager';
 import { PlayerInteractionHandler } from './PlayerInteractionHandler';
-import { loadScenario, fetchScenario } from '../engine/data/ScenarioLoader';
+import { loadScenario, fetchScenario, type Scenario } from '../engine/data/ScenarioLoader';
 import { demoScenario } from '../engine/data/scenarios/demo';
 import { solarSystemScenario } from '../engine/data/scenarios/solarSystem';
 import { redDwarfScenario } from '../engine/data/scenarios/redDwarf';
@@ -122,6 +122,7 @@ export class SpaceWarGame {
   private pendingOrder: PendingOrderType = 'none';
   private viewShadowsBtn!: HTMLButtonElement;
   currentScenarioId = 'solarSystem';
+  private currentScenario: Scenario | null = null;
   private stealthUnsub?: () => void;
 
   private cameraLockIndicator: HTMLElement | null = null;
@@ -1140,6 +1141,7 @@ export class SpaceWarGame {
   // --- Demo scenario ---
 
   loadDemoScenario(): void {
+    this.currentScenario = demoScenario;
     loadScenario(this.world, demoScenario);
     this.victorySystem.reset();
     this.centerCameraOnFlagship();
@@ -1206,6 +1208,7 @@ export class SpaceWarGame {
   }
 
   private loadSolarSystemScenario(): void {
+    this.currentScenario = solarSystemScenario;
     loadScenario(this.world, solarSystemScenario);
     this.victorySystem.reset();
     this.centerCameraOnFlagship();
@@ -1213,6 +1216,7 @@ export class SpaceWarGame {
   }
 
   private loadRedDwarfScenario(): void {
+    this.currentScenario = redDwarfScenario;
     loadScenario(this.world, redDwarfScenario);
     this.victorySystem.reset();
     this.centerCameraOnFlagship();
@@ -1220,6 +1224,7 @@ export class SpaceWarGame {
   }
 
   private loadProvingGroundsScenario(): void {
+    this.currentScenario = provingGroundsScenario;
     loadScenario(this.world, provingGroundsScenario);
     this.victorySystem.reset();
     this.centerCameraOnFlagship();
@@ -1227,6 +1232,7 @@ export class SpaceWarGame {
   }
 
   private loadStealthScenario(): void {
+    this.currentScenario = stealthScenario;
     loadScenario(this.world, stealthScenario);
     this.victorySystem.reset();
     this.centerCameraOnFlagship();
@@ -1275,6 +1281,7 @@ export class SpaceWarGame {
    */
   async loadScenarioByName(name: string): Promise<void> {
     const scenario = await fetchScenario(name);
+    this.currentScenario = scenario;
     loadScenario(this.world, scenario);
     this.victorySystem.reset();
     this.camera.setPosition(0, 0);
@@ -1284,7 +1291,7 @@ export class SpaceWarGame {
   /** Open pre-battle loadout editor; on Apply reloads scenario with chosen loadouts. */
   openLoadoutScreen(): void {
     showShipConfigScreen(
-      demoScenario,
+      this.currentScenario ?? demoScenario,
       this.container,
       (scenario) => {
         loadScenario(this.world, scenario);
