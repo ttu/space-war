@@ -50,8 +50,10 @@ function eventSummary(e: GameEvent): string | null {
     case 'PDCHit': {
       const hits = e.data?.hits as number | undefined;
       const dmg = e.data?.damage as number | undefined;
+      const faction = e.data?.faction as string | undefined;
       const hitWord = hits === 1 ? 'hit' : 'hits';
-      return `${t} PDC burst: ${hits ?? '?'} ${hitWord}, ${dmg ?? '?'} dmg`;
+      const label = faction === 'player' ? 'PDC' : 'Enemy PDC';
+      return `${t} ${label}: ${hits ?? '?'} ${hitWord}, ${dmg ?? '?'} dmg`;
     }
     case 'ShipDetected': {
       const n = e.data?.count as number | undefined;
