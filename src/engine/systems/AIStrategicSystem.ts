@@ -14,6 +14,8 @@ import {
 import { getBodiesFromWorld, getSafeWaypoint } from '../utils/PlanetAvoidance';
 
 const STRATEGIC_INTERVAL = 3; // seconds between re-evaluation
+/** Distance penalty per additional enemy already targeting the same contact. */
+const SPREAD_PENALTY_KM = 20_000;
 const DISENGAGE_HULL_RATIO = 0.35; // retreat when hull below this fraction
 const RETREAT_DISTANCE_KM = 20_000; // how far to set retreat point from contact
 const SAFE_RETREAT_DISTANCE_KM = 80_000; // once this far from threats, stop fleeing
@@ -42,6 +44,17 @@ export class AIStrategicSystem {
       COMPONENT.AIStrategicIntent,
     );
 
+    // Snapshot how many enemy ships already target each player contact.
+    const targetCounts = new Map<EntityId, number>();
+    for (const shipId of enemyShips) {
+      const ship = world.getComponent<Ship>(shipId, COMPONENT.Ship)!;
+      if (ship.faction !== 'enemy') continue;
+      const intent = world.getComponent<AIStrategicIntent>(shipId, COMPONENT.AIStrategicIntent)!;
+      if (intent.targetId != null) {
+        targetCounts.set(intent.targetId, (targetCounts.get(intent.targetId) ?? 0) + 1);
+      }
+    }
+
     for (const shipId of enemyShips) {
       const ship = world.getComponent<Ship>(shipId, COMPONENT.Ship)!;
       if (ship.faction !== 'enemy') continue;
@@ -57,7 +70,7 @@ export class AIStrategicSystem {
       if (hullRatio < DISENGAGE_HULL_RATIO || (armed && this.isOutOfAmmo(world, shipId))) {
         this.setDisengage(world, shipId, intent, pos, enemyTracker, gameTime);
       } else if (armed && enemyTracker && enemyTracker.contacts.size > 0) {
-        this.setEngage(world, shipId, intent, pos, enemyTracker, gameTime);
+        this.setEngage(world, shipId, intent, pos, enemyTracker, gameTime, targetCounts);
       } else {
         intent.objective = 'hold';
         intent.targetId = undefined;
@@ -158,9 +171,10 @@ export class AIStrategicSystem {
     pos: Position,
     tracker: ContactTracker,
     gameTime: number,
+    targetCounts: Map<EntityId, number>,
   ): void {
     let bestId: EntityId | undefined;
-    let bestDistSq = Infinity;
+    let bestScore = Infinity;
     let bestX = 0;
     let bestY = 0;
     let bestVx = 0;
@@ -170,9 +184,12 @@ export class AIStrategicSystem {
       if (contact.lost) continue;
       const dx = contact.lastKnownX - pos.x;
       const dy = contact.lastKnownY - pos.y;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < bestDistSq) {
-        bestDistSq = d2;
+      const dist = Math.hypot(dx, dy);
+      // Penalise targets already being engaged by other enemy ships so fire spreads.
+      const targeterCount = targetCounts.get(entityId) ?? 0;
+      const score = dist + targeterCount * SPREAD_PENALTY_KM;
+      if (score < bestScore) {
+        bestScore = score;
         bestId = entityId;
         bestX = contact.lastKnownX;
         bestY = contact.lastKnownY;
@@ -196,7 +213,7 @@ export class AIStrategicSystem {
     intent.objective = 'engage';
     intent.targetId = bestId;
     {
-      const dist = Math.sqrt(bestDistSq);
+      const dist = Math.hypot(bestX - pos.x, bestY - pos.y);
       const thruster = world.getComponent<Thruster>(shipId, COMPONENT.Thruster);
       const accel = thruster?.maxThrust ?? 0.01;
       const vel = world.getComponent<Velocity>(shipId, COMPONENT.Velocity);
