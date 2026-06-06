@@ -49,8 +49,10 @@ function eventSummary(e: GameEvent): string | null {
         ? `${t} ${count} missiles lost to enemy PDC`
         : `${t} Missile lost to enemy PDC`;
     }
-    case 'MissileImpact':
-      return `${t} Missile impact`;
+    case 'MissileImpact': {
+      const impactFaction = e.data?.faction as string | undefined;
+      return impactFaction === 'player' ? `${t} Missile impact` : `${t} Enemy missile impact`;
+    }
     case 'RailgunFired': {
       const railgunFaction = e.data?.faction as string | undefined;
       return railgunFaction === 'player' ? `${t} Railgun fired` : `${t} Enemy railgun fired`;
