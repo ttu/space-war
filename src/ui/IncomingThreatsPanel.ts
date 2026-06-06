@@ -1,5 +1,5 @@
 import type { World, EntityId } from '../engine/types';
-import { Position, Velocity, Missile, PDC, COMPONENT } from '../engine/components';
+import { Position, Velocity, Missile, PDC, Ship, COMPONENT } from '../engine/components';
 
 interface ThreatEntry {
   missileId: EntityId;
@@ -55,7 +55,7 @@ export class IncomingThreatsPanel {
       this.headerEl.textContent = 'Incoming';
       const msg = document.createElement('p');
       msg.className = 'threat-empty';
-      msg.textContent = 'Select a ship';
+      msg.textContent = this.hasPlayerShips() ? 'Select a ship' : 'No ships remaining';
       this.listEl.appendChild(msg);
       return;
     }
@@ -81,6 +81,15 @@ export class IncomingThreatsPanel {
     for (const threat of threats) {
       this.renderThreat(threat);
     }
+  }
+
+  private hasPlayerShips(): boolean {
+    const ships = this.world.query(COMPONENT.Ship);
+    for (const id of ships) {
+      const ship = this.world.getComponent<Ship>(id, COMPONENT.Ship);
+      if (ship?.faction === this.playerFaction) return true;
+    }
+    return false;
   }
 
   private collectThreats(selectedSet: Set<EntityId>): ThreatEntry[] {
