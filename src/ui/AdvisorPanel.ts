@@ -277,7 +277,7 @@ export class AdvisorPanel {
       if (ps.launcher) {
         hasAnyLauncher = true;
         if ((ps.launcher.integrity ?? 100) > 0 && ps.launcher.ammo > 0) {
-          bestMissileRange = Math.max(bestMissileRange, ps.launcher.maxRange);
+          bestMissileRange = Math.max(bestMissileRange, ps.launcher.maxRange * MISSILE_RANGE_FRACTION);
           missilesExpended = false;
         }
       }
