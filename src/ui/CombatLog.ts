@@ -49,10 +49,14 @@ function eventSummary(e: GameEvent): string | null {
     }
     case 'MissileImpact':
       return `${t} Missile impact`;
-    case 'RailgunFired':
-      return `${t} Railgun fired`;
-    case 'RailgunHit':
-      return `${t} Railgun hit`;
+    case 'RailgunFired': {
+      const railgunFaction = e.data?.faction as string | undefined;
+      return railgunFaction === 'player' ? `${t} Railgun fired` : `${t} Enemy railgun fired`;
+    }
+    case 'RailgunHit': {
+      const hitFaction = e.data?.faction as string | undefined;
+      return hitFaction === 'player' ? `${t} Railgun hit` : `${t} Enemy railgun hit`;
+    }
     case 'PDCFiring':
       return `${t} PDC firing`;
     case 'PDCHit': {

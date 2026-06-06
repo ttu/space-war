@@ -602,7 +602,7 @@ export class CommandHandler {
       time: gameTime,
       entityId: shipId,
       targetId,
-      data: { timeToImpact: solution.timeToImpact, hitProbability: prob },
+      data: { timeToImpact: solution.timeToImpact, hitProbability: prob, faction: ship.faction },
     });
     return true;
   }
@@ -845,7 +845,7 @@ export class CommandHandler {
         time: gameTime,
         entityId: shipId,
         targetId,
-        data: { timeToImpact: solution.timeToImpact, hitProbability: prob },
+        data: { timeToImpact: solution.timeToImpact, hitProbability: prob, faction: ship.faction },
       });
     }
 
