@@ -86,8 +86,10 @@ function eventSummary(e: GameEvent): string | null {
       return `${t} Game resumed`;
     case 'VictoryAchieved':
       return `${t} Victory`;
-    case 'DefeatSuffered':
-      return `${t} Defeat`;
+    case 'DefeatSuffered': {
+      const reason = e.data?.reason as string | undefined;
+      return reason ? `${t} Defeat: ${reason}` : `${t} Defeat`;
+    }
     case 'CelestialCollision':
       return `${t} ${e.data?.collision === 'impact' ? 'Crashed into' : 'Burned up near'} ${e.data?.bodyName ?? 'celestial body'}`;
     case 'OrderFeedback':
