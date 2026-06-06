@@ -244,7 +244,7 @@ export class ContactsPanel {
       const nameEl = row.querySelector('.contacts-panel-name')!;
       const metaEl = row.querySelector('.contacts-panel-meta') as HTMLElement;
       const age = gameTime - contact.receivedTime;
-      const metaText = contact.lost ? 'Lost' : (gameTime > 0 && contact.receivedTime > 0 && age > 0 ? formatDataAge(age) : '—');
+      const metaText = contact.lost ? 'Lost' : (gameTime > 0 && contact.receivedTime > 0 ? formatDataAge(Math.max(0, age)) : '—');
       const metaClass = contact.lost ? 'contacts-panel-meta contacts-panel-lost' : 'contacts-panel-meta';
 
       const locX = contact.lastKnownX + contact.lastKnownVx * age;
