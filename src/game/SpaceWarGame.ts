@@ -994,7 +994,6 @@ export class SpaceWarGame {
   private fixedUpdate(dt: number): void {
     this.commandHandler.processPendingMissileLaunches(this.world, this.gameTime.elapsed);
     this.commandHandler.processPendingRailgunBursts(this.world, this.gameTime.elapsed);
-    this.sensorSystem.update(this.world, dt, this.gameTime.elapsed);
     this.railgunSystem.update(this.world, dt, this.gameTime.elapsed);
     this.damageSystem.processHitEvents(this.world);
     this.aiStrategicSystem.update(this.world, dt, this.gameTime.elapsed);
@@ -1006,6 +1005,8 @@ export class SpaceWarGame {
     this.pdcSystem.update(this.world, dt, this.gameTime.elapsed);
     this.missileSystem.update(this.world, dt, this.gameTime.elapsed);
     this.victorySystem.update(this.world, this.gameTime.elapsed);
+    // Sensors run last so contact-loss fires in the same tick as ship destruction/defeat.
+    this.sensorSystem.update(this.world, dt, this.gameTime.elapsed);
     this.trailRenderer.recordPositions(this.world);
     this.missileRenderer.recordPositions(this.world);
   }
