@@ -9,6 +9,7 @@ export interface SensorArray extends Component {
 
 export interface DetectedContact {
   entityId: EntityId;
+  shipName?: string;       // cached ship name — survives entity removal
   lastKnownX: number;     // km — light-delayed position
   lastKnownY: number;     // km
   lastKnownVx: number;    // km/s — velocity at detection time

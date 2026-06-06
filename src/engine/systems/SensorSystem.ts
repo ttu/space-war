@@ -46,8 +46,10 @@ export class SensorSystem {
         const delayedVx = target.vel.vx - target.ax * lightDelay;
         const delayedVy = target.vel.vy - target.ay * lightDelay;
 
+        const ship = world.getComponent<Ship>(target.entityId, COMPONENT.Ship);
         const contact: DetectedContact = {
           entityId: target.entityId,
+          shipName: existing?.shipName ?? ship?.name, // cache name — survives entity removal
           lastKnownX: delayedX,
           lastKnownY: delayedY,
           lastKnownVx: delayedVx,
@@ -63,12 +65,11 @@ export class SensorSystem {
         tracker.contacts.set(target.entityId, contact);
 
         if (isNew && this.eventBus) {
-          const ship = world.getComponent<Ship>(target.entityId, COMPONENT.Ship);
           this.eventBus.emit({
             type: 'ShipDetected',
             time: gameTime,
             entityId: target.entityId,
-            data: { faction: tracker.faction, shipName: ship?.name },
+            data: { faction: tracker.faction, shipName: contact.shipName },
           });
         }
       }
@@ -87,7 +88,8 @@ export class SensorSystem {
             : Infinity; // first loss for this contact — always emit
           if (this.eventBus && timeSinceLastLost >= LOST_EVENT_COOLDOWN) {
             contact.lastLostEventTime = gameTime;
-            const shipName = world.getComponent<Ship>(entityId, COMPONENT.Ship)?.name;
+            // Use cached name — entity may already be removed from world
+            const shipName = contact.shipName ?? world.getComponent<Ship>(entityId, COMPONENT.Ship)?.name;
             this.eventBus.emit({
               type: 'ShipLostContact',
               time: gameTime,
