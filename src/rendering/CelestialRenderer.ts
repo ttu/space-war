@@ -2,22 +2,32 @@ import * as THREE from 'three';
 import { World, EntityId } from '../engine/types';
 import { Position, CelestialBody, COMPONENT } from '../engine/components';
 import { DANGER_ZONE_MULTIPLIER } from '../engine/constants';
+import { getGlowTexture, getSphereTexture } from './glowTexture';
 
 interface BodyVisual {
   bodyName: string;
   group: THREE.Group;
   bodyMesh: THREE.Mesh;
+  halo: THREE.Sprite;
+  haloScale: number;
   gravityRings: THREE.LineLoop[];
   dangerRing: THREE.LineLoop;
   label: THREE.Sprite;
 }
 
 const BODY_COLORS: Record<string, number> = {
-  star: 0xaa8833,
-  planet: 0x334466,
-  moon: 0x445566,
-  station: 0x446644,
-  asteroid: 0x554433,
+  star: 0xffd27a,
+  planet: 0x5a7fb0,
+  moon: 0x8a96a8,
+  station: 0x6fb07a,
+  asteroid: 0x8a7458,
+};
+
+/** Halo size relative to body radius, and its opacity. */
+const HALO: Record<string, { scale: number; opacity: number }> = {
+  star: { scale: 6, opacity: 0.9 },
+  planet: { scale: 2.6, opacity: 0.35 },
+  moon: { scale: 2, opacity: 0.15 },
 };
 
 export class CelestialRenderer {
@@ -58,6 +68,8 @@ export class CelestialRenderer {
       const minVisualRadius = zoom * 0.008;
       const visualRadius = Math.max(body.radius, minVisualRadius);
       visual.bodyMesh.scale.set(visualRadius, visualRadius, 1);
+      const haloSize = visualRadius * visual.haloScale;
+      visual.halo.scale.set(haloSize, haloSize, 1);
 
       // Show/hide gravity rings based on zoom
       for (let i = 0; i < visual.gravityRings.length; i++) {
@@ -84,14 +96,27 @@ export class CelestialRenderer {
     const group = new THREE.Group();
     const color = BODY_COLORS[body.bodyType] ?? 0x444444;
 
-    // Body circle (filled)
-    const bodyGeo = new THREE.CircleGeometry(1, 32);
-    const bodyMat = new THREE.MeshBasicMaterial({
+    // Atmosphere / corona halo behind the body
+    const haloCfg = HALO[body.bodyType] ?? { scale: 1.6, opacity: 0.1 };
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: getGlowTexture(),
       color,
       transparent: true,
-      opacity: 0.6,
+      opacity: haloCfg.opacity,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }));
+    group.add(halo);
+
+    // Body disc, shaded so it reads as a sphere (stars stay flat-bright)
+    const bodyGeo = new THREE.CircleGeometry(1, 48);
+    const bodyMat = new THREE.MeshBasicMaterial({
+      color,
+      map: body.bodyType === 'star' ? null : getSphereTexture(),
+      transparent: true, // so renderOrder can draw it over its own halo
     });
     const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+    bodyMesh.renderOrder = 1;
     group.add(bodyMesh);
 
     // Gravity well rings (3 concentric rings)
@@ -106,9 +131,9 @@ export class CelestialRenderer {
       }
       ringGeo.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
       const ringMat = new THREE.LineBasicMaterial({
-        color: 0x223344,
+        color: 0x3a5a7a,
         transparent: true,
-        opacity: 0.2 - i * 0.05,
+        opacity: 0.25 - i * 0.06,
       });
       const ring = new THREE.LineLoop(ringGeo, ringMat);
       gravityRings.push(ring);
@@ -127,7 +152,7 @@ export class CelestialRenderer {
     const dangerMat = new THREE.LineBasicMaterial({
       color: 0xcc4422,
       transparent: true,
-      opacity: 0.15,
+      opacity: 0.3,
     });
     const dangerRing = new THREE.LineLoop(dangerGeo, dangerMat);
     group.add(dangerRing);
@@ -136,7 +161,7 @@ export class CelestialRenderer {
     const label = this.createLabel(body.name);
     group.add(label);
 
-    return { bodyName: body.name, group, bodyMesh, gravityRings, dangerRing, label };
+    return { bodyName: body.name, group, bodyMesh, halo, haloScale: haloCfg.scale, gravityRings, dangerRing, label };
   }
 
   private createLabel(text: string): THREE.Sprite {
@@ -151,7 +176,7 @@ export class CelestialRenderer {
     ctx.fillStyle = 'transparent';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.font = '36px Courier New';
-    ctx.fillStyle = '#6888a8';
+    ctx.fillStyle = '#8fb0d0';
     ctx.textAlign = 'center';
     ctx.fillText(text, canvas.width / 2, 42);
 

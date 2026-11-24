@@ -4,21 +4,25 @@ import {
   Position, Velocity, Ship, Selectable, Thruster, COMPONENT, Faction,
   ContactTracker, DetectedContact, Missile,
 } from '../engine/components';
+import { getGlowTexture } from './glowTexture';
 
 interface ShipVisual {
   group: THREE.Group;
   icon: THREE.Mesh;
+  outline: THREE.LineLoop;
+  glow: THREE.Sprite;
   selectionRing: THREE.LineLoop;
   targetReticle: THREE.Group;
   velocityLine: THREE.Line;
-  thrustIndicator: THREE.Mesh;
+  thrustIndicator: THREE.Sprite;
   label: THREE.Sprite;
+  labelAspect: number;
 }
 
 const FACTION_COLORS: Record<Faction, number> = {
-  player: 0x4488cc,
-  enemy: 0xcc4444,
-  neutral: 0x888888,
+  player: 0x55aaff,
+  enemy: 0xff5555,
+  neutral: 0x999999,
 };
 
 const SELECTION_COLOR = 0x44cccc;
@@ -55,7 +59,7 @@ export class ShipRenderer {
     }
 
     // Scale factor: ships should be visible regardless of zoom
-    const iconScale = zoom * 0.015;
+    const iconScale = zoom * 0.022;
 
     for (const entityId of shipEntities) {
       const pos = world.getComponent<Position>(entityId, COMPONENT.Position)!;
@@ -80,7 +84,7 @@ export class ShipRenderer {
 
       let visual = this.visuals.get(entityId);
       if (!visual) {
-        visual = this.createShipVisual(ship.faction);
+        visual = this.createShipVisual(ship.faction, ship.name);
         this.visuals.set(entityId, visual);
         this.group.add(visual.group);
       }
@@ -89,6 +93,7 @@ export class ShipRenderer {
       // Update icon color: dimmed grey when going dark
       const iconMaterial = visual.icon.material as THREE.MeshBasicMaterial;
       iconMaterial.color.setHex(ship.darkMode ? 0x555555 : FACTION_COLORS[ship.faction]);
+      (visual.glow.material as THREE.SpriteMaterial).visible = !ship.darkMode;
 
       // Position: use velocity-extrapolated position for enemy contacts
       if (contact && gameTime !== undefined) {
@@ -113,9 +118,14 @@ export class ShipRenderer {
       } else {
         iconMat.opacity = 0.9;
       }
+      (visual.outline.material as THREE.LineBasicMaterial).opacity = iconMat.opacity;
+      (visual.glow.material as THREE.SpriteMaterial).opacity = iconMat.opacity * 0.7;
+      (visual.label.material as THREE.SpriteMaterial).opacity = Math.min(1, iconMat.opacity + 0.1);
 
       // Scale icon to be visible at any zoom
       visual.icon.scale.set(iconScale, iconScale, 1);
+      visual.outline.scale.set(iconScale, iconScale, 1);
+      visual.glow.scale.set(iconScale * 4, iconScale * 4, 1);
       visual.selectionRing.scale.set(iconScale * 1.4, iconScale * 1.4, 1);
 
       // Selection ring visibility
@@ -148,7 +158,7 @@ export class ShipRenderer {
       // Thrust indicator
       if (thruster && thruster.throttle > 0) {
         visual.thrustIndicator.visible = true;
-        const thrustScale = iconScale * (0.5 + thruster.throttle * 0.5);
+        const thrustScale = iconScale * (0.8 + thruster.throttle * 1.2);
         visual.thrustIndicator.scale.set(thrustScale, thrustScale, 1);
         // Position behind the ship (opposite of thrust direction)
         const behindAngle = thruster.thrustAngle + Math.PI;
@@ -162,12 +172,13 @@ export class ShipRenderer {
       }
 
       // Label
-      visual.label.scale.set(iconScale * 4, iconScale * 1.5, 1);
-      visual.label.position.set(0, -iconScale * 2, 0);
+      const labelHeight = iconScale * 1.8;
+      visual.label.scale.set(labelHeight * visual.labelAspect, labelHeight, 1);
+      visual.label.position.set(0, -iconScale * 1.5, 0);
     }
   }
 
-  private createShipVisual(faction: Faction): ShipVisual {
+  private createShipVisual(faction: Faction, name: string): ShipVisual {
     const group = new THREE.Group();
     const color = FACTION_COLORS[faction];
 
@@ -182,7 +193,23 @@ export class ShipRenderer {
     const iconGeo = new THREE.ShapeGeometry(iconShape);
     const iconMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 });
     const icon = new THREE.Mesh(iconGeo, iconMat);
+
+    // Soft faction glow behind the icon
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: getGlowTexture(),
+      color,
+      transparent: true,
+      opacity: 0.4,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }));
+    group.add(glow);
     group.add(icon);
+
+    // Bright rim so the hull shape stays crisp against the glow
+    const outlineGeo = new THREE.BufferGeometry().setFromPoints(iconShape.getPoints());
+    const outline = new THREE.LineLoop(outlineGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 }));
+    group.add(outline);
 
     // Selection ring
     const ringGeo = new THREE.BufferGeometry();
@@ -210,22 +237,23 @@ export class ShipRenderer {
     const velocityLine = new THREE.Line(velGeo, velMat);
     group.add(velocityLine);
 
-    // Thrust indicator (small circle glow)
-    const thrustGeo = new THREE.CircleGeometry(0.5, 8);
-    const thrustMat = new THREE.MeshBasicMaterial({
+    // Thrust indicator: additive drive-plume glow
+    const thrustIndicator = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: getGlowTexture(),
       color: 0xffaa44,
       transparent: true,
-      opacity: 0.7,
-    });
-    const thrustIndicator = new THREE.Mesh(thrustGeo, thrustMat);
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }));
     thrustIndicator.visible = false;
     group.add(thrustIndicator);
 
     // Name label
-    const label = this.createTextSprite('');
+    const { sprite: label, aspect: labelAspect } = this.createTextSprite(name, color);
     group.add(label);
 
-    return { group, icon, selectionRing, targetReticle, velocityLine, thrustIndicator, label };
+    return { group, icon, outline, glow, selectionRing, targetReticle, velocityLine, thrustIndicator, label, labelAspect };
   }
 
   private createTargetReticle(): THREE.Group {
@@ -252,14 +280,21 @@ export class ShipRenderer {
     return g;
   }
 
-  private createTextSprite(_text: string): THREE.Sprite {
-    // Simple sprite placeholder - will show ship names later
+  private createTextSprite(text: string, color: number): { sprite: THREE.Sprite; aspect: number } {
+    const font = '32px Courier New';
     const canvas = document.createElement('canvas');
-    canvas.width = 1;
-    canvas.height = 1;
+    const ctx = canvas.getContext('2d')!;
+    ctx.font = font;
+    canvas.width = Math.ceil(ctx.measureText(text).width) + 16;
+    canvas.height = 44;
+    ctx.font = font; // resizing the canvas resets context state
+    ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+    ctx.textAlign = 'center';
+    ctx.fillText(text, canvas.width / 2, 32);
     const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
-    return new THREE.Sprite(material);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+    return { sprite: new THREE.Sprite(material), aspect: canvas.width / canvas.height };
   }
 
   dispose(): void {

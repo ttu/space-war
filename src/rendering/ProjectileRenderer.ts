@@ -4,12 +4,14 @@ import {
   Position, Velocity, Projectile,
   COMPONENT,
 } from '../engine/components';
+import { getGlowTexture } from './glowTexture';
 
 const PROJECTILE_COLOR_PLAYER = 0xaaccff;
 const PROJECTILE_COLOR_ENEMY = 0xff8866;
 
 interface Visual {
   head: THREE.Mesh;       // bright dot at the round
+  glow: THREE.Sprite;     // additive halo so the round reads at a glance
   streak: THREE.Line;     // tracer pointing back along velocity
   streakGeom: THREE.BufferGeometry;
 }
@@ -52,16 +54,27 @@ export class ProjectileRenderer {
         const head = new THREE.Mesh(headGeo, headMat);
         const streakGeom = new THREE.BufferGeometry();
         streakGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
-        const streakMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55 });
+        const streakMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 });
         const streak = new THREE.Line(streakGeom, streakMat);
-        v = { head, streak, streakGeom };
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: getGlowTexture(),
+          color,
+          transparent: true,
+          opacity: 0.9,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        }));
+        v = { head, glow, streak, streakGeom };
         this.visuals.set(entityId, v);
+        this.group.add(glow);
         this.group.add(head);
         this.group.add(streak);
       }
 
       v.head.position.set(pos.x, pos.y, 1.6);
       v.head.scale.set(headScale, headScale, 1);
+      v.glow.position.set(pos.x, pos.y, 1.58);
+      v.glow.scale.set(headScale * 9, headScale * 9, 1);
 
       const speed = vel ? Math.hypot(vel.vx, vel.vy) : 0;
       const ux = speed > 0 ? vel!.vx / speed : 0;
@@ -77,6 +90,8 @@ export class ProjectileRenderer {
 
   private removeVisual(id: EntityId, v: Visual): void {
     this.group.remove(v.head);
+    this.group.remove(v.glow);
+    v.glow.material.dispose();
     this.group.remove(v.streak);
     v.head.geometry.dispose();
     (v.head.material as THREE.Material).dispose();

@@ -4,10 +4,12 @@ import {
   Position, Missile, Selectable, ContactTracker,
   COMPONENT,
 } from '../engine/components';
+import { getGlowTexture } from './glowTexture';
 
 interface MissileVisual {
   group: THREE.Group;
   dots: THREE.Mesh[];
+  flare: THREE.Sprite;
   selectionRing: THREE.LineLoop;
   trail: THREE.Line;
   targetLine: THREE.Line;
@@ -15,7 +17,7 @@ interface MissileVisual {
 
 const MISSILE_COLOR_PLAYER = 0x88bbff;
 const MISSILE_COLOR_ENEMY = 0xff6644;
-const TRAIL_OPACITY = 0.4;
+const TRAIL_OPACITY = 0.55;
 const MAX_TRAIL_POINTS = 50;
 const BALLISTIC_OPACITY = 0.3;
 const SELECTION_COLOR = 0x44cccc;
@@ -102,6 +104,9 @@ export class MissileRenderer {
       for (const dot of visual.dots) {
         (dot.material as THREE.MeshBasicMaterial).opacity = opacity;
       }
+      // Drive flare: bright while under power, faint once ballistic
+      visual.flare.scale.set(dotScale * 14, dotScale * 14, 1);
+      (visual.flare.material as THREE.SpriteMaterial).opacity = opacity;
 
       // Selection ring
       const selectable = world.getComponent<Selectable>(entityId, COMPONENT.Selectable);
@@ -121,6 +126,15 @@ export class MissileRenderer {
   private createMissileVisual(missile: Missile): MissileVisual {
     const group = new THREE.Group();
     const color = missile.launcherFaction === 'player' ? MISSILE_COLOR_PLAYER : MISSILE_COLOR_ENEMY;
+
+    const flare = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: getGlowTexture(),
+      color,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }));
+    group.add(flare);
 
     // Create dots in a cluster pattern
     const dots: THREE.Mesh[] = [];
@@ -178,7 +192,7 @@ export class MissileRenderer {
     selectionRing.visible = false;
     group.add(selectionRing);
 
-    return { group, dots, selectionRing, trail, targetLine };
+    return { group, dots, flare, selectionRing, trail, targetLine };
   }
 
   private updateTargetLine(

@@ -1,10 +1,14 @@
 import * as THREE from 'three';
 import type { EventBus } from '../engine/core/EventBus';
+import { getGlowTexture } from './glowTexture';
 
 /** Real-time duration of the explosion animation in milliseconds. */
 const DURATION_MS = 1600;
-/** Max radius of the expanding ring in world km. */
+/** Min radius of the expanding ring in world km; grows with zoom so it stays visible zoomed out. */
 const MAX_RING_RADIUS = 3000;
+/** Ring radius as a fraction of camera zoom (half view height). */
+const RING_ZOOM_FRACTION = 0.1;
+const INTERCEPT_ZOOM_FRACTION = 0.03;
 const RING_SEGMENTS = 48;
 /** Number of debris particles per explosion. */
 const PARTICLE_COUNT = 16;
@@ -37,6 +41,8 @@ interface ExplosionEffect {
   flashGeom: THREE.BufferGeometry;
   particles: THREE.Points;
   particleMat: THREE.PointsMaterial;
+  glow: THREE.Sprite;
+  glowMat: THREE.SpriteMaterial;
   particleGeom: THREE.BufferGeometry;
   /** Per-particle velocity in world km/ms: [vx0, vy0, vx1, vy1, ...] */
   velocities: Float32Array;
@@ -66,6 +72,8 @@ function buildRingGeometry(segments: number): THREE.BufferGeometry {
 export class ExplosionRenderer {
   private group = new THREE.Group();
   private effects: ExplosionEffect[] = [];
+  /** Latest camera zoom, used to size new explosions. */
+  private zoom = 0;
 
   constructor(scene: THREE.Scene, eventBus: EventBus) {
     scene.add(this.group);
@@ -84,6 +92,7 @@ export class ExplosionRenderer {
   }
 
   private spawn(x: number, y: number): void {
+    const radius = Math.max(MAX_RING_RADIUS, this.zoom * RING_ZOOM_FRACTION);
     const ringGeom = buildRingGeometry(RING_SEGMENTS);
     const ringMat = new THREE.LineBasicMaterial({ color: RING_COLOR, transparent: true, opacity: 1 });
     const ring = new THREE.LineLoop(ringGeom, ringMat);
@@ -98,7 +107,7 @@ export class ExplosionRenderer {
     const velocities = new Float32Array(PARTICLE_COUNT * 2);
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const angle = (i / PARTICLE_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
-      const speed = PARTICLE_SPEED * (0.4 + Math.random() * 0.6);
+      const speed = PARTICLE_SPEED * (radius / MAX_RING_RADIUS) * (0.4 + Math.random() * 0.6);
       velocities[i * 2] = Math.cos(angle) * speed;
       velocities[i * 2 + 1] = Math.sin(angle) * speed;
       particlePositions[i * 3] = x;
@@ -109,13 +118,18 @@ export class ExplosionRenderer {
     particleGeom.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
     const particleMat = new THREE.PointsMaterial({
       color: DEBRIS_COLOR,
-      size: 3,
+      size: 7,
       sizeAttenuation: false,
+      map: getGlowTexture(),
       transparent: true,
       opacity: 1,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
     });
     const particles = new THREE.Points(particleGeom, particleMat);
+    const { glow, glowMat } = this.createGlow(x, y, 0xffaa55);
 
+    this.group.add(glow);
     this.group.add(ring);
     this.group.add(flash);
     this.group.add(particles);
@@ -123,16 +137,18 @@ export class ExplosionRenderer {
     this.effects.push({
       startMs: performance.now(),
       duration: DURATION_MS,
-      maxRingRadius: MAX_RING_RADIUS,
+      maxRingRadius: radius,
       particleCount: PARTICLE_COUNT,
       ring, ringMat, ringGeom,
       flash, flashMat, flashGeom,
       particles, particleMat, particleGeom,
+      glow, glowMat,
       velocities, x, y,
     });
   }
 
   private spawnIntercept(x: number, y: number): void {
+    const radius = Math.max(INTERCEPT_RING_RADIUS, this.zoom * INTERCEPT_ZOOM_FRACTION);
     const ringGeom = buildRingGeometry(RING_SEGMENTS);
     const ringMat = new THREE.LineBasicMaterial({ color: INTERCEPT_RING_COLOR, transparent: true, opacity: 1 });
     const ring = new THREE.LineLoop(ringGeom, ringMat);
@@ -147,7 +163,7 @@ export class ExplosionRenderer {
     const velocities = new Float32Array(INTERCEPT_PARTICLE_COUNT * 2);
     for (let i = 0; i < INTERCEPT_PARTICLE_COUNT; i++) {
       const angle = (i / INTERCEPT_PARTICLE_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-      const speed = INTERCEPT_PARTICLE_SPEED * (0.5 + Math.random() * 0.5);
+      const speed = INTERCEPT_PARTICLE_SPEED * (radius / INTERCEPT_RING_RADIUS) * (0.5 + Math.random() * 0.5);
       velocities[i * 2] = Math.cos(angle) * speed;
       velocities[i * 2 + 1] = Math.sin(angle) * speed;
       particlePositions[i * 3] = x;
@@ -158,13 +174,18 @@ export class ExplosionRenderer {
     particleGeom.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
     const particleMat = new THREE.PointsMaterial({
       color: INTERCEPT_DEBRIS_COLOR,
-      size: 3,
+      size: 7,
       sizeAttenuation: false,
+      map: getGlowTexture(),
       transparent: true,
       opacity: 1,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
     });
     const particles = new THREE.Points(particleGeom, particleMat);
+    const { glow, glowMat } = this.createGlow(x, y, 0x66ffff);
 
+    this.group.add(glow);
     this.group.add(ring);
     this.group.add(flash);
     this.group.add(particles);
@@ -172,16 +193,31 @@ export class ExplosionRenderer {
     this.effects.push({
       startMs: performance.now(),
       duration: INTERCEPT_DURATION_MS,
-      maxRingRadius: INTERCEPT_RING_RADIUS,
+      maxRingRadius: radius,
       particleCount: INTERCEPT_PARTICLE_COUNT,
       ring, ringMat, ringGeom,
       flash, flashMat, flashGeom,
       particles, particleMat, particleGeom,
+      glow, glowMat,
       velocities, x, y,
     });
   }
 
-  update(): void {
+  private createGlow(x: number, y: number, color: number): { glow: THREE.Sprite; glowMat: THREE.SpriteMaterial } {
+    const glowMat = new THREE.SpriteMaterial({
+      map: getGlowTexture(),
+      color,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const glow = new THREE.Sprite(glowMat);
+    glow.position.set(x, y, 0.09);
+    return { glow, glowMat };
+  }
+
+  update(zoom: number): void {
+    this.zoom = zoom;
     const now = performance.now();
     this.effects = this.effects.filter((eff) => {
       const elapsed = now - eff.startMs;
@@ -191,6 +227,8 @@ export class ExplosionRenderer {
         this.group.remove(eff.ring);
         this.group.remove(eff.flash);
         this.group.remove(eff.particles);
+        this.group.remove(eff.glow);
+        eff.glowMat.dispose();
         eff.ringGeom.dispose();
         eff.ringMat.dispose();
         eff.flashGeom.dispose();
@@ -211,6 +249,11 @@ export class ExplosionRenderer {
       eff.flash.scale.set(flashRadius, flashRadius, 1);
       eff.flashMat.opacity = Math.max(0, 1 - flashT * 1.5);
 
+      // Fireball: swells fast, then fades out
+      const glowSize = eff.maxRingRadius * (0.6 + 0.8 * Math.min(1, t / 0.15));
+      eff.glow.scale.set(glowSize, glowSize, 1);
+      eff.glowMat.opacity = Math.pow(1 - t, 2);
+
       // Debris particles: spread outward, fade out in second half
       const posAttr = eff.particleGeom.attributes['position'] as THREE.BufferAttribute;
       const pos = posAttr.array as Float32Array;
@@ -227,6 +270,7 @@ export class ExplosionRenderer {
 
   dispose(): void {
     for (const eff of this.effects) {
+      eff.glowMat.dispose();
       eff.ringGeom.dispose();
       eff.ringMat.dispose();
       eff.flashGeom.dispose();

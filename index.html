@@ -42,6 +42,16 @@
         height: 100%;
       }
 
+      /* Radar-screen vignette over the map, under the UI panels */
+      #game-container::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 1;
+        background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+      }
+
       canvas {
         display: block;
         width: 100%;

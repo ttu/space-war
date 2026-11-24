@@ -67,27 +67,25 @@ export class RadarRenderer {
     const startY = Math.floor((cy - extent) / spacing) * spacing;
     const endY = Math.ceil((cy + extent) / spacing) * spacing;
 
-    const vertices: number[] = [];
+    const minor: number[] = [];
+    const major: number[] = [];
+    const isMajor = (v: number) => Math.round(v / spacing) % 5 === 0;
 
-    // Vertical lines
     for (let x = startX; x <= endX; x += spacing) {
-      vertices.push(x, startY, 0, x, endY, 0);
+      (isMajor(x) ? major : minor).push(x, startY, 0, x, endY, 0);
     }
-    // Horizontal lines
     for (let y = startY; y <= endY; y += spacing) {
-      vertices.push(startX, y, 0, endX, y, 0);
+      (isMajor(y) ? major : minor).push(startX, y, 0, endX, y, 0);
     }
 
+    this.addLines(minor, 0x1a2a3a, 0.45);
+    this.addLines(major, 0x22384f, 0.55);
+  }
+
+  private addLines(vertices: number[], color: number, opacity: number): void {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-
-    const material = new THREE.LineBasicMaterial({
-      color: 0x1a2a3a,
-      transparent: true,
-      opacity: 0.5,
-    });
-
-    const lines = new THREE.LineSegments(geometry, material);
+    const lines = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color, transparent: true, opacity }));
     lines.renderOrder = -1;
     this.gridGroup.add(lines);
   }
@@ -97,11 +95,11 @@ export class RadarRenderer {
       this.scaleLabel = document.createElement('div');
       this.scaleLabel.style.cssText = `
         position: absolute;
-        bottom: 12px;
-        right: 12px;
+        bottom: 44px;
+        right: 14px;
         font-family: 'Courier New', monospace;
         font-size: 11px;
-        color: #384858;
+        color: #5a7896;
         z-index: 10;
       `;
       container.appendChild(this.scaleLabel);

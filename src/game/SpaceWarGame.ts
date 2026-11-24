@@ -1047,7 +1047,7 @@ export class SpaceWarGame {
     this.missileRenderer.update(this.world, zoom, playerContacts);
     this.projectileRenderer.update(this.world, zoom);
     this.pdcRenderer.update(this.world, this.gameTime.elapsed);
-    this.explosionRenderer.update();
+    this.explosionRenderer.update(zoom);
     this.offScreenContactRenderer.update(
       this.world,
       camPos.x,
