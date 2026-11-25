@@ -137,7 +137,7 @@ export class MissileSystem {
             time: gameTime,
             entityId: missileId,
             targetId: missile.targetId,
-            data: { missileCount: missile.count, faction: missile.launcherFaction },
+            data: { missileCount: missile.count, faction: missile.launcherFaction, x: tx, y: ty },
           });
           toRemove.push(missileId);
           continue;

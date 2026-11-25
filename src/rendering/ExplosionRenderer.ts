@@ -2,31 +2,44 @@ import * as THREE from 'three';
 import type { EventBus } from '../engine/core/EventBus';
 import { getGlowTexture } from './glowTexture';
 
-/** Real-time duration of the explosion animation in milliseconds. */
-const DURATION_MS = 1600;
-/** Min radius of the expanding ring in world km; grows with zoom so it stays visible zoomed out. */
-const MAX_RING_RADIUS = 3000;
-/** Ring radius as a fraction of camera zoom (half view height). */
-const RING_ZOOM_FRACTION = 0.1;
-const INTERCEPT_ZOOM_FRACTION = 0.03;
 const RING_SEGMENTS = 48;
-/** Number of debris particles per explosion. */
-const PARTICLE_COUNT = 16;
-/** Debris spread speed: particles reach MAX_RING_RADIUS * 0.6 by end. */
-const PARTICLE_SPEED = (MAX_RING_RADIUS * 0.6) / DURATION_MS;
 
-const RING_COLOR = new THREE.Color(0xff8844);
-const FLASH_COLOR = new THREE.Color(0xffffff);
-const DEBRIS_COLOR = new THREE.Color(0xff6622);
+interface EffectStyle {
+  /** Real-time duration in ms (wall clock, so it's visible at any time scale). */
+  durationMs: number;
+  /** Min ring radius in world km. */
+  minRadius: number;
+  /** Ring radius as a fraction of camera zoom, so effects stay visible zoomed out. */
+  zoomFraction: number;
+  particleCount: number;
+  /** Fraction of ring radius the debris reaches by the end. */
+  particleReach: number;
+  ringColor: number;
+  debrisColor: number;
+  glowColor: number;
+  /** Optional floating text shown above the effect. */
+  label?: { text: string; color: string };
+}
 
-// Intercept burst (PDC kills missile) — smaller and faster than ship explosion
-const INTERCEPT_DURATION_MS = 450;
-const INTERCEPT_RING_RADIUS = 500;
-const INTERCEPT_PARTICLE_COUNT = 8;
-const INTERCEPT_PARTICLE_SPEED = (INTERCEPT_RING_RADIUS * 0.7) / INTERCEPT_DURATION_MS;
-const INTERCEPT_RING_COLOR = new THREE.Color(0x44ffff);
-const INTERCEPT_FLASH_COLOR = new THREE.Color(0xffffff);
-const INTERCEPT_DEBRIS_COLOR = new THREE.Color(0x88ffff);
+/** Ship destroyed: big, slow fireball. */
+const SHIP_EXPLOSION: EffectStyle = {
+  durationMs: 1600, minRadius: 3000, zoomFraction: 0.1, particleCount: 16, particleReach: 0.6,
+  ringColor: 0xff8844, debrisColor: 0xff6622, glowColor: 0xffaa55,
+};
+
+/** Missile warhead hits a ship: hot white-orange flash on the hull. */
+const MISSILE_IMPACT: EffectStyle = {
+  durationMs: 800, minRadius: 1200, zoomFraction: 0.05, particleCount: 10, particleReach: 0.7,
+  ringColor: 0xffcc66, debrisColor: 0xffaa44, glowColor: 0xffeecc,
+  label: { text: 'HIT', color: '#ffb060' },
+};
+
+/** PDC kills a missile: small cyan pop, labelled so it can't be mistaken for a hit. */
+const MISSILE_INTERCEPT: EffectStyle = {
+  durationMs: 700, minRadius: 500, zoomFraction: 0.03, particleCount: 8, particleReach: 0.7,
+  ringColor: 0x44ffff, debrisColor: 0x88ffff, glowColor: 0x66ffff,
+  label: { text: 'INTERCEPTED', color: '#66ffff' },
+};
 
 interface ExplosionEffect {
   startMs: number;
@@ -41,9 +54,11 @@ interface ExplosionEffect {
   flashGeom: THREE.BufferGeometry;
   particles: THREE.Points;
   particleMat: THREE.PointsMaterial;
+  particleGeom: THREE.BufferGeometry;
   glow: THREE.Sprite;
   glowMat: THREE.SpriteMaterial;
-  particleGeom: THREE.BufferGeometry;
+  label?: THREE.Sprite;
+  labelAspect: number;
   /** Per-particle velocity in world km/ms: [vx0, vy0, vx1, vy1, ...] */
   velocities: Float32Array;
   /** Origin of the explosion in world km. */
@@ -65,49 +80,54 @@ function buildRingGeometry(segments: number): THREE.BufferGeometry {
 }
 
 /**
- * Renders short-lived explosion effects at ship destruction sites.
- * Animation runs in real wall-clock time so it's always visible regardless
- * of game time scale.
+ * Renders short-lived effects for ship destruction, missile hits and PDC
+ * intercepts. Animation runs in real wall-clock time so it's always visible
+ * regardless of game time scale.
  */
 export class ExplosionRenderer {
   private group = new THREE.Group();
   private effects: ExplosionEffect[] = [];
-  /** Latest camera zoom, used to size new explosions. */
+  /** Latest camera zoom, used to size new effects. */
   private zoom = 0;
+  /** Label textures are shared per text so repeated intercepts don't allocate. */
+  private labelTextures = new Map<string, { texture: THREE.Texture; aspect: number }>();
 
   constructor(scene: THREE.Scene, eventBus: EventBus) {
     scene.add(this.group);
     eventBus.subscribe('ShipDestroyed', (e) => {
       const x = e.data?.x as number | undefined ?? 0;
       const y = e.data?.y as number | undefined ?? 0;
-      this.spawn(x, y);
+      this.spawn(x, y, SHIP_EXPLOSION);
     });
-    eventBus.subscribe('MissileIntercepted', (e) => {
-      const x = e.data?.x as number | undefined;
-      const y = e.data?.y as number | undefined;
-      if (x !== undefined && y !== undefined) {
-        this.spawnIntercept(x, y);
-      }
-    });
+    eventBus.subscribe('MissileImpact', (e) => this.spawnAtEvent(e.data, MISSILE_IMPACT));
+    eventBus.subscribe('MissileIntercepted', (e) => this.spawnAtEvent(e.data, MISSILE_INTERCEPT));
   }
 
-  private spawn(x: number, y: number): void {
-    const radius = Math.max(MAX_RING_RADIUS, this.zoom * RING_ZOOM_FRACTION);
+  private spawnAtEvent(data: Record<string, unknown> | undefined, style: EffectStyle): void {
+    const x = data?.x as number | undefined;
+    const y = data?.y as number | undefined;
+    if (x !== undefined && y !== undefined) this.spawn(x, y, style);
+  }
+
+  private spawn(x: number, y: number, style: EffectStyle): void {
+    const radius = Math.max(style.minRadius, this.zoom * style.zoomFraction);
+
     const ringGeom = buildRingGeometry(RING_SEGMENTS);
-    const ringMat = new THREE.LineBasicMaterial({ color: RING_COLOR, transparent: true, opacity: 1 });
+    const ringMat = new THREE.LineBasicMaterial({ color: style.ringColor, transparent: true, opacity: 1 });
     const ring = new THREE.LineLoop(ringGeom, ringMat);
     ring.position.set(x, y, 0.1);
 
     const flashGeom = buildRingGeometry(RING_SEGMENTS);
-    const flashMat = new THREE.LineBasicMaterial({ color: FLASH_COLOR, transparent: true, opacity: 1 });
+    const flashMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1 });
     const flash = new THREE.LineLoop(flashGeom, flashMat);
     flash.position.set(x, y, 0.11);
 
-    const particlePositions = new Float32Array(PARTICLE_COUNT * 3);
-    const velocities = new Float32Array(PARTICLE_COUNT * 2);
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      const angle = (i / PARTICLE_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
-      const speed = PARTICLE_SPEED * (radius / MAX_RING_RADIUS) * (0.4 + Math.random() * 0.6);
+    const particleSpeed = (radius * style.particleReach) / style.durationMs;
+    const particlePositions = new Float32Array(style.particleCount * 3);
+    const velocities = new Float32Array(style.particleCount * 2);
+    for (let i = 0; i < style.particleCount; i++) {
+      const angle = (i / style.particleCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      const speed = particleSpeed * (0.4 + Math.random() * 0.6);
       velocities[i * 2] = Math.cos(angle) * speed;
       velocities[i * 2 + 1] = Math.sin(angle) * speed;
       particlePositions[i * 3] = x;
@@ -117,7 +137,7 @@ export class ExplosionRenderer {
     const particleGeom = new THREE.BufferGeometry();
     particleGeom.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
     const particleMat = new THREE.PointsMaterial({
-      color: DEBRIS_COLOR,
+      color: style.debrisColor,
       size: 7,
       sizeAttenuation: false,
       map: getGlowTexture(),
@@ -127,93 +147,60 @@ export class ExplosionRenderer {
       depthWrite: false,
     });
     const particles = new THREE.Points(particleGeom, particleMat);
-    const { glow, glowMat } = this.createGlow(x, y, 0xffaa55);
 
-    this.group.add(glow);
-    this.group.add(ring);
-    this.group.add(flash);
-    this.group.add(particles);
-
-    this.effects.push({
-      startMs: performance.now(),
-      duration: DURATION_MS,
-      maxRingRadius: radius,
-      particleCount: PARTICLE_COUNT,
-      ring, ringMat, ringGeom,
-      flash, flashMat, flashGeom,
-      particles, particleMat, particleGeom,
-      glow, glowMat,
-      velocities, x, y,
-    });
-  }
-
-  private spawnIntercept(x: number, y: number): void {
-    const radius = Math.max(INTERCEPT_RING_RADIUS, this.zoom * INTERCEPT_ZOOM_FRACTION);
-    const ringGeom = buildRingGeometry(RING_SEGMENTS);
-    const ringMat = new THREE.LineBasicMaterial({ color: INTERCEPT_RING_COLOR, transparent: true, opacity: 1 });
-    const ring = new THREE.LineLoop(ringGeom, ringMat);
-    ring.position.set(x, y, 0.1);
-
-    const flashGeom = buildRingGeometry(RING_SEGMENTS);
-    const flashMat = new THREE.LineBasicMaterial({ color: INTERCEPT_FLASH_COLOR, transparent: true, opacity: 1 });
-    const flash = new THREE.LineLoop(flashGeom, flashMat);
-    flash.position.set(x, y, 0.11);
-
-    const particlePositions = new Float32Array(INTERCEPT_PARTICLE_COUNT * 3);
-    const velocities = new Float32Array(INTERCEPT_PARTICLE_COUNT * 2);
-    for (let i = 0; i < INTERCEPT_PARTICLE_COUNT; i++) {
-      const angle = (i / INTERCEPT_PARTICLE_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-      const speed = INTERCEPT_PARTICLE_SPEED * (radius / INTERCEPT_RING_RADIUS) * (0.5 + Math.random() * 0.5);
-      velocities[i * 2] = Math.cos(angle) * speed;
-      velocities[i * 2 + 1] = Math.sin(angle) * speed;
-      particlePositions[i * 3] = x;
-      particlePositions[i * 3 + 1] = y;
-      particlePositions[i * 3 + 2] = 0.05;
-    }
-    const particleGeom = new THREE.BufferGeometry();
-    particleGeom.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-    const particleMat = new THREE.PointsMaterial({
-      color: INTERCEPT_DEBRIS_COLOR,
-      size: 7,
-      sizeAttenuation: false,
-      map: getGlowTexture(),
-      transparent: true,
-      opacity: 1,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    const particles = new THREE.Points(particleGeom, particleMat);
-    const { glow, glowMat } = this.createGlow(x, y, 0x66ffff);
-
-    this.group.add(glow);
-    this.group.add(ring);
-    this.group.add(flash);
-    this.group.add(particles);
-
-    this.effects.push({
-      startMs: performance.now(),
-      duration: INTERCEPT_DURATION_MS,
-      maxRingRadius: radius,
-      particleCount: INTERCEPT_PARTICLE_COUNT,
-      ring, ringMat, ringGeom,
-      flash, flashMat, flashGeom,
-      particles, particleMat, particleGeom,
-      glow, glowMat,
-      velocities, x, y,
-    });
-  }
-
-  private createGlow(x: number, y: number, color: number): { glow: THREE.Sprite; glowMat: THREE.SpriteMaterial } {
     const glowMat = new THREE.SpriteMaterial({
       map: getGlowTexture(),
-      color,
+      color: style.glowColor,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
     const glow = new THREE.Sprite(glowMat);
     glow.position.set(x, y, 0.09);
-    return { glow, glowMat };
+
+    this.group.add(glow, ring, flash, particles);
+
+    let label: THREE.Sprite | undefined;
+    let labelAspect = 1;
+    if (style.label) {
+      const tex = this.getLabelTexture(style.label.text, style.label.color);
+      label = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex.texture, transparent: true, depthWrite: false }));
+      labelAspect = tex.aspect;
+      this.group.add(label);
+    }
+
+    this.effects.push({
+      startMs: performance.now(),
+      duration: style.durationMs,
+      maxRingRadius: radius,
+      particleCount: style.particleCount,
+      ring, ringMat, ringGeom,
+      flash, flashMat, flashGeom,
+      particles, particleMat, particleGeom,
+      glow, glowMat,
+      label, labelAspect,
+      velocities, x, y,
+    });
+  }
+
+  private getLabelTexture(text: string, color: string): { texture: THREE.Texture; aspect: number } {
+    const cached = this.labelTextures.get(text);
+    if (cached) return cached;
+    const font = 'bold 30px Courier New';
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    ctx.font = font;
+    canvas.width = Math.ceil(ctx.measureText(text).width) + 16;
+    canvas.height = 40;
+    ctx.font = font; // resizing the canvas resets context state
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.fillText(text, canvas.width / 2, 29);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const entry = { texture, aspect: canvas.width / canvas.height };
+    this.labelTextures.set(text, entry);
+    return entry;
   }
 
   update(zoom: number): void {
@@ -224,17 +211,7 @@ export class ExplosionRenderer {
       const t = Math.min(1, elapsed / eff.duration);
 
       if (t >= 1) {
-        this.group.remove(eff.ring);
-        this.group.remove(eff.flash);
-        this.group.remove(eff.particles);
-        this.group.remove(eff.glow);
-        eff.glowMat.dispose();
-        eff.ringGeom.dispose();
-        eff.ringMat.dispose();
-        eff.flashGeom.dispose();
-        eff.flashMat.dispose();
-        eff.particleGeom.dispose();
-        eff.particleMat.dispose();
+        this.disposeEffect(eff);
         return false;
       }
 
@@ -254,6 +231,14 @@ export class ExplosionRenderer {
       eff.glow.scale.set(glowSize, glowSize, 1);
       eff.glowMat.opacity = Math.pow(1 - t, 2);
 
+      // Label: screen-constant size, drifts upward, fades in the last 40%
+      if (eff.label) {
+        const h = zoom * 0.04;
+        eff.label.scale.set(h * eff.labelAspect, h, 1);
+        eff.label.position.set(eff.x, eff.y + zoom * (0.04 + 0.03 * t), 0.12);
+        (eff.label.material as THREE.SpriteMaterial).opacity = t < 0.6 ? 1 : (1 - t) / 0.4;
+      }
+
       // Debris particles: spread outward, fade out in second half
       const posAttr = eff.particleGeom.attributes['position'] as THREE.BufferAttribute;
       const pos = posAttr.array as Float32Array;
@@ -268,16 +253,25 @@ export class ExplosionRenderer {
     });
   }
 
-  dispose(): void {
-    for (const eff of this.effects) {
-      eff.glowMat.dispose();
-      eff.ringGeom.dispose();
-      eff.ringMat.dispose();
-      eff.flashGeom.dispose();
-      eff.flashMat.dispose();
-      eff.particleGeom.dispose();
-      eff.particleMat.dispose();
+  private disposeEffect(eff: ExplosionEffect): void {
+    this.group.remove(eff.ring, eff.flash, eff.particles, eff.glow);
+    eff.ringGeom.dispose();
+    eff.ringMat.dispose();
+    eff.flashGeom.dispose();
+    eff.flashMat.dispose();
+    eff.particleGeom.dispose();
+    eff.particleMat.dispose();
+    eff.glowMat.dispose();
+    if (eff.label) {
+      this.group.remove(eff.label);
+      (eff.label.material as THREE.Material).dispose();
     }
+  }
+
+  dispose(): void {
+    for (const eff of this.effects) this.disposeEffect(eff);
     this.effects = [];
+    for (const { texture } of this.labelTextures.values()) texture.dispose();
+    this.labelTextures.clear();
   }
 }
